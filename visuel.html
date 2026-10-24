@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Circulations du jour</title>
+<link rel="stylesheet" href="visuel.css">
+</head>
+<body>
+<div class="ecran" id="ecran">
+  <header class="tete">
+    <div class="titre" id="v-titre">Circulations du jour</div>
+    <div class="date" id="v-date"></div>
+    <div class="direct attente" id="v-direct"><i></i><span>Connexion…</span></div>
+    <div class="heure" id="v-heure">--:--</div>
+  </header>
+  <div class="alerte" id="v-alerte" hidden></div>
+  <main class="grille" id="v-grille">
+    <section class="col" id="v-col1"></section>
+    <section class="col" id="v-col2"></section>
+    <section class="trains" id="v-trains"></section>
+  </main>
+  <div class="attente-donnees" id="v-attente">En attente des données du poste de saisie…</div>
+  <div class="flash" id="v-flash" hidden><span class="flash-lib">Flash info</span><div class="flash-fen" id="v-flash-fen"><div class="flash-txt" id="v-flash-txt"></div></div></div>
+  <footer class="pied"><span id="v-maj"></span><span>Information indicative · ne remplace pas les procédures de circulation</span></footer>
+</div>
+<script src="commun.js"></script>
+<script src="visuel.js"></script>
+</body>
+</html>

@@ -1,0 +1,5 @@
+# Les données de l'entreprise (planning, voies, destinataires des mails) ne vont jamais sur GitHub :
+# elles sont importées une fois dans le dossier Google Drive depuis l'écran Connexion.
+donnees-initiales*.json
+*.local.json
+node_modules/

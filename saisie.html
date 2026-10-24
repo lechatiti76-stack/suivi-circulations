@@ -1,0 +1,264 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Suivi des circulations · Saisie</title>
+<link rel="stylesheet" href="saisie.css">
+</head>
+<body>
+<header class="barre">
+  <div class="marque">Suivi des circulations <span id="h-jour">chargement…</span><span id="h-lecture" class="badge" hidden>Lecture seule</span></div>
+  <div class="horloge" id="h-horloge">--:--:--</div>
+  <div class="etats" role="status" aria-live="polite">
+    <span class="etat" id="e-service" title="Service local du poste de saisie"><i></i><b>Service</b><span>…</span></span>
+    <span class="etat" id="e-ecrans" title="Publication du fichier lu par les écrans"><i></i><b>Écrans</b><span>…</span></span>
+    <span class="etat" id="e-mails" title="Mails automatiques aux EF"><i></i><b>Mails</b><span>…</span></span>
+  </div>
+  <nav class="actions" aria-label="Actions">
+    <button type="button" id="b-connexion" hidden>Connexion</button>
+    <button type="button" id="b-flash">Flash info</button>
+    <button type="button" id="b-mails">Mails<span class="compteur" id="c-mails" hidden>0</span></button>
+    <button type="button" id="b-stats">Statistiques</button>
+    <button type="button" id="b-planning">Planning</button>
+    <button type="button" id="b-params">Paramètres</button>
+    <button type="button" id="b-journees">Journées</button>
+    <button type="button" id="b-cloture">Clôturer</button>
+  </nav>
+</header>
+
+<div id="bandeau" class="bandeau" hidden></div>
+
+<form id="saisie" class="saisie" autocomplete="off" novalidate>
+  <div class="saisie-tete">
+    <h2 id="s-titre">Nouveau mouvement</h2>
+    <button type="button" class="bouton petit" id="s-annuler" hidden>Annuler la modification (Échap)</button>
+  </div>
+  <div class="champs">
+    <div class="champ"><label for="f-num">N° train</label><input class="mono" id="f-num" list="l-numeros" placeholder="509431, locom…" spellcheck="false"></div>
+    <div class="champ"><label for="f-ef">EF</label><input id="f-ef" list="l-ef" placeholder="auto" spellcheck="false" tabindex="-1" title="Remplie d'après la base N° → EF (Paramètres). Cliquez pour la corriger."></div>
+    <div class="champ"><label for="f-voie">Voie</label><input class="mono" id="f-voie" list="l-voies" spellcheck="false"></div>
+    <div class="champ"><label for="f-compo">Wagons</label><input class="mono" id="f-compo" placeholder="nb / hlp" spellcheck="false"></div>
+    <div class="champ"><label for="f-cv">Chargés/vides</label><select id="f-cv"><option value="chargés">chargés</option><option value="vides">vides</option><option value="/">/</option></select></div>
+    <div class="champ"><label for="f-sit">Situation voie</label><select id="f-sit"><option value="libre">libre</option><option value="occupée">occupée</option></select></div>
+    <div class="champ"><label for="f-vers">Vers</label><input class="mono" id="f-vers" list="l-voies" spellcheck="false"></div>
+    <div class="champ"><label for="f-comm">Commentaire interne</label><input id="f-comm" placeholder="non diffusé, facultatif"></div>
+    <button type="submit" class="bouton primaire" id="s-valider">Valider ↵</button>
+  </div>
+  <div class="ligne-aide">
+    <div class="aide" id="s-aide" aria-live="polite"></div>
+    <div class="secondaires">
+      <label for="f-reel">Réel</label><input class="mono" id="f-reel" placeholder="hh:mm" spellcheck="false" tabindex="-1">
+      <label for="f-annonce">Annonce</label><input class="mono" id="f-annonce" placeholder="auto" spellcheck="false" tabindex="-1">
+    </div>
+  </div>
+  <datalist id="l-numeros"></datalist>
+  <datalist id="l-voies"></datalist>
+  <datalist id="l-ef"></datalist>
+</form>
+
+<main class="corps">
+  <section class="volet" aria-label="Journal des mouvements">
+    <div class="volet-tete">
+      <h3>Journal des mouvements</h3>
+      <div class="outils">
+        <span id="j-compte"></span>
+        <label><input type="checkbox" id="j-supprimees"> lignes supprimées</label>
+      </div>
+    </div>
+    <div class="defile" id="j-defile" tabindex="0">
+      <table class="journal">
+        <thead><tr><th>#</th><th>Annonce</th><th>N°</th><th>EF</th><th>Zone</th><th>Voie</th><th>Wagons</th><th>Situation</th><th>Vers</th><th>Réel</th><th>Commentaire</th><th>Circulation</th><th></th></tr></thead>
+        <tbody id="j-corps"></tbody>
+      </table>
+      <div class="vide" id="j-vide" hidden>Aucun mouvement. Tapez un numéro de train ou « locom » dans la saisie ci-dessus.</div>
+    </div>
+  </section>
+  <section class="volet" aria-label="Circulations du jour">
+    <div class="volet-tete">
+      <div class="onglets" role="tablist">
+        <button type="button" class="onglet" role="tab" aria-selected="true" data-onglet="navette">Navettes</button>
+        <button type="button" class="onglet" role="tab" aria-selected="false" data-onglet="ligne">Trains de ligne</button>
+        <button type="button" class="onglet" role="tab" aria-selected="false" data-onglet="demain" id="o-demain">Demain</button>
+      </div>
+      <div class="outils"><button type="button" class="bouton petit" id="b-ajout">+ Ajouter</button></div>
+    </div>
+    <div class="defile" id="p-liste"></div>
+  </section>
+</main>
+
+<footer class="pied">
+  <div class="alertes" id="alertes"></div>
+  <div class="resume" id="resume"></div>
+  <div class="raccourcis"><span><span class="touche">Entrée</span> champ suivant</span><span><span class="touche">Ctrl+Entrée</span> valider</span><span><span class="touche">F2</span> réel = maintenant</span><span><span class="touche">Échap</span> effacer</span><span><span class="touche">Ctrl+Z</span> annuler</span></div>
+</footer>
+
+<div id="toasts" aria-live="polite"></div>
+
+<!-- Connexion au serveur Google (version GitHub) -->
+<dialog id="d-connexion" style="width:min(760px, calc(100vw - 32px))">
+  <form method="dialog" id="fm-connexion">
+    <div class="dlg-tete"><h2>Connexion au serveur Google</h2><button type="button" class="bouton" data-fermer>Fermer</button></div>
+    <div class="dlg-corps">
+      <p class="note" id="cx-message" aria-live="polite"></p>
+      <div class="formgrid">
+        <div class="champ large"><label for="cx-url">Adresse du serveur (Apps Script, se termine par /exec)</label><input id="cx-url" class="mono" placeholder="https://script.google.com/macros/s/…/exec" spellcheck="false"></div>
+        <div class="champ"><label for="cx-cle">Clé (constante CLE de Code.gs)</label><input id="cx-cle" type="password" autocomplete="off"></div>
+        <div class="champ"><label>&nbsp;</label><button type="button" class="bouton" id="cx-tester">Tester la connexion</button></div>
+      </div>
+      <div class="section"><h4>Données initiales (une seule fois)</h4>
+        <p class="note">Le planning, les voies, la base N° → EF et les destinataires des mails ne sont pas publiés sur GitHub. Importez le fichier <span class="mono">donnees-initiales.json</span> fourni à côté de l'application : il est envoyé directement dans votre dossier Google Drive.</p>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><input type="file" id="cx-fichier" accept=".json,application/json"><button type="button" class="bouton" id="cx-importer">Importer</button></div>
+      </div>
+      <div class="section"><h4>Lien à mettre dans le raccourci des écrans</h4>
+        <div style="display:flex;gap:8px"><input id="cx-lien" class="mono" readonly style="flex:1;padding:6px 8px;border:1px solid var(--trait);border-radius:6px;background:var(--surface-2)"><button type="button" class="bouton" id="cx-copier">Copier</button></div>
+      </div>
+    </div>
+    <div class="dlg-pied"><span class="gauche">La clé reste dans ce navigateur. Elle n'est jamais publiée.</span><button type="submit" class="bouton primaire">Enregistrer et recharger</button></div>
+  </form>
+</dialog>
+
+<!-- Flash info -->
+<dialog id="d-flash">
+  <form method="dialog" id="fm-flash">
+    <div class="dlg-tete"><h2>Flash info des écrans</h2><button type="button" class="bouton" data-fermer>Fermer</button></div>
+    <div class="dlg-corps">
+      <p class="note">Le texte défile en bas des écrans tant qu'il est actif. Il ne contient aucune information interne : rédigez-le pour le public des écrans.</p>
+      <div class="champ"><label for="fl-texte">Texte</label><textarea id="fl-texte" maxlength="400" style="font-family:var(--f-texte);font-size:15px"></textarea></div>
+      <div class="formgrid">
+        <div class="champ"><label for="fl-jusqua">Jusqu'à (facultatif)</label><input class="mono" id="fl-jusqua" placeholder="hh:mm"></div>
+        <div class="champ"><label><input type="checkbox" id="fl-actif"> Afficher sur les écrans</label></div>
+      </div>
+    </div>
+    <div class="dlg-pied"><span class="gauche" id="fl-etat"></span><button type="button" class="bouton danger" id="fl-retirer">Retirer</button><button type="submit" class="bouton primaire" id="fl-publier">Publier</button></div>
+  </form>
+</dialog>
+
+<!-- Mails -->
+<dialog id="d-mails">
+  <div>
+    <div class="dlg-tete"><h2>Mails de la journée</h2><button type="button" class="bouton" data-fermer>Fermer</button></div>
+    <div class="dlg-corps">
+      <div class="mode-mail" id="m-mode"></div>
+      <div class="tableau"><table><thead><tr><th>Heure</th><th>Circulation</th><th>Type</th><th>Objet</th><th>Statut</th><th></th></tr></thead><tbody id="m-corps"></tbody></table></div>
+      <iframe class="apercu" id="m-apercu" sandbox="" title="Aperçu du mail" hidden></iframe>
+    </div>
+    <div class="dlg-pied"><span class="gauche">Un mail part automatiquement quand l'heure réelle d'une navette au départ ou d'un train de ligne est saisie.</span></div>
+  </div>
+</dialog>
+
+<!-- Statistiques -->
+<dialog id="d-stats">
+  <div>
+    <div class="dlg-tete"><h2>Statistiques de la journée</h2><button type="button" class="bouton" data-fermer>Fermer</button></div>
+    <div class="dlg-corps" id="st-corps"></div>
+    <div class="dlg-pied"><span class="gauche">Ces chiffres sont ajoutés à statistiques.csv lors de la clôture.</span></div>
+  </div>
+</dialog>
+
+<!-- Planning -->
+<dialog id="d-planning" style="width:min(1320px, calc(100vw - 24px))">
+  <form method="dialog" id="fm-planning">
+    <div class="dlg-tete"><h2>Planning type</h2><button type="button" class="bouton" data-fermer>Fermer</button></div>
+    <div class="dlg-corps">
+      <p class="note">Les circulations sont générées chaque jour selon leurs jours de circulation. Les modifications valent pour les journées créées ensuite ; « Régénérer demain » applique le planning à la préparation de demain. Variantes : <span class="mono">lun,mar: hlr=07:00; sam: heure=08:06</span>.</p>
+      <div class="tableau" style="max-height:60vh">
+        <table><thead><tr><th>Groupe</th><th>Code</th><th>Sens</th><th>N° interne</th><th>Sillon</th><th>HLR</th><th>Heure</th><th>Jours</th><th>Wagons dem.</th><th>Voie prévue</th><th>Variantes</th><th></th></tr></thead><tbody id="pl-corps"></tbody></table>
+      </div>
+      <div><button type="button" class="bouton" id="pl-ajouter">+ Ajouter une circulation</button></div>
+    </div>
+    <div class="dlg-pied"><span class="gauche" id="pl-erreur"></span><button type="button" class="bouton" id="pl-regenerer">Régénérer demain</button><button type="submit" class="bouton primaire">Enregistrer le planning</button></div>
+  </form>
+</dialog>
+
+<!-- Paramètres -->
+<dialog id="d-params">
+  <form method="dialog" id="fm-params">
+    <div class="dlg-tete"><h2>Paramètres</h2><button type="button" class="bouton" data-fermer>Fermer</button></div>
+    <div class="dlg-corps">
+      <div class="section"><h4>Base des numéros : N° ou appellation → EF</h4>
+        <p class="note">L'EF se remplit d'après cette base dès que le numéro est tapé (exemple : locom → LHTE, 511911 → NRS). Une EF corrigée à la main peut y être ajoutée d'un clic après l'enregistrement.</p>
+        <div class="tableau" style="max-height:240px"><table><thead><tr><th>N° ou appellation</th><th>EF</th><th></th></tr></thead><tbody id="pa-base"></tbody></table></div>
+        <div style="display:flex;gap:10px;align-items:center;margin-top:8px"><button type="button" class="bouton petit" id="pa-base-ajouter">+ Ajouter une ligne</button>
+          <label class="note" for="pa-vers">Voie de destination (Vers) obligatoire :</label>
+          <select id="pa-vers"><option value="internes">pour les locomotives et manœuvres (locom, nrs…)</option><option value="toujours">pour tous les mouvements</option><option value="jamais">jamais</option></select></div>
+      </div>
+      <div class="section"><h4>Mails automatiques</h4>
+        <div class="formgrid">
+          <div class="champ"><label for="pa-mode">Mode</label><select id="pa-mode"><option value="simulation">Simulation (rien n'est envoyé)</option><option value="brouillon">Brouillon Outlook à valider</option><option value="auto">Envoi automatique</option><option value="desactive">Désactivé</option></select></div>
+          <div class="champ"><label for="pa-signature">Image de signature</label><input id="pa-signature" class="mono"></div>
+          <div class="champ"><label for="pa-copie">Copie des mails navettes</label><input id="pa-copie" class="mono"></div>
+          <div class="champ"><label for="pa-cci">Liste en copie cachée (trains de ligne)</label><input id="pa-cci" class="mono"></div>
+        </div>
+        <p class="note">Une liste par ligne : <span class="mono">Naviland: adresse1; adresse2</span></p>
+        <textarea id="pa-listes" style="min-height:150px"></textarea>
+      </div>
+      <div class="section"><h4>Exploitation</h4>
+        <div class="formgrid">
+          <div class="champ"><label for="pa-seuil">Seuil de retard (min)</label><input id="pa-seuil" class="mono" inputmode="numeric"></div>
+          <div class="champ"><label for="pa-coupure">Coupure matin / après-midi</label><input id="pa-coupure" class="mono"></div>
+          <div class="champ"><label for="pa-site">Nom du site (mails)</label><input id="pa-site"></div>
+        </div>
+        <div class="formgrid">
+          <div class="champ large"><label for="pa-voies">Voies (séparées par des espaces)</label><textarea id="pa-voies" style="min-height:44px"></textarea></div>
+          <div class="champ large"><label for="pa-alias">Graphies corrigées automatiquement (ex. vext1=ext1)</label><input id="pa-alias" class="mono"></div>
+        </div>
+      </div>
+      <div class="section"><h4>Écrans et fichiers</h4>
+        <div class="formgrid">
+          <div class="champ large"><label for="pa-diffusion">Dossiers de diffusion lus par les écrans (un par ligne)</label><textarea id="pa-diffusion" style="min-height:52px"></textarea></div>
+          <div class="champ"><label for="pa-sauvegarde">Copie de sauvegarde (dossier)</label><input id="pa-sauvegarde" class="mono"></div>
+          <div class="champ"><label for="pa-archives">Archives (dossier)</label><input id="pa-archives" class="mono"></div>
+          <div class="champ"><label for="pa-titre">Titre des écrans</label><input id="pa-titre"></div>
+          <div class="champ"><label for="pa-demain">Afficher demain à partir de</label><input id="pa-demain" class="mono" placeholder="00:00"></div>
+          <div class="champ"><label for="pa-vitesse">Vitesse du flash info (px/s)</label><input id="pa-vitesse" class="mono" inputmode="numeric"></div>
+        </div>
+      </div>
+    </div>
+    <div class="dlg-pied"><span class="gauche" id="pa-erreur"></span><button type="submit" class="bouton primaire">Enregistrer</button></div>
+  </form>
+</dialog>
+
+<!-- Journées -->
+<dialog id="d-journees" style="width:min(520px, calc(100vw - 32px))">
+  <div>
+    <div class="dlg-tete"><h2>Journées enregistrées</h2><button type="button" class="bouton" data-fermer>Fermer</button></div>
+    <div class="dlg-corps" id="jo-corps"></div>
+    <div class="dlg-pied"><span class="gauche">Les journées passées s'ouvrent en lecture seule.</span></div>
+  </div>
+</dialog>
+
+<!-- Clôture -->
+<dialog id="d-cloture" style="width:min(620px, calc(100vw - 32px))">
+  <div>
+    <div class="dlg-tete"><h2>Clôturer la journée</h2><button type="button" class="bouton" data-fermer>Fermer</button></div>
+    <div class="dlg-corps" id="cl-corps"></div>
+    <div class="dlg-pied"><span class="gauche" id="cl-etat"></span><button type="button" class="bouton primaire" id="cl-valider">Clôturer et archiver</button></div>
+  </div>
+</dialog>
+
+<!-- Ajout d'une circulation -->
+<dialog id="d-ajout" style="width:min(720px, calc(100vw - 32px))">
+  <form method="dialog" id="fm-ajout">
+    <div class="dlg-tete"><h2 id="aj-titre">Ajouter une circulation</h2><button type="button" class="bouton" data-fermer>Fermer</button></div>
+    <div class="dlg-corps">
+      <div class="section"><h4>Depuis le planning (non prévues ce jour)</h4><div class="tableau" style="max-height:260px"><table><tbody id="aj-planning"></tbody></table></div></div>
+      <div class="section"><h4>Circulation exceptionnelle</h4>
+        <div class="formgrid">
+          <div class="champ"><label for="aj-groupe">Groupe</label><select id="aj-groupe"></select></div>
+          <div class="champ"><label for="aj-code">Code</label><input id="aj-code" class="mono"></div>
+          <div class="champ"><label for="aj-sens">Sens</label><select id="aj-sens"><option value="A">Arrivée</option><option value="D">Départ</option></select></div>
+          <div class="champ"><label for="aj-numero">N° / sillon</label><input id="aj-numero" class="mono"></div>
+          <div class="champ"><label for="aj-heure">Heure prévue</label><input id="aj-heure" class="mono" placeholder="hh:mm"></div>
+          <div class="champ"><label for="aj-hlr">HLR</label><input id="aj-hlr" class="mono" placeholder="hh:mm"></div>
+        </div>
+      </div>
+    </div>
+    <div class="dlg-pied"><span class="gauche" id="aj-erreur"></span><button type="submit" class="bouton primaire">Ajouter la circulation exceptionnelle</button></div>
+  </form>
+</dialog>
+
+<script src="commun.js"></script>
+<script src="saisie.js"></script>
+</body>
+</html>

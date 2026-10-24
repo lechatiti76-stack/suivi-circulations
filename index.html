@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Suivi des circulations</title>
+<style>
+  :root { --fond: #13202C; --encre: #EEF2F5; --dim: #9FB0C0; --signal: #F2B705; --carte: #1B2B3A; --trait: #2C4053; }
+  body { margin: 0; min-height: 100vh; background: var(--fond); color: var(--encre); font: 16px/1.5 "Segoe UI", system-ui, sans-serif; display: grid; place-items: center; }
+  main { width: min(720px, calc(100vw - 32px)); display: grid; gap: 22px; padding: 32px 0; }
+  h1 { margin: 0; font-family: "Bahnschrift", "Segoe UI", sans-serif; font-size: 40px; letter-spacing: .05em; text-transform: uppercase; }
+  p { margin: 0; color: var(--dim); }
+  .choix { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; }
+  a.carte { display: grid; gap: 6px; padding: 20px; border-radius: 12px; background: var(--carte); border: 1px solid var(--trait); color: var(--encre); text-decoration: none; }
+  a.carte:hover, a.carte:focus-visible { border-color: var(--signal); outline: none; }
+  a.carte b { font-family: "Bahnschrift", "Segoe UI", sans-serif; font-size: 22px; letter-spacing: .04em; text-transform: uppercase; }
+  .note { font-size: 14px; }
+  code { color: var(--signal); }
+</style>
+</head>
+<body>
+<main>
+  <h1>Suivi des circulations</h1>
+  <p>Outil d'information d'exploitation : il ne remplace ni les procédures réglementaires de circulation, ni les installations de sécurité.</p>
+  <div class="choix">
+    <a class="carte" href="saisie.html"><b>Saisie</b><span>Poste opérateur : journal des mouvements, circulations du jour, préparation du lendemain.</span></a>
+    <a class="carte" href="visuel.html" id="lien-visuel"><b>Écrans</b><span>Affichage plein écran des TV, en lecture seule.</span></a>
+  </div>
+  <p class="note">Première installation : voir le fichier README du dépôt. Les écrans ont besoin de l'adresse du serveur Google dans leur lien (<code>visuel.html?source=…</code>), affichée dans Saisie › Connexion.</p>
+</main>
+<script>
+  try {
+    var c = JSON.parse(localStorage.getItem('suivi:connexion') || 'null');
+    if (c && c.url) document.getElementById('lien-visuel').href = 'visuel.html?source=' + encodeURIComponent(c.url);
+  } catch (e) { /* lien par défaut */ }
+</script>
+</body>
+</html>
