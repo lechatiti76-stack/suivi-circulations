@@ -1241,6 +1241,7 @@
   var GOOGLE = CONNEXION.mode === 'google';
   function demarrer() {
     if (GOOGLE && !CONNEXION.url) { ouvrirConnexion('Première utilisation : indiquez l\'adresse du serveur Google (elle se termine par /exec) et la clé choisie dans Code.gs.'); return; }
+    if (GOOGLE && !CONNEXION.cle) { ouvrirConnexion('Première utilisation : tapez la clé choisie dans Code.gs, puis « Tester la connexion ».'); setTimeout(function () { $('#cx-cle').focus(); }, 50); return; }
     api('GET', '/api/config').then(function (r) {
       if (r.status === 403) { ouvrirConnexion('Clé refusée par le serveur : ' + ((r.data && r.data.erreur) || '')); throw new Error('clé refusée'); }
       if (r.status !== 200) throw new Error('configuration illisible');
