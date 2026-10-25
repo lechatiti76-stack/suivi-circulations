@@ -14,7 +14,7 @@
  * (horaires, voies, wagons, flash info), qui ne contient aucune donnée interne.
  */
 
-const CLE = 'CHANGER-CE-MOT-DE-PASSE';
+const CLE = 'Momiji01';
 const VERSION = '2.1.0';
 const FUSEAU = 'Europe/Paris';
 const NOM_DOSSIER = 'Suivi des circulations - données';
