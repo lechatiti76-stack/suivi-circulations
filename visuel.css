@@ -32,10 +32,11 @@ html, body { margin: 0; height: 100%; background: var(--fond); color: var(--encr
 .ecran.fige .grille { opacity: .8; }
 
 .panneau { background: var(--panneau); border: .08rem solid var(--trait); border-radius: .6rem; overflow: hidden; min-width: 0; }
+.panneau > .cols, .panneau > .r, .panneau > .tcols, .panneau > .t { overflow: hidden; }
 .p-tete { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; padding: .55rem 1rem .4rem; }
 .p-tete h2 { margin: 0; font-weight: 700; font-size: 1.6rem; letter-spacing: .08em; text-transform: uppercase; }
 .p-tete span { font-size: .95rem; color: var(--dim); letter-spacing: .06em; text-transform: uppercase; }
-.cols, .r { display: grid; grid-template-columns: 4.4rem 4.6rem 6.4rem 5.4rem 4.6rem minmax(0, 1fr) 7.2rem; gap: .55rem; align-items: center; padding: 0 1rem; }
+.cols, .r { display: grid; grid-template-columns: 4.4rem 4.6rem 6.4rem 5.4rem 4.6rem minmax(5.6rem, 1fr) 7.2rem; gap: .55rem; align-items: center; padding: 0 1rem; }
 .cols { font-size: .82rem; letter-spacing: .08em; text-transform: uppercase; color: var(--dim); padding-bottom: .3rem; }
 .r { min-height: 2.7rem; border-top: .08rem solid var(--trait); background: var(--ligne); }
 .r:nth-of-type(even) { background: var(--ligne-2); }
@@ -61,7 +62,7 @@ html, body { margin: 0; height: 100%; background: var(--fond); color: var(--encr
 .r.demain { background: transparent; opacity: .8; min-height: 2.3rem; }
 .r.demain .code, .r.demain .h { font-size: 1.25rem; }
 
-.tcols, .t { display: grid; grid-template-columns: 7rem 6.4rem 4.6rem 4.8rem minmax(0, 1fr) 5.6rem 6.6rem 4.4rem 4.6rem 4.8rem 7.2rem; gap: .55rem; align-items: center; padding: 0 1rem; }
+.tcols, .t { display: grid; grid-template-columns: 7rem 6.4rem 4.6rem 4.8rem minmax(7rem, 1fr) 5.6rem 6.6rem 4.4rem 4.6rem 4.8rem 7.2rem; gap: .55rem; align-items: center; padding: 0 1rem; }
 .tcols { font-size: .82rem; letter-spacing: .08em; text-transform: uppercase; color: var(--dim); padding-bottom: .3rem; }
 .tcols .c, .t .c { text-align: center; }
 .t { min-height: 2.9rem; border-top: .08rem solid var(--trait); background: var(--ligne); }

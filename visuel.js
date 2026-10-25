@@ -147,7 +147,13 @@
     var taille = base * 1.15;
     racine.style.fontSize = taille + 'px';
     var garde = 0;
-    while (garde++ < 40 && taille > base * 0.5 && (ecran.scrollHeight > window.innerHeight + 1 || $('#v-grille').scrollHeight > $('#v-grille').clientHeight + 1)) {
+    var deborde = function () {
+      if (ecran.scrollHeight > window.innerHeight + 1 || $('#v-grille').scrollHeight > $('#v-grille').clientHeight + 1) return true;
+      var lignes = document.querySelectorAll('.panneau > .cols, .panneau > .r, .panneau > .tcols, .panneau > .t');
+      for (var i = 0; i < lignes.length; i++) if (lignes[i].scrollWidth > lignes[i].clientWidth + 1) return true;
+      return false;
+    };
+    while (garde++ < 40 && taille > base * 0.5 && deborde()) {
       taille *= 0.96; racine.style.fontSize = taille + 'px';
     }
   }
