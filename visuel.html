@@ -7,7 +7,7 @@
 <link rel="stylesheet" href="visuel.css">
 </head>
 <body>
-<div class="ecran" id="ecran">
+<div class="ecran sans-donnees" id="ecran">
   <header class="tete">
     <div class="titre" id="v-titre">Circulations du jour</div>
     <div class="date" id="v-date"></div>
@@ -16,8 +16,7 @@
   </header>
   <div class="alerte" id="v-alerte" hidden></div>
   <main class="grille" id="v-grille">
-    <section class="col" id="v-col1"></section>
-    <section class="col" id="v-col2"></section>
+    <section class="navettes" id="v-navettes"></section>
     <section class="trains" id="v-trains"></section>
   </main>
   <div class="attente-donnees" id="v-attente">En attente des données du poste de saisie…</div>

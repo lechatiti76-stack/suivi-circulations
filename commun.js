@@ -317,10 +317,10 @@
         var lignes = circs.slice().sort(trierParHeure).map(function (c) { return ligneDiffusee(c, etatCirculation(c, j), 'navette'); });
         var dem = [];
         if (demainVisible) {
-          dem = (j.demain.circulations || []).filter(function (c) { return c.groupe === g.id && c.sens === 'D'; }).sort(trierParHeure)
+          dem = (j.demain.circulations || []).filter(function (c) { return c.groupe === g.id; }).sort(trierParHeure)
             .map(function (c) { return ligneDiffusee(c, { annonce: null, reel: null, voie: null, wagons: null }, 'navette'); });
         }
-        if (lignes.length || dem.length) navettes.push({ id: g.id, libelle: g.libelle, lignes: lignes, demain: dem });
+        navettes.push({ id: g.id, libelle: g.libelle, couleur: couleurGroupe(g, vis), lignes: lignes, demain: dem });
       } else {
         rotations(circs).forEach(function (r) {
           trains.push({
@@ -350,6 +350,32 @@
       navettes: navettes, trains: trains,
       flash: flashActif ? { texte: String(f.texte).trim(), jusqua: f.jusqua || '' } : null
     };
+  }
+  var COULEURS_NAVETTES = { TDF: '#F28C28', TN: '#2D8CFF', ATL: '#F2C230' };
+  var COULEURS_SECOURS = ['#2EB872', '#B07CFF', '#FF6FA8'];
+  /** Couleur d'un groupe de navettes : Paramètres › visuel.couleurs, sinon TDF orange, TN bleu, ATL jaune. */
+  function couleurGroupe(g, vis) {
+    var c = (vis && vis.couleurs && vis.couleurs[g.id]) || g.couleur || COULEURS_NAVETTES[g.id];
+    if (c) return c;
+    var h = 0; String(g.id).split('').forEach(function (ch) { h = (h + ch.charCodeAt(0)) % COULEURS_SECOURS.length; });
+    return COULEURS_SECOURS[h];
+  }
+  /**
+   * État affiché sur les écrans, avec le compte à rebours. cle : supprime, fait, deja, imminent, bientot, attendu, retard, prevu.
+   * « Annoncé » devient « Arrivée imminente » ou « Départ imminent » ; dans les 30 minutes : « Arrive dans 12 min ».
+   */
+  function etatAffichage(l, maintenantIso, seuilMin) {
+    var seuil = seuilMin == null ? 15 : seuilMin, arr = l.sens !== 'D';
+    if (l.etat === 'supprime') return { cle: 'supprime', libelle: 'Supprimé' };
+    if (l.reel) return { cle: 'fait', libelle: (arr ? 'Arrivé ' : 'Parti ') + hm(l.reel) };
+    if (l.etat === 'deja') return { cle: 'deja', libelle: 'Déjà là' };
+    if (l.annonce) return { cle: 'imminent', libelle: arr ? 'Arrivée imminente' : 'Départ imminent' };
+    if (!l.theo) return { cle: 'prevu', libelle: 'Prévu' };
+    var m = minutesEntre(l.theo, maintenantIso);
+    if (m > 30) return { cle: 'prevu', libelle: 'Prévu' };
+    if (m > 0) return { cle: 'bientot', libelle: (arr ? 'Arrive dans ' : 'Départ dans ') + m + ' min', minutes: m };
+    if (-m <= seuil) return { cle: 'attendu', libelle: arr ? 'Attendu' : 'Départ attendu' };
+    return { cle: 'retard', libelle: 'Retard ' + fmtEcart(-m) };
   }
   /** Statut d'une ligne diffusée, recalculé par l'écran avec sa propre horloge. */
   function statutDiffuse(l, maintenantIso, seuilMin) {
@@ -573,7 +599,7 @@
     appliquerVariantes: appliquerVariantes, numerosDe: numerosDe, instancier: instancier, genererCirculations: genererCirculations, nouvelleJournee: nouvelleJournee,
     mouvementsActifs: mouvementsActifs, trouverCirculation: trouverCirculation, etatCirculation: etatCirculation, statutCirculation: statutCirculation,
     libelleStatut: libelleStatut, derniereVoie: derniereVoie, prochainNumeroLigne: prochainNumeroLigne, verifierMouvement: verifierMouvement,
-    rotations: rotations, projeterDiffusion: projeterDiffusion, statutDiffuse: statutDiffuse,
+    rotations: rotations, projeterDiffusion: projeterDiffusion, statutDiffuse: statutDiffuse, etatAffichage: etatAffichage, couleurGroupe: couleurGroupe,
     typeMail: typeMail, modeMail: modeMail, construireMail: construireMail, mailsEnAttente: mailsEnAttente, STATUTS_MAIL_OK: STATUTS_MAIL_OK,
     statistiques: statistiques, csv: csv, exporterMouvements: exporterMouvements, exporterCirculations: exporterCirculations, ligneStatistiques: ligneStatistiques,
     variantesEnTexte: variantesEnTexte, texteEnVariantes: texteEnVariantes, memoriserHabitudes: memoriserHabitudes
