@@ -274,7 +274,8 @@
       annonce: !!d.annonce, reel: d.reel || null,
       wagons: d.wagons != null ? d.wagons : (c.wagonsDemandes != null ? c.wagonsDemandes : null),
       voie: voieAffichee(c, d),
-      partie: c.sens !== 'D' && !d.reel && c.etat !== 'supprime' ? (c.partie || null) : null,
+      // gardé après l'arrivée : le Suivi trains relit ce départ et ne doit pas le croire effacé
+      partie: c.sens !== 'D' && c.etat !== 'supprime' ? (c.partie || null) : null,
       etape: c.sens === 'D' && !d.reel && c.etat !== 'supprime' ? (c.etape || null) : null,
       etat: c.etat === 'supprime' || c.etat === 'deja' ? c.etat : null
     };

@@ -537,7 +537,7 @@
     var t = maintenant();
     modifier(retirer ? 'Départ de ' + c.code + ' retiré' : c.code + ' partie à ' + hm(t), 'circulation.partie', function (j) { circDe(j, id).partie = retirer ? null : t; });
   }
-  /** Lit le classeur du Suivi trains (toutes les 30 s) et reporte départs, arrivées et déroulés dans la journée. */
+  /** Lit le classeur du Suivi trains (toutes les 15 s) et reporte départs, arrivées et déroulés dans la journée. */
   function suivreTrains() {
     var cfg = app.params && app.params.suiviTrains;
     if (!GOOGLE || !cfg || !cfg.classeur || !app.prete || app.lectureSeule || !estJourActif()) return;
@@ -1306,7 +1306,7 @@
       setInterval(traiterMails, 60000);
       setInterval(verifierChangementJour, 30000);
       if (GOOGLE) setInterval(function () { if (estJourActif()) api('POST', '/api/battement', '').then(null, function () { /* signalé par verifierService */ }); }, 30000);
-      if (GOOGLE) { suivreTrains(); setInterval(suivreTrains, 30000); }
+      if (GOOGLE) { suivreTrains(); setInterval(suivreTrains, 15000); }
     }).catch(function (e) {
       if (e.message === 'clé refusée' || e.message === 'serveur vide') return;
       app.serviceOk = false; rendreEtats();
