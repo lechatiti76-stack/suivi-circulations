@@ -532,8 +532,25 @@
   function basculer(id, champ, valeur, libelle) {
     modifier(libelle, 'circulation.' + champ, function (j) { var cc = circDe(j, id); cc[champ] = cc[champ] === valeur ? null : valeur; });
   }
-  function basculerRame(id) {
-    modifier('Rame', 'circulation.rame', function (j) { var cc = circDe(j, id); cc.rame = cc.rame === 'ok' ? 'attente' : 'ok'; });
+  function marquerPartie(id, retirer) {
+    var c = circDe(app.journee, id); if (!c) return;
+    var t = maintenant();
+    modifier(retirer ? 'Départ de ' + c.code + ' retiré' : c.code + ' partie à ' + hm(t), 'circulation.partie', function (j) { circDe(j, id).partie = retirer ? null : t; });
+  }
+  /** Lit le classeur du Suivi trains (toutes les 30 s) et reporte départs, arrivées et déroulés dans la journée. */
+  function suivreTrains() {
+    var cfg = app.params && app.params.suiviTrains;
+    if (!GOOGLE || !cfg || !cfg.classeur || !app.prete || app.lectureSeule || !estJourActif()) return;
+    var date = app.journee.date;
+    api('POST', '/api/suivi-trains', JSON.stringify({ date: date })).then(function (r) {
+      if (r.status !== 200) { app.suiviTrains = { erreur: (r.data && r.data.erreur) || ('erreur ' + r.status), a: new Date() }; return; }
+      app.suiviTrains = { a: new Date(), lignes: (r.data.navettes || []).length + (r.data.journal || []).length };
+      if (!app.journee || app.journee.date !== date || app.lectureSeule) return;
+      var changes = SC.appliquerSuiviTrains(SC.copie(app.journee), r.data, app.params);
+      if (!changes.length) return;
+      modifier('Suivi trains : ' + changes.join(', '), 'suivi-trains', function (j) { SC.appliquerSuiviTrains(j, r.data, app.params); }, { sansAnnulation: true });
+      toast('Suivi trains : ' + changes.join(' · '));
+    }, function () { app.suiviTrains = { erreur: 'serveur injoignable', a: new Date() }; });
   }
   function reelSurSaisie() {
     var c = SC.trouverCirculation(app.journee, F.num.value);
@@ -601,12 +618,16 @@
     var b = [];
     if (st === 'supprime') return '<button type="button" class="bouton petit" data-act="suppr">Rétablir</button>';
     if (d.reel) return '<button type="button" class="bouton petit" data-act="annuler-reel" title="Retirer l\'heure réelle">Annuler</button>';
-    if (c.sens === 'A') {
+    if (c.sens === 'A' && famille(c) === 'navette') {
+      // navette : partie de son terminal, puis arrivée (les écrans suivent son parcours entre les deux)
+      if (!c.partie) b.push('<button type="button" class="bouton petit" data-act="partie" title="La navette a quitté son terminal">Partie</button>');
+      else b.push('<button type="button" class="bouton petit" data-act="reel" title="La navette est arrivée">Arrivée</button>' +
+        '<button type="button" class="bouton petit" data-act="annuler-partie" title="Retirer l\'heure de départ ' + hm(c.partie) + '">↺</button>');
+    } else if (c.sens === 'A') {
       b.push('<button type="button" class="bouton petit" data-act="reel" title="FA : le train est arrivé">FA ✅</button>');
       b.push('<button type="button" class="bouton petit" data-act="deja" title="Le train est déjà présent">' + (c.etat === 'deja' ? 'Pas là' : 'Déjà là') + '</button>');
     } else {
       b.push('<button type="button" class="bouton petit" data-act="reel">Parti</button>');
-      if (famille(c) === 'navette') b.push('<button type="button" class="bouton petit" data-act="rame" title="Mise à disposition de la rame">' + (c.rame === 'ok' ? 'Rame ✅' : 'Rame ⌛') + '</button>');
     }
     return b.join('');
   }
@@ -639,6 +660,8 @@
       return '<input class="mono" ' + attr + '="' + k + '" value="' + esc(val == null ? '' : val) + '"' + (indice ? ' placeholder="' + esc(indice) + '"' : '') + ' title="' + esc(titre) + '"' + dis + '>';
     };
     var etat = SC.libelleStatut(st, c.sens) + (d.reel ? ' ' + hm(d.reel) : '');
+    if (!demain && !d.reel && c.partie && st !== 'supprime') { etat = 'En route · dép. ' + hm(c.partie); st = 'annonce'; }
+    if (!demain && !d.reel && c.etape && st !== 'supprime') etat = c.etape.lib + ' ' + c.etape.h;
     var boutons = demain ? (app.lectureSeule ? '' : '<button type="button" class="bouton petit danger" data-act="suppr-demain">' + (c.etat === 'supprime' ? 'Rétablir' : 'Suppr.') + '</button>')
       : boutonsCirculation(c, d, st);
     var ouverte = !demain && app.ouverte === c.id;
@@ -909,6 +932,13 @@
     var base = p.correspondancesEF || {};
     $('#pa-base').innerHTML = Object.keys(base).sort().map(function (k) { return ligneBase(k, base[k]); }).join('');
     $('#pa-vers').value = (p.saisie || {}).versObligatoire || 'internes';
+    var st = p.suiviTrains || {}, corr = st.correspondances || SC.CORRESPONDANCES_SUIVI;
+    $('#pa-st-classeur').value = st.classeur || '';
+    $('#pa-st-corr').value = Object.keys(corr).map(function (k) { return k + '=' + corr[k]; }).join(', ');
+    $('#pa-st-parcours').value = SC.parcoursEnTexte(Object.assign({}, SC.PARCOURS_DEFAUT, p.parcours || {}));
+    var lu = app.suiviTrains;
+    $('#pa-st-etat').textContent = !GOOGLE ? 'Disponible avec la version Google seulement.' : (!st.classeur ? 'Désactivé.' :
+      (!lu ? 'Pas encore lu.' : (lu.erreur ? 'Dernière lecture ' + hm(SC.iso(lu.a)) + ' : ' + lu.erreur : 'Dernière lecture ' + hm(SC.iso(lu.a)) + ' : ' + lu.lignes + ' ligne' + (lu.lignes > 1 ? 's' : '') + ' du jour.')));
     $('#pa-erreur').textContent = '';
     ouvrir('#d-params');
   });
@@ -959,6 +989,14 @@
     p.visuel = p.visuel || {}; p.visuel.titre = $('#pa-titre').value.trim() || 'Circulations du jour';
     var dm = SC.normHeure($('#pa-demain').value || '00:00'); if (!dm) err.push('Heure d\'affichage de demain invalide.'); p.visuel.demainAPartirDe = dm;
     p.visuel.vitesseFlash = Math.max(20, Math.min(400, +$('#pa-vitesse').value || 90));
+    var corrST = {};
+    $('#pa-st-corr').value.split(/[,;]+/).forEach(function (x) {
+      x = x.trim(); if (!x) return; var k = x.split('=');
+      if (k.length !== 2 || !k[0].trim() || !k[1].trim()) { err.push('Suivi trains : « ' + x + ' » doit s\'écrire vignette=CODE.'); return; }
+      corrST[k[0].trim().toLowerCase()] = k[1].trim().toUpperCase();
+    });
+    p.suiviTrains = { classeur: $('#pa-st-classeur').value.trim(), correspondances: corrST };
+    try { p.parcours = SC.texteEnParcours($('#pa-st-parcours').value); } catch (ex) { err.push('Parcours : ' + ex.message); }
     if (err.length) { $('#pa-erreur').textContent = err.join(' '); return; }
     enregistrerParametres(p, 'Paramètres enregistrés.').then(function () {
       fermer($('#fm-params')); verifierService();
@@ -1040,8 +1078,8 @@
     var fam = groupe(g).famille;
     var c = {
       id: uid('x'), planId: null, groupe: g, code: code, sens: sens, numero: fam === 'navette' ? num : '', sillon: fam === 'navette' ? '' : num,
-      hlr: SC.normHeure(hlr) || '', theo: SC.combiner(date, h), wagonsDemandes: null, voiePrevue: '', rame: fam === 'navette' && sens === 'D' ? 'attente' : null,
-      etat: null, reel: null, mails: {}, deroule: {}, ajoutee: true
+      hlr: SC.normHeure(hlr) || '', theo: SC.combiner(date, h), wagonsDemandes: null, voiePrevue: '',
+      etat: null, reel: null, partie: null, mails: {}, deroule: {}, ajoutee: true
     };
     fermer($('#fm-ajout')); ajouterCirculation(c, code + ' (exceptionnel) ajouté');
   });
@@ -1107,7 +1145,8 @@
       if (a === 'reel') marquerReel(id);
       else if (a === 'annuler-reel') annulerReel(id);
       else if (a === 'deja') basculer(id, 'etat', 'deja', 'Déjà là');
-      else if (a === 'rame') basculerRame(id);
+      else if (a === 'partie') marquerPartie(id);
+      else if (a === 'annuler-partie') marquerPartie(id, true);
       else if (a === 'suppr') { basculer(id, 'etat', 'supprime', 'Suppression / rétablissement'); }
       else if (a === 'suppr-demain') modifier('Demain : suppression / rétablissement', 'demain.suppression', function (j) { var cc = circDemainDe(j, id); cc.etat = cc.etat === 'supprime' ? null : 'supprime'; });
       else if (a === 'renvoyer') { var c = circDe(app.journee, id); var t2 = SC.typeMail(c, app.planning); envoyerMail(c, c.mails && c.mails[t2] ? 'r' + Date.now().toString(36) : null); }
@@ -1267,6 +1306,7 @@
       setInterval(traiterMails, 60000);
       setInterval(verifierChangementJour, 30000);
       if (GOOGLE) setInterval(function () { if (estJourActif()) api('POST', '/api/battement', '').then(null, function () { /* signalé par verifierService */ }); }, 30000);
+      if (GOOGLE) { suivreTrains(); setInterval(suivreTrains, 30000); }
     }).catch(function (e) {
       if (e.message === 'clé refusée' || e.message === 'serveur vide') return;
       app.serviceOk = false; rendreEtats();

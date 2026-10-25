@@ -204,6 +204,18 @@
           <div class="champ large"><label for="pa-alias">Graphies corrigées automatiquement (ex. vext1=ext1)</label><input id="pa-alias" class="mono"></div>
         </div>
       </div>
+      <div class="section"><h4>Suivi trains (lecture automatique, version Google)</h4>
+        <p class="note">Toutes les 30 secondes, la saisie lit le classeur Google du Suivi trains (onglets « Navettes » et « Journal ») :
+          navette FL1 validée → FL1 « en route » sur les écrans avec ses points de passage et son heure d'arrivée estimée ;
+          arrivée, tableau des départs (LF1…) et départ pour la ligne → heure réelle ; étapes du train → déroulé du départ.</p>
+        <div class="formgrid">
+          <div class="champ large"><label for="pa-st-classeur">Adresse du classeur Google du Suivi trains (vide = désactivé)</label><input id="pa-st-classeur" class="mono" placeholder="https://docs.google.com/spreadsheets/d/…/edit"></div>
+          <div class="champ large"><label for="pa-st-corr">Arrivées fret du Suivi trains → train de ligne</label><input id="pa-st-corr" class="mono"></div>
+        </div>
+        <p class="note">Parcours : une ligne par groupe ou code de train, durée du trajet puis points de passage en minutes depuis le départ. <span class="mono">TDF 35 : Départ FS 2, CV 1474 5</span></p>
+        <textarea id="pa-st-parcours" class="mono" style="min-height:70px"></textarea>
+        <p class="note" id="pa-st-etat"></p>
+      </div>
       <div class="section"><h4>Écrans et fichiers</h4>
         <div class="formgrid">
           <div class="champ large"><label for="pa-diffusion">Dossiers de diffusion lus par les écrans (un par ligne)</label><textarea id="pa-diffusion" style="min-height:52px"></textarea></div>

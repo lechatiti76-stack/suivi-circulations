@@ -150,15 +150,13 @@
   }
   function instancier(pc, cle, planning) {
     var r = appliquerVariantes(pc, jourSemaine(cle));
-    var fam = familleDe(planning, r);
     return {
       id: r.id, planId: r.id, groupe: r.groupe, code: r.code, sens: r.sens,
       numero: r.numero || '', sillon: r.sillon || '',
       hlr: normHeure(r.hlr) || '', theo: combiner(cle, r.heure),
       wagonsDemandes: r.wagonsDemandes == null || r.wagonsDemandes === '' ? null : +r.wagonsDemandes,
       voiePrevue: r.voiePrevue || '',
-      rame: (fam === 'navette' && r.sens === 'D') ? 'attente' : null,
-      etat: null, reel: null, mails: {}, deroule: {}, ajoutee: false
+      etat: null, reel: null, partie: null, mails: {}, deroule: {}, ajoutee: false
     };
   }
   /** Circulations prévues pour une date, selon les jours de circulation et les variantes. */
@@ -276,9 +274,31 @@
       annonce: !!d.annonce, reel: d.reel || null,
       wagons: d.wagons != null ? d.wagons : (c.wagonsDemandes != null ? c.wagonsDemandes : null),
       voie: voieAffichee(c, d),
-      rame: (fam === 'navette' && c.sens === 'D' && !d.reel && c.etat !== 'supprime') ? (c.rame || null) : null,
+      partie: c.sens !== 'D' && !d.reel && c.etat !== 'supprime' ? (c.partie || null) : null,
+      etape: c.sens === 'D' && !d.reel && c.etat !== 'supprime' ? (c.etape || null) : null,
       etat: c.etat === 'supprime' || c.etat === 'deja' ? c.etat : null
     };
+  }
+  /**
+   * Prochaines navettes d'un groupe : celles de demain, sinon celles du premier jour suivant qui en a
+   * (le samedi, on voit celles du lundi). Les wagons et voies notés pour demain sont repris.
+   */
+  function prochainesNavettes(j, planning, gid) {
+    var vide = { annonce: null, reel: null, voie: null, wagons: null };
+    var cle = j.demain ? j.demain.date : ajouterJours(j.date, 1);
+    for (var k = 0; k < 7; k++) {
+      var circs = k === 0 && j.demain ? (j.demain.circulations || []) : genererCirculations(planning, ajouterJours(cle, k));
+      circs = circs.filter(function (c) { return c.groupe === gid; });
+      if (circs.length) {
+        var date = ajouterJours(cle, k), d = lireDate(date);
+        return {
+          date: date, demain: k === 0,
+          libelle: (k === 0 ? 'Demain · ' : '') + JOURS[jourSemaine(date) - 1] + ' ' + d.getDate(),
+          lignes: circs.sort(trierParHeure).map(function (c) { return ligneDiffusee(c, vide, 'navette'); })
+        };
+      }
+    }
+    return null;
   }
   function trierParHeure(a, b) { return (a.theo || '9') < (b.theo || '9') ? -1 : ((a.theo || '9') > (b.theo || '9') ? 1 : 0); }
   /** Regroupe arrivées et départs d'un même code en rotations, comme la feuille « tri trains 2 ». */
@@ -315,16 +335,15 @@
       var circs = (j.circulations || []).filter(function (c) { return c.groupe === g.id; });
       if (g.famille === 'navette') {
         var lignes = circs.slice().sort(trierParHeure).map(function (c) { return ligneDiffusee(c, etatCirculation(c, j), 'navette'); });
-        var dem = [];
-        if (demainVisible) {
-          dem = (j.demain.circulations || []).filter(function (c) { return c.groupe === g.id; }).sort(trierParHeure)
-            .map(function (c) { return ligneDiffusee(c, { annonce: null, reel: null, voie: null, wagons: null }, 'navette'); });
-        }
-        navettes.push({ id: g.id, libelle: g.libelle, couleur: couleurGroupe(g, vis), lignes: lignes, demain: dem });
+        var proch = demainVisible ? prochainesNavettes(j, planning, g.id) : null;
+        navettes.push({
+          id: g.id, libelle: g.libelle, couleur: couleurGroupe(g, vis), parcours: parcoursDe(g.id, g, params), lignes: lignes,
+          demain: proch ? proch.lignes : [], demainLibelle: proch ? proch.libelle : ''
+        });
       } else {
         rotations(circs).forEach(function (r) {
           trains.push({
-            groupe: g.libelle, code: r.code,
+            groupe: g.libelle, code: r.code, parcours: parcoursDe(r.code, g, params),
             arrivee: r.arrivee ? ligneDiffusee(r.arrivee, etatCirculation(r.arrivee, j), 'ligne') : null,
             depart: r.depart ? ligneDiffusee(r.depart, etatCirculation(r.depart, j), 'ligne') : null
           });
@@ -360,16 +379,67 @@
     var h = 0; String(g.id).split('').forEach(function (ch) { h = (h + ch.charCodeAt(0)) % COULEURS_SECOURS.length; });
     return COULEURS_SECOURS[h];
   }
+  // ------------------------------------------------------ parcours des navettes
+  /** Trajet (minutes depuis le départ de l'origine) et points de passage, repris du « Suivi trains ». */
+  var PASSAGES_FS = [{ lib: 'Départ FS', min: 2 }, { lib: 'CV 1474', min: 5 }, { lib: 'Entrée GB', min: 15 }, { lib: 'Sortie GB', min: 23 }];
+  var PARCOURS_DEFAUT = {
+    TDF: { trajet: 35, passages: PASSAGES_FS },
+    TN: { trajet: 35, passages: PASSAGES_FS },
+    ATL: { trajet: 35, passages: [{ lib: 'Départ Maritime', min: 2 }, { lib: 'Départ 4R', min: 5 }, { lib: 'Pont rouge', min: 15 }, { lib: 'Point X', min: 20 }, { lib: 'passage FA', min: 25 }] }
+  };
+  var TRAJET_LIGNE = 180;
+  /** Parcours d'un groupe de navettes (ou d'un train de ligne par son code) : Paramètres › parcours, sinon les valeurs du Suivi trains. */
+  function parcoursDe(cle, g, params) {
+    var p = (params && params.parcours) || {};
+    var r = p[cle] || (g && p[g.id]) || PARCOURS_DEFAUT[cle] || (g && PARCOURS_DEFAUT[g.id]);
+    if (!r && g && g.famille === 'ligne') r = { trajet: TRAJET_LIGNE, passages: [] };
+    return r ? { trajet: +r.trajet || 0, passages: (r.passages || []).slice().sort(function (a, b) { return a.min - b.min; }) } : null;
+  }
+  /** « TDF 35 : Départ FS 2, CV 1474 5 » : une ligne par groupe (ou code de train), minutes depuis le départ. */
+  function parcoursEnTexte(parcours) {
+    return Object.keys(parcours || {}).map(function (k) {
+      var p = parcours[k];
+      return k + ' ' + p.trajet + ((p.passages || []).length ? ' : ' + p.passages.map(function (x) { return x.lib + ' ' + x.min; }).join(', ') : '');
+    }).join('\n');
+  }
+  function texteEnParcours(t) {
+    var out = {};
+    String(t || '').split(/\r?\n/).forEach(function (ligne, i) {
+      ligne = ligne.trim(); if (!ligne) return;
+      var m = /^(\S+)\s+(\d{1,3})\s*(?::\s*(.*))?$/.exec(ligne);
+      if (!m) throw new Error('Ligne ' + (i + 1) + ' : écrire « TDF 35 : Départ FS 2, CV 1474 5 ».');
+      var passages = (m[3] || '').split(',').map(function (x) { return x.trim(); }).filter(Boolean).map(function (x) {
+        var pm = /^(.+?)\s+(\d{1,3})$/.exec(x);
+        if (!pm) throw new Error('Ligne ' + (i + 1) + ' : « ' + x + ' » doit finir par ses minutes depuis le départ.');
+        return { lib: pm[1], min: +pm[2] };
+      });
+      out[m[1].toUpperCase()] = { trajet: +m[2], passages: passages };
+    });
+    return out;
+  }
+
   /**
-   * État affiché sur les écrans, avec le compte à rebours. cle : supprime, fait, deja, imminent, bientot, attendu, retard, prevu.
-   * « Annoncé » devient « Arrivée imminente » ou « Départ imminent » ; dans les 30 minutes : « Arrive dans 12 min ».
+   * État affiché sur les écrans, avec le compte à rebours. cle : supprime, fait, deja, imminent, route, bientot, prepa,
+   * attendu, retard, prevu. « Annoncé » devient « Arrivée imminente » ou « Départ imminent » ; dans les 30 minutes :
+   * « Arrive dans 12 min ». Une arrivée partie de son origine suit son parcours : sous = point de passage, eta = arrivée estimée.
    */
-  function etatAffichage(l, maintenantIso, seuilMin) {
+  function etatAffichage(l, maintenantIso, seuilMin, parcours) {
     var seuil = seuilMin == null ? 15 : seuilMin, arr = l.sens !== 'D';
     if (l.etat === 'supprime') return { cle: 'supprime', libelle: 'Supprimé' };
     if (l.reel) return { cle: 'fait', libelle: (arr ? 'Arrivé ' : 'Parti ') + hm(l.reel) };
     if (l.etat === 'deja') return { cle: 'deja', libelle: 'Déjà là' };
     if (l.annonce) return { cle: 'imminent', libelle: arr ? 'Arrivée imminente' : 'Départ imminent' };
+    if (arr && l.partie) {
+      var trajet = (parcours && parcours.trajet) || 35;
+      var ecoule = minutesEntre(maintenantIso, l.partie), eta = iso(new Date(lireDate(l.partie).getTime() + trajet * 60000)), reste = trajet - ecoule;
+      var passe = ((parcours && parcours.passages) || []).filter(function (p) { return p.min <= ecoule; }).pop();
+      var base = { eta: eta, ecartEta: l.theo ? minutesEntre(eta, l.theo) : null, sous: passe ? passe.lib : 'Départ ' + hm(l.partie) };
+      if (reste > 5) return Object.assign(base, { cle: 'route', libelle: 'Arrive dans ' + reste + ' min', progression: Math.max(0, Math.min(1, ecoule / trajet)) });
+      if (reste > 0) return Object.assign(base, { cle: 'imminent', libelle: 'Arrivée imminente' });
+      if (-reste <= seuil) return Object.assign(base, { cle: 'attendu', libelle: 'Arrivée attendue', sous: 'prévue à ' + hm(eta) });
+      return Object.assign(base, { cle: 'retard', libelle: 'Retard ' + fmtEcart(-reste), sous: 'prévue à ' + hm(eta) });
+    }
+    if (!arr && l.etape && l.etape.lib) return { cle: 'prepa', libelle: l.etape.lib, sous: l.etape.h ? 'à ' + l.etape.h : '' };
     if (!l.theo) return { cle: 'prevu', libelle: 'Prévu' };
     var m = minutesEntre(l.theo, maintenantIso);
     if (m > 30) return { cle: 'prevu', libelle: 'Prévu' };
@@ -588,8 +658,78 @@
     return { planning: p, modifiees: n };
   }
 
+  // -------------------------------------------------------- Suivi trains
+  /** Arrivées fret du Suivi trains (identifiant de vignette) → code du train de ligne. Paramètres › suiviTrains.correspondances. */
+  var CORRESPONDANCES_SUIVI = { venissieux: 'VNX', spco: 'SPCO', bordeaux: 'BDX', vierzon: 'VIERZN', clermont: 'CLERMT' };
+  /** Étapes du Suivi trains → champ de la circulation de départ (reel = départ pour la ligne). */
+  var ETAPES_SUIVI = [
+    [/depart pour la ligne/, 'reel'], [/conducteur/, 'conducteur'], [/mise en tete/, 'miseEnTete'],
+    [/bon au depart/, 'bonDepart'], [/regulateur/, 'retourRegulateur'], [/ouverture/, 'ouvertureSignal']
+  ];
+  function sansAccents(s) { return norm(s).normalize('NFD').replace(/[̀-ͯ]/g, ''); }
+  function heureSuivi(v) { var m = /(\d{1,2})[:h](\d{2})/.exec(String(v == null ? '' : v)); return m ? normHeure(m[1] + ':' + m[2]) : null; }
+  /**
+   * Reporte dans la journée ce que le Suivi trains a enregistré (onglets « Navettes » et « Journal » de son classeur) :
+   * - navette FL1 : départ de l'origine (partie), FL1-arr : arrivée réelle ; tableau des départs LF1 : départ réel ;
+   * - arrivées fret (venissieux…) : départ de l'origine et arrivée ; trains (n° de départ) : déroulé et départ pour la ligne.
+   * Une valeur n'est reportée que si elle est nouvelle ou a changé dans le Suivi trains : une correction faite ici reste.
+   * Renvoie la liste des changements (texte), vide si rien n'a bougé.
+   */
+  function appliquerSuiviTrains(j, donnees, params) {
+    var cfg = (params && params.suiviTrains) || {}, corr = cfg.correspondances || CORRESPONDANCES_SUIVI;
+    var st = j.suiviTrains = j.suiviTrains || { vu: {} }, vu = st.vu = st.vu || {}, changes = [];
+    var circ = function (code, sens) {
+      var k = norm(code);
+      return (j.circulations || []).filter(function (c) { return norm(c.code) === k && c.sens === sens && c.etat !== 'supprime'; })[0] || null;
+    };
+    var reporter = function (cle, valeur, c, champ, texte) {
+      if (!c || vu[cle] === (valeur || '')) return;
+      var avant = vu[cle], h = valeur ? combiner(j.date, valeur) : null;
+      vu[cle] = valeur || '';
+      var cible = champ.indexOf('deroule.') === 0 ? (c.deroule = c.deroule || {}) : c, k = champ.replace('deroule.', '');
+      var actuel = champ.indexOf('deroule.') === 0 ? cible[k] : (cible[k] ? hm(cible[k]) : '');
+      if (!h) { if (avant && actuel === avant) { cible[k] = null; changes.push(texte + ' retiré'); } return; }
+      var nouveau = champ.indexOf('deroule.') === 0 ? valeur : h;
+      if (cible[k] === nouveau) return;
+      cible[k] = nouveau; changes.push(texte + ' ' + valeur);
+    };
+    (donnees.navettes || []).forEach(function (r) {
+      var type = sansAccents(r.type), code = String(r.code || '').trim(), h = heureSuivi(r.reel), arrivee = /-arr$/i.test(code);
+      var base = code.replace(/-arr$/i, '');
+      if (type === 'navette') {
+        var n = circ(base, 'A');
+        reporter('N|' + code, h, n, arrivee ? 'reel' : 'partie', base + (arrivee ? ' arrivée' : ' partie'));
+      } else if (type === 'quickboard') {
+        reporter('Q|' + code, h, circ(base, 'D'), 'reel', base + ' partie');
+      } else if (type === 'arrivee') {
+        var cible = corr[base.toLowerCase()] || corr[base];
+        if (cible) reporter('A|' + code, h, circ(cible, 'A'), arrivee ? 'reel' : 'partie', cible + (arrivee ? ' arrivé' : ' parti de l\'origine'));
+      }
+    });
+    var etapes = {};
+    (donnees.journal || []).forEach(function (r) {
+      var num = norm(r.train), lib = sansAccents(r.etape), h = heureSuivi(r.reel);
+      var c = (j.circulations || []).filter(function (x) { return x.sens === 'D' && x.etat !== 'supprime' && numerosDe(x).indexOf(num) >= 0; })[0];
+      if (!c) return;
+      var regle = ETAPES_SUIVI.filter(function (e) { return e[0].test(lib); })[0];
+      if (regle) reporter('J|' + num + '|' + lib, h, c, regle[1] === 'reel' ? 'reel' : 'deroule.' + regle[1], c.code + ' ' + String(r.etape).trim());
+      // dernière étape franchie, affichée sur les écrans tant que le train n'est pas parti
+      if (h && !(regle && regle[1] === 'reel') && (!etapes[c.id] || etapes[c.id].h <= h)) etapes[c.id] = { lib: String(r.etape).trim(), h: h };
+    });
+    (j.circulations || []).forEach(function (c) {
+      if (c.sens !== 'D') return;
+      var e = etapes[c.id] || null;
+      if (JSON.stringify(c.etape || null) !== JSON.stringify(e)) { c.etape = e; if (e) changes.push(c.code + ' : ' + e.lib + ' ' + e.h); }
+    });
+    if (changes.length) st.maj = iso(new Date());
+    return changes;
+  }
+
   return {
     JOURS: JOURS, JOURS_COURTS: JOURS_COURTS, TYPES_MAIL: TYPES_MAIL, DEROULE: DEROULE, ENTETE_STATS: ENTETE_STATS,
+    PARCOURS_DEFAUT: PARCOURS_DEFAUT, CORRESPONDANCES_SUIVI: CORRESPONDANCES_SUIVI,
+    parcoursDe: parcoursDe, parcoursEnTexte: parcoursEnTexte, texteEnParcours: texteEnParcours, prochainesNavettes: prochainesNavettes,
+    appliquerSuiviTrains: appliquerSuiviTrains, heureSuivi: heureSuivi,
     p2: p2, lireDate: lireDate, iso: iso, cleDate: cleDate, ajouterJours: ajouterJours, jourSemaine: jourSemaine,
     libelleJour: libelleJour, libelleDateCourte: libelleDateCourte, hm: hm, hhmm: hhmm, normHeure: normHeure, combiner: combiner,
     heureProche: heureProche, minutesEntre: minutesEntre, fmtEcart: fmtEcart, minutesDuJour: minutesDuJour,

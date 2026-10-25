@@ -42,9 +42,14 @@ html, body { margin: 0; height: 100%; background: var(--fond); color: var(--encr
 .nav-tete span { font-size: .9rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; opacity: .8; }
 .cols, .r { display: grid; grid-template-columns: 3.4rem 2.6rem 5.4rem 3.9rem 3.6rem minmax(4rem, 1fr) 10.2rem; gap: .45rem; align-items: center; padding: 0 .8rem; overflow: hidden; }
 .cols { font-size: .74rem; letter-spacing: .08em; text-transform: uppercase; color: var(--dim); padding-top: .3rem; padding-bottom: .25rem; }
-.r { min-height: 2.45rem; border-top: .08rem solid color-mix(in srgb, var(--c) 30%, var(--trait)); }
-.r.dep { background: color-mix(in srgb, var(--c) 26%, var(--panneau)); }
-.r.arr { background: color-mix(in srgb, var(--c) 13%, var(--panneau)); }
+/* Lignes pleinement colorées : départs dans la couleur du groupe, arrivées un ton plus sombre ; --el = encre lisible sur ce fond. */
+.r { min-height: 2.45rem; border-top: .08rem solid rgba(0, 0, 0, .3); color: var(--el, var(--encre)); }
+.r.dep { background: var(--fd, var(--panneau)); }
+.r.arr { background: var(--fa, var(--panneau)); }
+.r .sens, .r .h small, .r .ec.hlr, .r .wg { color: inherit; opacity: .78; }
+.r .barre { color: inherit; opacity: .55; }
+.r .ec.tard, .r .ec.tres-tard, .r .ec.tot { background: #0B141D; padding: .04rem .35rem; border-radius: .3rem; justify-self: start; }
+.r .st { background-color: #0B141D; outline: .1rem solid rgba(8, 18, 27, .55); }
 .code { font-weight: 700; font-size: 1.4rem; letter-spacing: .02em; white-space: nowrap; }
 .sens { font-size: .78rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: color-mix(in srgb, var(--c) 55%, var(--encre)); }
 .h { font-weight: 700; font-size: 1.4rem; font-variant-numeric: tabular-nums; display: flex; align-items: baseline; gap: .3rem; white-space: nowrap; }
@@ -54,28 +59,32 @@ html, body { margin: 0; height: 100%; background: var(--fond); color: var(--encr
 .ec.hlr { color: var(--dim); font-size: .95rem; display: flex; flex-direction: column; line-height: 1; }
 .ec.hlr small { font-size: .6rem; letter-spacing: .08em; }
 .wg { font-size: 1.1rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.vo { font-weight: 700; font-size: 1.25rem; display: flex; flex-direction: column; line-height: 1.05; white-space: nowrap; overflow: hidden; }
-.vo small { font-weight: 700; font-size: .7rem; letter-spacing: .03em; }
-.rame-ok { color: var(--vert); } .rame-attente { color: var(--ambre); }
+.vo { font-weight: 700; font-size: 1.25rem; white-space: nowrap; overflow: hidden; }
 .barre { text-decoration: line-through; text-decoration-thickness: .1rem; color: var(--dim); }
 .vide { padding: .7rem .9rem .8rem; color: var(--dim); font-size: 1.05rem; }
 
-/* Demain : une ligne de pastilles par groupe, sans alourdir le tableau */
-.demain { border-top: .12rem dashed color-mix(in srgb, var(--c) 45%, var(--trait)); padding: .4rem .8rem .55rem; display: grid; gap: .3rem; }
-.demain-tete { font-size: .8rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--c); }
-.puces { display: flex; flex-wrap: wrap; gap: .3rem .4rem; }
-.puce { display: inline-flex; align-items: baseline; gap: .35rem; padding: .12rem .5rem; border-radius: .35rem; font-size: .92rem; white-space: nowrap;
-  background: color-mix(in srgb, var(--c) 14%, var(--panneau)); border: .08rem solid color-mix(in srgb, var(--c) 40%, transparent); }
-.puce b { font-size: 1rem; }
-.puce i { font-style: normal; color: var(--dim); font-size: .8rem; }
-.puce.supprimee { opacity: .6; text-decoration: line-through; }
+/* Prochaines navettes (demain, ou le jour suivant qui en a) : une carte par rotation, quatre par rangée */
+.demain { border-top: .12rem dashed color-mix(in srgb, var(--c) 45%, var(--trait)); padding: .45rem .8rem .6rem; display: grid; gap: .4rem; }
+.demain-tete { font-size: .95rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--c); }
+.rots { display: grid; grid-template-columns: repeat(var(--r, 4), minmax(0, 1fr)); gap: .4rem; }
+.rot { display: grid; gap: .15rem; padding: .3rem .5rem .35rem; border-radius: .4rem; min-width: 0;
+  background: color-mix(in srgb, var(--c) 16%, var(--panneau)); border: .08rem solid color-mix(in srgb, var(--c) 50%, transparent); border-left: .35rem solid var(--c); }
+.rl { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: .45rem; white-space: nowrap; overflow: hidden; }
+.rl b { font-size: 1.2rem; }
+.rl span { font-size: 1.2rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.rl.arr b, .rl.arr span { color: color-mix(in srgb, var(--c) 35%, var(--encre)); }
+.rl i { flex-basis: 100%; font-style: normal; font-size: .85rem; color: var(--dim); }
+.rl.supprimee { opacity: .55; text-decoration: line-through; }
 
 /* ------------------------------------------------------------- états */
 .st { position: relative; display: inline-flex; justify-content: center; align-items: center; width: 100%; font-weight: 700; font-size: .88rem; letter-spacing: .03em; text-transform: uppercase; padding: .26rem .4rem; border-radius: .35rem; white-space: nowrap; overflow: hidden; }
 .st.fait { background: var(--vert); color: #06210f; }
 .st.imminent { background: var(--ambre); color: #1a1200; animation: pouls 1.8s ease-in-out infinite; }
-.st.bientot { color: var(--cyan); box-shadow: inset 0 0 0 .12rem var(--cyan); }
-.st.bientot .avance { position: absolute; left: 0; bottom: 0; height: .2rem; background: var(--cyan); }
+.st.bientot, .st.route { color: var(--cyan); box-shadow: inset 0 0 0 .12rem var(--cyan); }
+.st .avance { position: absolute; left: 0; bottom: 0; height: .22rem; background: var(--cyan); }
+.st.prepa { background: var(--cyan); color: #04202e; }
+.etat { display: flex; flex-direction: column; gap: .1rem; min-width: 0; }
+.sous { font-size: .72rem; font-weight: 700; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; opacity: .9; }
 .st.attendu { color: var(--ambre); box-shadow: inset 0 0 0 .12rem var(--ambre); }
 .st.retard { background: var(--rouge); color: #2a0602; }
 .st.supprime { color: var(--rouge); box-shadow: inset 0 0 0 .12rem var(--rouge); }

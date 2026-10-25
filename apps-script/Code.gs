@@ -15,7 +15,7 @@
  */
 
 const CLE = 'CHANGER-CE-MOT-DE-PASSE';
-const VERSION = '2.0.0';
+const VERSION = '2.1.0';
 const FUSEAU = 'Europe/Paris';
 const NOM_DOSSIER = 'Suivi des circulations - données';
 
@@ -54,7 +54,44 @@ function router_(m, c, corps) {
   if (m === 'POST' && c === '/api/battement') return ok_({ battement: battre_() });
   if (m === 'POST' && c === '/api/mail') return avecVerrou_(() => mail_(JSON.parse(corps)));
   if (m === 'POST' && c === '/api/archives') return avecVerrou_(() => archives_(JSON.parse(corps)));
+  if (m === 'POST' && c === '/api/suivi-trains') return suiviTrains_(JSON.parse(corps || '{}').date);
   return { status: 404, data: { erreur: 'route inconnue : ' + m + ' ' + c } };
+}
+
+// ------------------------------------------------------------------ Suivi trains
+/**
+ * Lignes du jour du classeur de l'application « Suivi trains » (Paramètres › suiviTrains.classeur) :
+ * onglet Navettes (Date | Type | Code | Libellé | Heure théorique | Heure réelle…) et onglet Journal
+ * (Date | Train | Étape | Heure théorique | Heure réelle…). Lecture seule, gardée 20 s en cache.
+ * Le classeur doit appartenir au compte qui a déployé ce serveur (ou lui être partagé).
+ */
+function suiviTrains_(date) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(date || ''))) return { status: 400, data: { erreur: 'date invalide' } };
+  const id = idClasseur_((lireJson_('parametres.json', {}).suiviTrains || {}).classeur);
+  if (!id) return { status: 400, data: { erreur: 'adresse du classeur Suivi trains absente ou invalide (Paramètres)' } };
+  const cache = CacheService.getScriptCache(), cle = 'suivi:' + id + ':' + date, vu = cache.get(cle);
+  if (vu) return ok_(JSON.parse(vu));
+  let ss;
+  try { ss = SpreadsheetApp.openById(id); }
+  catch (e) { return { status: 502, data: { erreur: 'classeur Suivi trains inaccessible : vérifiez l\'adresse et que ce compte Google peut l\'ouvrir' } }; }
+  const out = { date: date, lu: maintenant_(), navettes: [], journal: [] };
+  lignesDuJour_(ss.getSheetByName('Navettes'), date).forEach(r => out.navettes.push({ type: r[1], code: r[2], theo: r[4], reel: r[5] }));
+  lignesDuJour_(ss.getSheetByName('Journal'), date).forEach(r => out.journal.push({ train: r[1], etape: r[2], theo: r[3], reel: r[4] }));
+  cache.put(cle, JSON.stringify(out), 20);
+  return ok_(out);
+}
+/** Identifiant d'un classeur à partir de son adresse (…/spreadsheets/d/<id>/edit) ou de l'identifiant seul. */
+function idClasseur_(adresse) {
+  const s = String(adresse || '').trim(), m = /\/d\/([A-Za-z0-9_-]{20,})/.exec(s);
+  return m ? m[1] : (/^[A-Za-z0-9_-]{20,}$/.test(s) ? s : '');
+}
+/** Lignes dont la date (texte 2026-10-25 ou date affichée 25/10/2026) est celle demandée, en texte affiché. */
+function lignesDuJour_(feuille, date) {
+  if (!feuille) return [];
+  return feuille.getDataRange().getDisplayValues().slice(1).filter(r => {
+    const d = String(r[0] || '').trim(), fr = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(d);
+    return (fr ? fr[3] + '-' + ('0' + fr[2]).slice(-2) + '-' + ('0' + fr[1]).slice(-2) : d.slice(0, 10)) === date;
+  }).map(r => r.map(v => String(v == null ? '' : v).trim()));
 }
 
 // --------------------------------------------------------------------- outils

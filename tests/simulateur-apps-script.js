@@ -41,9 +41,17 @@ function creerServices() {
   function Feuille(nom) { this.nom = nom; this.lignes = []; }
   Feuille.prototype.appendRow = function (l) { this.lignes.push(l.map(function (v) { return /^\d{4}-\d{2}-\d{2}$/.test(String(v)) ? new DateCtx(String(v) + 'T00:00:00') : v; })); return this; };
   Feuille.prototype.setFrozenRows = function () { return this; };
-  Feuille.prototype.getDataRange = function () { var f = this; return { getValues: function () { return f.lignes.map(function (l) { return l.slice(); }); } }; };
+  // valeurs affichées : une date comme Sheets en français (25/10/2026), le reste en texte
+  function affiche(v) { return v instanceof DateCtx ? p2(v.getDate()) + '/' + p2(v.getMonth() + 1) + '/' + v.getFullYear() : String(v == null ? '' : v); }
+  Feuille.prototype.getDataRange = function () {
+    var f = this;
+    return {
+      getValues: function () { return f.lignes.map(function (l) { return l.slice(); }); },
+      getDisplayValues: function () { return f.lignes.map(function (l) { return l.map(affiche); }); }
+    };
+  };
   Feuille.prototype.getRange = function (r, c, nr, nc) { var f = this; return { setValues: function (v) { f.lignes[r - 1] = v[0].slice(); } }; };
-  function Classeur(nom) { this.id = nouvelId(); this.nom = nom; this.feuilles = {}; classeurs[this.id] = this; fichiers[this.id] = new Fichier(nom, '', 'sheet', 'racine'); fichiers[this.id].id = this.id; }
+  function Classeur(nom, id) { this.id = id || nouvelId(); this.nom = nom; this.feuilles = {}; classeurs[this.id] = this; fichiers[this.id] = new Fichier(nom, '', 'sheet', 'racine'); fichiers[this.id].id = this.id; }
   Classeur.prototype.getId = function () { return this.id; };
   Classeur.prototype.getSheetByName = function (n) { return this.feuilles[n] || null; };
   Classeur.prototype.insertSheet = function (n) { this.feuilles[n] = new Feuille(n); return this.feuilles[n]; };
@@ -75,6 +83,7 @@ function creerServices() {
   return {
     services: services,
     etat: { fichiers: fichiers, dossiers: dossiers, classeurs: classeurs, proprietes: proprietes, cache: cache, envois: envois, brouillons: brouillons },
+    creerClasseur: function (nom, id) { return new Classeur(nom, id); },
     viderCache: function () { Object.keys(cache).forEach(function (k) { delete cache[k]; }); },
     definirDate: function (D) { DateCtx = D; }
   };
@@ -97,6 +106,7 @@ function charger(cle) {
     doPost: function (contenu) { return contexte.doPost({ postData: { contents: contenu } }); },
     appel: appel,
     etat: s.etat,
+    creerClasseur: s.creerClasseur,
     viderCache: s.viderCache
   };
 }

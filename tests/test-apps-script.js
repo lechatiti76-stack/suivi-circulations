@@ -127,5 +127,29 @@ test('fichiers CSV avec BOM dans Drive › archives › année, statistiques san
   assert.strictEqual(G.appel('POST', '/api/archives', JSON.stringify({ date: '2026-10-22', fichiers: [{ nom: '../x.csv', contenu: '' }] })).status, 400);
 });
 
+console.log('Suivi trains');
+test('lecture des onglets Navettes et Journal du jour, adresse vérifiée', function () {
+  var g = simulateur.charger('secret-essai');
+  g.appel('PUT', '/api/parametres', JSON.stringify({ voies: ['vf1'] }));
+  assert.strictEqual(g.appel('POST', '/api/suivi-trains', JSON.stringify({ date: '2026-10-25' })).status, 400);
+  var id = '1AbCdEfGhIjKlMnOpQrStUvWxYz0123456789', ss = g.creerClasseur('Suivi trains', id);
+  var nav = ss.insertSheet('Navettes');
+  nav.appendRow(['Date', 'Type', 'Code', 'Libellé', 'Heure théorique', 'Heure réelle', 'Écart (min)', 'Mis à jour le']);
+  nav.appendRow(['2026-10-25', 'Navette', 'FL1', 'FL1 (départ)', '', '14:05', '', '']);
+  nav.appendRow(['2026-10-25', 'Quickboard', 'LF2', 'LF2', '15:30', '15:34', 4, '']);
+  nav.appendRow(['2026-10-24', 'Navette', 'FL1', 'FL1 (départ)', '', '09:00', '', '']);
+  var jr = ss.insertSheet('Journal');
+  jr.appendRow(['Date', 'Train', 'Étape', 'Heure théorique', 'Heure réelle']);
+  jr.appendRow(['2026-10-25', '50238', 'Mise en tête', '16:56', '16:58:12']);
+  g.appel('PUT', '/api/parametres', JSON.stringify({ voies: ['vf1'], suiviTrains: { classeur: 'https://docs.google.com/spreadsheets/d/' + id + '/edit#gid=0' } }));
+  var r = g.appel('POST', '/api/suivi-trains', JSON.stringify({ date: '2026-10-25' }));
+  assert.strictEqual(r.status, 200);
+  assert.deepStrictEqual(r.data.navettes.map(function (x) { return x.code + ' ' + x.reel; }), ['FL1 14:05', 'LF2 15:34']);
+  assert.deepStrictEqual(r.data.journal, [{ train: '50238', etape: 'Mise en tête', theo: '16:56', reel: '16:58:12' }]);
+  g.appel('PUT', '/api/parametres', JSON.stringify({ voies: ['vf1'], suiviTrains: { classeur: 'https://docs.google.com/spreadsheets/d/inconnu0123456789abcdef/edit' } }));
+  assert.strictEqual(g.appel('POST', '/api/suivi-trains', JSON.stringify({ date: '2026-10-25' })).status, 502);
+  assert.strictEqual(g.appel('POST', '/api/suivi-trains', JSON.stringify({ date: 'hier' })).status, 400);
+});
+
 console.log('\n' + reussis + ' tests réussis, ' + echecs + ' en échec.');
 process.exit(echecs ? 1 : 0);

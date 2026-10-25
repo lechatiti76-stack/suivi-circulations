@@ -41,6 +41,8 @@
   function classeEcart(min) { return min < 0 ? 'tot' : (min > 15 ? 'tres-tard' : (min > 0 ? 'tard' : '')); }
   function celluleEcart(l, e) {
     if (l.reel && l.theo) { var m = SC.minutesEntre(l.reel, l.theo); return '<span class="ec ' + classeEcart(m) + '">' + SC.fmtEcart(m) + '</span>'; }
+    // en route : retard estimé à l'arrivée, d'après l'heure de départ de l'origine
+    if (e.ecartEta != null) return e.ecartEta ? '<span class="ec ' + classeEcart(e.ecartEta) + '">' + SC.fmtEcart(e.ecartEta) + '</span>' : '<span class="ec">à l\'heure</span>';
     if ((e.cle === 'retard' || e.cle === 'attendu' || e.cle === 'imminent') && l.theo) {
       var r = SC.minutesEntre(maintenant(), l.theo);
       if (r > 0) return '<span class="ec ' + classeEcart(r) + '">' + SC.fmtEcart(r) + '</span>';
@@ -54,22 +56,38 @@
     return '<span class="h' + (barre ? ' barre' : '') + '">' + h + '<small>' + (l.reel ? 'réel' : 'prévu') + '</small></span>';
   }
   function celluleEtat(e) {
-    var barre = e.cle === 'bientot' ? '<span class="avance" style="width:' + Math.round((30 - e.minutes) / 30 * 100) + '%"></span>' : '';
-    return '<span><span class="st ' + e.cle + '">' + esc(e.libelle) + barre + '</span></span>';
+    var avance = e.cle === 'bientot' ? (30 - e.minutes) / 30 : (e.cle === 'route' ? e.progression : null);
+    var barre = avance != null ? '<span class="avance" style="width:' + Math.round(avance * 100) + '%"></span>' : '';
+    var sous = e.sous ? '<small class="sous">' + esc(e.sous) + (e.eta && e.cle !== 'attendu' && e.cle !== 'retard' ? ' · arr. ' + hm(e.eta) : '') + '</small>' : '';
+    return '<span class="etat"><span class="st ' + e.cle + '">' + esc(e.libelle) + barre + '</span>' + sous + '</span>';
   }
-  function celluleVoie(l) {
-    var rame = l.rame === 'ok' ? '<small class="rame-ok">rame prête</small>' : (l.rame === 'attente' ? '<small class="rame-attente">rame att.</small>' : '');
-    return '<span class="vo">' + esc(l.voie || '') + rame + '</span>';
-  }
+  function celluleVoie(l) { return '<span class="vo">' + esc(l.voie || '') + '</span>'; }
 
   // ------------------------------------------------------------- navettes
-  function encreSur(hex) {
-    var m = /^#?([0-9a-f]{6})$/i.exec(hex || ''); if (!m) return '#ffffff';
-    var n = parseInt(m[1], 16), r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
-    return (0.299 * r + 0.587 * g + 0.114 * b) > 150 ? '#1a1200' : '#ffffff';
+  function rvb(hex) {
+    var m = /^#?([0-9a-f]{6})$/i.exec(hex || ''); if (!m) return null;
+    var n = parseInt(m[1], 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
   }
-  function ligneNavette(l) {
-    var e = SC.etatAffichage(l, maintenant(), etat.d.seuilRetardMinutes);
+  function melange(a, b, part) { return a.map(function (v, i) { return Math.round(v * part + b[i] * (1 - part)); }); }
+  function enHex(c) { return '#' + c.map(function (v) { return (v < 16 ? '0' : '') + v.toString(16); }).join(''); }
+  /** Encre la plus lisible sur un fond (contraste WCAG), blanc à contraste presque égal. */
+  function encreSur(fond) {
+    if (!fond) return '#ffffff';
+    var l = fond.map(function (v) { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); });
+    var lum = 0.2126 * l[0] + 0.7152 * l[1] + 0.0722 * l[2];
+    return (lum + 0.05) / 0.0555 > 1.05 / (lum + 0.05) + 0.3 ? '#14100a' : '#ffffff';
+  }
+  /** Fond des lignes de départ (couleur pleine) et d'arrivée (un ton plus sombre), encre commune au groupe. */
+  function couleursGroupe(el, hex) {
+    var c = rvb(hex) || [242, 140, 40], dep = melange(c, [0, 0, 0], 0.86), arr = melange(c, [13, 26, 38], 0.68);
+    el.style.setProperty('--c', enHex(c));
+    el.style.setProperty('--ce', encreSur(c));
+    el.style.setProperty('--fd', enHex(dep));
+    el.style.setProperty('--fa', enHex(arr));
+    el.style.setProperty('--el', encreSur(dep));
+  }
+  function ligneNavette(l, parcours) {
+    var e = SC.etatAffichage(l, maintenant(), etat.d.seuilRetardMinutes, parcours);
     return '<div class="r ' + (l.sens === 'D' ? 'dep' : 'arr') + '" data-k="' + esc(l.id) + '">' +
       '<span class="code">' + esc(l.code) + '</span>' +
       '<span class="sens">' + (l.sens === 'D' ? 'Dép.' : 'Arr.') + '</span>' +
@@ -77,18 +95,33 @@
       '<span class="wg">' + (l.wagons != null ? esc(l.wagons) + ' wgs' : '') + '</span>' +
       celluleVoie(l) + celluleEtat(e) + '</div>';
   }
-  function puceDemain(l) {
-    return '<span class="puce' + (l.etat === 'supprime' ? ' supprimee' : '') + '"><b>' + esc(l.code) + '</b>' + esc(hm(l.theo) || '—') +
-      (l.wagons != null ? '<i>' + esc(l.wagons) + ' w</i>' : '') + (l.voie ? '<i>' + esc(l.voie) + '</i>' : '') + '</span>';
+  /** Prochaines navettes : une carte par rotation (LF1 + FL1, LF2 + FL2…), quatre par rangée. */
+  function blocProchaines(g) {
+    var rot = {}, ordre = [];
+    g.demain.forEach(function (l) {
+      var k = String(l.code).replace(/^\D+/, '') || l.code;
+      if (!rot[k]) { rot[k] = []; ordre.push(k); }
+      rot[k].push(l);
+    });
+    var cartes = ordre.map(function (k) {
+      return '<div class="rot">' + rot[k].map(function (l) {
+        var detail = [l.wagons != null ? l.wagons + ' w' : '', l.voie || ''].filter(Boolean).join(' · ');
+        return '<div class="rl ' + (l.sens === 'D' ? 'dep' : 'arr') + (l.etat === 'supprime' ? ' supprimee' : '') + '"><b>' + esc(l.code) + '</b>' +
+          '<span>' + esc(hm(l.theo) || '—') + '</span>' + (detail ? '<i>' + esc(detail) + '</i>' : '') + '</div>';
+      }).join('') + '</div>';
+    });
+    // demainLibelle absent : diffusion publiée par une saisie pas encore rechargée
+    return '<div class="demain"><div class="demain-tete">Prochaines navettes · ' + esc(g.demainLibelle || ('Demain · ' + (etat.d.demain || ''))) + '</div>' +
+      '<div class="rots" style="--r:' + Math.min(4, Math.max(1, ordre.length)) + '">' + cartes.join('') + '</div></div>';
   }
   function blocNavettes(g) {
     var fait = g.lignes.filter(function (l) { return l.reel; }).length;
     var html = '<div class="nav-tete"><h2>' + esc(g.libelle) + '</h2><span>' + (g.lignes.length ? fait + ' / ' + g.lignes.length + ' réalisées' : 'aucune aujourd\'hui') + '</span></div>';
     if (g.lignes.length) {
       html += '<div class="cols"><span>Code</span><span>Sens</span><span>Heure</span><span>Écart</span><span>Wagons</span><span>Voie</span><span>État</span></div>' +
-        '<div class="lignes">' + g.lignes.map(ligneNavette).join('') + '</div>';
+        '<div class="lignes">' + g.lignes.map(function (l) { return ligneNavette(l, g.parcours); }).join('') + '</div>';
     }
-    if (g.demain && g.demain.length) html += '<div class="demain"><div class="demain-tete">Demain · ' + esc(etat.d.demain || '') + '</div><div class="puces">' + g.demain.map(puceDemain).join('') + '</div></div>';
+    if (g.demain && g.demain.length) html += blocProchaines(g);
     else if (!g.lignes.length) html += '<div class="vide">Aucune navette prévue.</div>';
     return html;
   }
@@ -96,7 +129,7 @@
   // ------------------------------------------------------- trains de ligne
   function ligneTrain(t) {
     var a = t.arrivee, d = t.depart, s = etat.d.seuilRetardMinutes, n = maintenant();
-    var ea = a ? SC.etatAffichage(a, n, s) : null, ed = d ? SC.etatAffichage(d, n, s) : null;
+    var ea = a ? SC.etatAffichage(a, n, s, t.parcours) : null, ed = d ? SC.etatAffichage(d, n, s) : null;
     var arr = a ? celluleEtat(ea) + celluleHeure(a, ea.cle === 'supprime') + '<span class="vo">' + esc(ea.cle === 'supprime' ? '' : (a.voie || '')) + '</span>'
       : '<span></span><span></span><span></span>';
     var dep = d ? '<span class="num' + (ed.cle === 'supprime' ? ' barre' : '') + '">' + esc(d.numero || '') + '</span>' + celluleHeure(d, ed.cle === 'supprime') +
@@ -145,8 +178,7 @@
     nav.forEach(function (g, i) {
       var el = zone.children[i];
       if (!el) { el = document.createElement('div'); el.className = 'nav'; zone.appendChild(el); }
-      el.style.setProperty('--c', g.couleur || '#F28C28');
-      el.style.setProperty('--ce', encreSur(g.couleur));
+      couleursGroupe(el, g.couleur);
       change = majBloc(el, blocNavettes(g)) || change;
     });
     var trains = $('#v-trains');
