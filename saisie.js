@@ -1206,16 +1206,21 @@
   $('#fm-connexion').addEventListener('submit', function (e) {
     e.preventDefault(); lireConnexionSaisie();
     lsEcrire('suivi:connexion', { url: CONNEXION.url, cle: CONNEXION.cle });
+    if ($('#cx-fichier').files[0]) { importerDonnees(); return; }
     location.reload();
   });
   $('#cx-copier').addEventListener('click', function () {
     var l = $('#cx-lien'); l.select();
     try { navigator.clipboard.writeText(l.value).then(function () { toast('Lien des écrans copié.'); }, function () { document.execCommand('copy'); }); } catch (e) { document.execCommand('copy'); }
   });
-  $('#cx-importer').addEventListener('click', function () {
+  $('#cx-importer').addEventListener('click', importerDonnees);
+  // Un fichier choisi est importé tout de suite, sans autre clic.
+  $('#cx-fichier').addEventListener('change', function () { if ($('#cx-fichier').files[0]) importerDonnees(); });
+  function importerDonnees() {
     lireConnexionSaisie();
     var f = $('#cx-fichier').files[0];
     if (!f) { $('#cx-message').textContent = 'Choisissez le fichier donnees-initiales.json.'; return; }
+    if (!CONNEXION.url || !CONNEXION.cle) { $('#cx-message').textContent = 'Indiquez d\'abord l\'adresse du serveur et la clé.'; return; }
     var lecteur = new FileReader();
     lecteur.onload = function () {
       var d;
@@ -1230,10 +1235,10 @@
         lsEcrire('suivi:connexion', { url: CONNEXION.url, cle: CONNEXION.cle });
         $('#cx-message').textContent = 'Données importées : ' + d.planning.circulations.length + ' circulations. Rechargement…';
         setTimeout(function () { location.reload(); }, 1200);
-      }).catch(function (e) { $('#cx-message').textContent = 'Import impossible : ' + e.message; });
+      }).catch(function (e) { $('#cx-message').textContent = 'Import impossible : ' + (e.message === 'Failed to fetch' ? 'serveur injoignable, vérifiez l\'adresse' : e.message); });
     };
     lecteur.readAsText(f);
-  });
+  }
 
   // ------------------------------------------------------------- démarrage
   horloge(); setInterval(horloge, 1000);
