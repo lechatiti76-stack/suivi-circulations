@@ -668,6 +668,16 @@
   ];
   function sansAccents(s) { return norm(s).normalize('NFD').replace(/[̀-ͯ]/g, ''); }
   function heureSuivi(v) { var m = /(\d{1,2})[:h](\d{2})/.exec(String(v == null ? '' : v)); return m ? normHeure(m[1] + ':' + m[2]) : null; }
+  /** Une ligne par clé : le classeur peut contenir la même étape plusieurs fois ; une heure vide ne remplace pas une heure. */
+  function dedoublonner(lignes, cle) {
+    var vus = {}, ordre = [];
+    (lignes || []).forEach(function (r) {
+      var k = cle(r);
+      if (!Object.prototype.hasOwnProperty.call(vus, k)) { ordre.push(k); vus[k] = r; }
+      else if (heureSuivi(r.reel) || !heureSuivi(vus[k].reel)) vus[k] = r;
+    });
+    return ordre.map(function (k) { return vus[k]; });
+  }
   /**
    * Reporte dans la journée ce que le Suivi trains a enregistré (onglets « Navettes » et « Journal » de son classeur) :
    * - navette FL1 : départ de l'origine (partie), FL1-arr : arrivée réelle ; tableau des départs LF1 : départ réel ;
@@ -693,7 +703,7 @@
       if (cible[k] === nouveau) return;
       cible[k] = nouveau; changes.push(texte + ' ' + valeur);
     };
-    (donnees.navettes || []).forEach(function (r) {
+    dedoublonner(donnees.navettes, function (r) { return sansAccents(r.type) + '|' + norm(r.code); }).forEach(function (r) {
       var type = sansAccents(r.type), code = String(r.code || '').trim(), h = heureSuivi(r.reel), arrivee = /-arr$/i.test(code);
       var base = code.replace(/-arr$/i, '');
       if (type === 'navette') {
@@ -707,7 +717,7 @@
       }
     });
     var etapes = {};
-    (donnees.journal || []).forEach(function (r) {
+    dedoublonner(donnees.journal, function (r) { return norm(r.train) + '|' + sansAccents(r.etape); }).forEach(function (r) {
       var num = norm(r.train), lib = sansAccents(r.etape), h = heureSuivi(r.reel);
       var c = (j.circulations || []).filter(function (x) { return x.sens === 'D' && x.etat !== 'supprime' && numerosDe(x).indexOf(num) >= 0; })[0];
       if (!c) return;
@@ -719,7 +729,7 @@
     (j.circulations || []).forEach(function (c) {
       if (c.sens !== 'D') return;
       var e = etapes[c.id] || null;
-      if (JSON.stringify(c.etape || null) !== JSON.stringify(e)) { c.etape = e; if (e) changes.push(c.code + ' : ' + e.lib + ' ' + e.h); }
+      if (JSON.stringify(c.etape || null) !== JSON.stringify(e)) { c.etape = e; if (e && !c.reel) changes.push(c.code + ' : ' + e.lib + ' ' + e.h); }
     });
     if (changes.length) st.maj = iso(new Date());
     return changes;
