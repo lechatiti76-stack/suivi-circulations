@@ -80,6 +80,7 @@
         <button type="button" class="onglet" role="tab" aria-selected="true" data-onglet="navette">Navettes</button>
         <button type="button" class="onglet" role="tab" aria-selected="false" data-onglet="ligne">Trains de ligne</button>
         <button type="button" class="onglet" role="tab" aria-selected="false" data-onglet="demain" id="o-demain">Demain</button>
+        <button type="button" class="onglet" role="tab" aria-selected="false" data-onglet="surlendemain" id="o-surlendemain">Après-demain</button>
       </div>
       <div class="outils"><button type="button" class="bouton petit" id="b-ajout">+ Ajouter</button></div>
     </div>
@@ -215,6 +216,10 @@
         <p class="note">Parcours : une ligne par groupe ou code de train, durée du trajet puis points de passage en minutes depuis le départ. <span class="mono">TDF 35 : Départ FS 2, CV 1474 5</span></p>
         <textarea id="pa-st-parcours" class="mono" style="min-height:70px"></textarea>
         <p class="note" id="pa-st-etat"></p>
+      </div>
+      <div class="section"><h4>Jours de circulation et numéros</h4>
+        <p class="note">Pour chaque train et navette : jours de circulation, et numéro (sillon) qui change selon le jour.</p>
+        <button type="button" class="bouton" id="pa-planning">Ouvrir le planning (jours et numéros par jour)</button>
       </div>
       <div class="section"><h4>Écrans et fichiers</h4>
         <div class="formgrid">

@@ -166,15 +166,24 @@
       .filter(function (pc) { return (appliquerVariantes(pc, jour).jours || []).indexOf(jour) >= 0; })
       .map(function (pc) { return instancier(pc, cle, planning); });
   }
-  function nouvelleJournee(planning, cle, prepVeille, maintenant) {
-    var circ = prepVeille && prepVeille.date === cle && prepVeille.circulations ? copie(prepVeille.circulations) : genererCirculations(planning, cle);
+  /** Préparations de la veille (demain, après-demain) reprises telles quelles quand leur date correspond. */
+  function nouvelleJournee(planning, cle, prepVeille, maintenant, prepSurveille) {
+    var reprise = function (prep, date) { return prep && prep.date === date && prep.circulations ? copie(prep.circulations) : genererCirculations(planning, date); };
+    var d1 = ajouterJours(cle, 1), d2 = ajouterJours(cle, 2);
     return {
       schema: 1, date: cle, version: 0, creeA: iso(maintenant || new Date()),
-      mouvements: [], circulations: circ,
+      mouvements: [], circulations: reprise(prepVeille, cle),
       flash: { actif: false, texte: '', jusqua: '' },
-      demain: { date: ajouterJours(cle, 1), circulations: genererCirculations(planning, ajouterJours(cle, 1)) },
+      demain: { date: d1, circulations: reprise(prepSurveille, d1) },
+      surlendemain: { date: d2, circulations: genererCirculations(planning, d2) },
       cloture: null
     };
+  }
+  /** Préparation d'après-demain, créée depuis le planning pour une journée qui n'en a pas encore. */
+  function assurerSurlendemain(j, planning) {
+    var d2 = ajouterJours(j.date, 2);
+    if (!j.surlendemain || j.surlendemain.date !== d2) j.surlendemain = { date: d2, circulations: genererCirculations(planning, d2) };
+    return j.surlendemain;
   }
 
   // ------------------------------------------------- journal et rapprochement
@@ -202,6 +211,7 @@
   }
   /** Statut d'une circulation : supprime, fait, deja, annonce, retard, prevu. */
   function statutCirculation(c, d, maintenantIso, seuilMin) {
+    if (c.etat === 'nonprevu') return 'nonprevu';
     if (c.etat === 'supprime') return 'supprime';
     if (d.reel) return 'fait';
     if (c.etat === 'deja') return 'deja';
@@ -210,7 +220,7 @@
     return 'prevu';
   }
   function libelleStatut(st, sens) {
-    return { supprime: 'Supprimé', fait: sens === 'D' ? 'Parti' : 'Arrivé', deja: 'Déjà là', annonce: 'Annoncé', retard: 'Retard', prevu: 'Prévu' }[st] || '';
+    return { nonprevu: 'Non prévue', supprime: 'Supprimé', fait: sens === 'D' ? 'Parti' : 'Arrivé', deja: 'Déjà là', annonce: 'Annoncé', retard: 'Retard', prevu: 'Prévu' }[st] || '';
   }
   function derniereVoie(j, num) {
     var s = norm(num), mv = mouvementsActifs(j);
@@ -221,6 +231,24 @@
     var n = 0;
     (j.mouvements || []).forEach(function (m) { if (m.n > n) n = m.n; });
     return n + 1;
+  }
+  /**
+   * Circulation validée (Arrivée, Parti) : si aucune ligne active du journal ne lui est rattachée, une ligne est créée
+   * (numéro, EF, voie et wagons prévus, marquée auto) ; sinon l'heure réelle de la dernière est complétée.
+   * Renvoie la ligne créée, ou null.
+   */
+  function journaliserCirculation(j, c, t, planning, params, id) {
+    var liens = mouvementsActifs(j).filter(function (m) { return m.lien === c.id; });
+    if (liens.length) { if (!liens[liens.length - 1].reel) liens[liens.length - 1].reel = t; return null; }
+    var num = c.numero || c.sillon || c.code;
+    var m = {
+      id: id, n: prochainNumeroLigne(j), annonce: t, num: num, ef: deduireEF(num, j, planning, params) || '',
+      voie: c.voiePrevue ? normaliserVoie(c.voiePrevue, params) : '', compo: c.wagonsDemandes != null ? String(c.wagonsDemandes) : '',
+      cv: '', sit: '', vers: '', reel: t, comm: c.code + (c.sens === 'D' ? ' parti' : ' arrivé') + ' (saisie)', lien: c.id, supprime: false, auto: true
+    };
+    j.mouvements = j.mouvements || [];
+    j.mouvements.push(m);
+    return m;
   }
   /** Mouvement interne (locomotive, manœuvre NRS) : pas un numéro de train. */
   function estMouvementInterne(num, params) {
@@ -276,31 +304,34 @@
       voie: voieAffichee(c, d),
       // gardé après l'arrivée : le Suivi trains relit ce départ et ne doit pas le croire effacé
       partie: c.sens !== 'D' && c.etat !== 'supprime' ? (c.partie || null) : null,
+      eta: c.sens !== 'D' && c.etat !== 'supprime' && c.partie ? (c.eta || null) : null,
+      fa: c.sens !== 'D' && !d.reel && c.etat !== 'supprime' ? (c.fa || null) : null,
       etape: c.sens === 'D' && !d.reel && c.etat !== 'supprime' ? (c.etape || null) : null,
       cale: c.sens === 'D' && !d.reel && c.etat !== 'supprime' ? (c.cale || null) : null,
       etat: c.etat === 'supprime' || c.etat === 'deja' ? c.etat : null
     };
   }
   /**
-   * Prochaines navettes d'un groupe : celles de demain, sinon celles du premier jour suivant qui en a
-   * (le samedi, on voit celles du lundi). Les wagons et voies notés pour demain sont repris.
+   * Prochaines navettes d'un groupe : les `nb` prochains jours qui en ont (demain et après-demain ; le samedi, lundi et
+   * mardi). Les jours préparés dans la saisie (demain, après-demain) sont repris avec leurs wagons et voies.
+   * Sans `nb` : le premier jour seulement (ou null).
    */
-  function prochainesNavettes(j, planning, gid) {
-    var vide = { annonce: null, reel: null, voie: null, wagons: null };
-    var cle = j.demain ? j.demain.date : ajouterJours(j.date, 1);
-    for (var k = 0; k < 7; k++) {
-      var circs = k === 0 && j.demain ? (j.demain.circulations || []) : genererCirculations(planning, ajouterJours(cle, k));
-      circs = circs.filter(function (c) { return c.groupe === gid; });
-      if (circs.length) {
-        var date = ajouterJours(cle, k), d = lireDate(date);
-        return {
-          date: date, demain: k === 0,
-          libelle: (k === 0 ? 'Demain · ' : '') + JOURS[jourSemaine(date) - 1] + ' ' + d.getDate(),
-          lignes: circs.sort(trierParHeure).map(function (c) { return ligneDiffusee(c, vide, 'navette'); })
-        };
-      }
+  function prochainesNavettes(j, planning, gid, nb) {
+    var vide = { annonce: null, reel: null, voie: null, wagons: null }, out = [];
+    var base = ajouterJours(j.date, 1);
+    for (var k = 0; k < 8 && out.length < (nb || 1); k++) {
+      var date = ajouterJours(base, k);
+      var prep = [j.demain, j.surlendemain].filter(function (p) { return p && p.date === date; })[0];
+      var circs = (prep ? (prep.circulations || []) : genererCirculations(planning, date))
+        .filter(function (c) { return c.groupe === gid && c.etat !== 'nonprevu'; });
+      if (!circs.length) continue;
+      out.push({
+        date: date, demain: k === 0,
+        libelle: (k === 0 ? 'Demain · ' : '') + JOURS[jourSemaine(date) - 1] + ' ' + lireDate(date).getDate(),
+        lignes: circs.sort(trierParHeure).map(function (c) { return ligneDiffusee(c, vide, 'navette'); })
+      });
     }
-    return null;
+    return nb ? out : (out[0] || null);
   }
   function trierParHeure(a, b) { return (a.theo || '9') < (b.theo || '9') ? -1 : ((a.theo || '9') > (b.theo || '9') ? 1 : 0); }
   /** Regroupe arrivées et départs d'un même code en rotations, comme la feuille « tri trains 2 ». */
@@ -334,13 +365,15 @@
     var navettes = [], trains = [];
     var demainVisible = vis.afficherDemain !== false && j.demain && hm(maint) >= (normHeure(vis.demainAPartirDe) || '00:00');
     groupes.forEach(function (g) {
-      var circs = (j.circulations || []).filter(function (c) { return c.groupe === g.id; });
+      // « Non prévue » : retirée des écrans
+      var circs = (j.circulations || []).filter(function (c) { return c.groupe === g.id && c.etat !== 'nonprevu'; });
       if (g.famille === 'navette') {
         var lignes = circs.slice().sort(trierParHeure).map(function (c) { return ligneDiffusee(c, etatCirculation(c, j), 'navette'); });
-        var proch = demainVisible ? prochainesNavettes(j, planning, g.id) : null;
+        var blocs = demainVisible ? prochainesNavettes(j, planning, g.id, 2) : [];
         navettes.push({
           id: g.id, libelle: g.libelle, couleur: couleurGroupe(g, vis), parcours: parcoursDe(g.id, g, params), lignes: lignes,
-          demain: proch ? proch.lignes : [], demainLibelle: proch ? proch.libelle : '',
+          demain: blocs[0] ? blocs[0].lignes : [], demainLibelle: blocs[0] ? blocs[0].libelle : '',
+          ensuite: blocs[1] ? { libelle: blocs[1].libelle, lignes: blocs[1].lignes } : null,
           demainNote: demainVisible ? String((j.notesProchaines || {})[g.id] || '').trim() : ''
         });
       } else {
@@ -379,7 +412,10 @@
     var n = (params && params.visuel && params.visuel.nomsTrains) || {};
     return n[code] || NOMS_TRAINS[code] || code;
   }
-  var COULEURS_NAVETTES = { TDF: '#F28C28', TN: '#2D8CFF', ATL: '#F2C230' };
+  var COULEURS_NAVETTES = {
+    TDF: '#F28C28', TN: '#2D8CFF', ATL: '#F2C230',
+    NAVILAND: '#8E5CF7', FEROVERGNE: '#22B573', DELTA: '#0EA5E9', FORWARDIS: '#EC4899', ARMEE: '#8D9EAF'
+  };
   var COULEURS_SECOURS = ['#2EB872', '#B07CFF', '#FF6FA8'];
   /** Couleur d'un groupe de navettes : Paramètres › visuel.couleurs, sinon TDF orange, TN bleu, ATL jaune. */
   function couleurGroupe(g, vis) {
@@ -441,15 +477,19 @@
     if (l.etat === 'deja') return { cle: 'deja', libelle: 'Déjà là' };
     if (l.annonce) return { cle: 'imminent', libelle: arr ? 'Arrivée imminente' : 'Départ imminent' };
     if (arr && l.partie) {
-      var trajet = (parcours && parcours.trajet) || 35;
-      var ecoule = minutesEntre(maintenantIso, l.partie), eta = iso(new Date(lireDate(l.partie).getTime() + trajet * 60000)), reste = trajet - ecoule;
-      var passe = ((parcours && parcours.passages) || []).filter(function (p) { return p.min <= ecoule; }).pop();
+      // heure d'arrivée estimée : celle du Suivi trains si elle est connue, sinon départ + durée du parcours
+      var eta = l.eta || iso(new Date(lireDate(l.partie).getTime() + ((parcours && parcours.trajet) || 35) * 60000));
+      var trajet = Math.max(1, minutesEntre(eta, l.partie)), ecoule = minutesEntre(maintenantIso, l.partie), reste = minutesEntre(eta, maintenantIso);
+      var passages = (parcours && parcours.passages) || [];
+      var passe = passages.filter(function (p) { return p.min <= ecoule; }).pop();
       var base = { eta: eta, ecartEta: l.theo ? minutesEntre(eta, l.theo) : null, sous: passe ? passe.lib : 'Départ ' + hm(l.partie) };
-      if (reste > 5) return Object.assign(base, { cle: 'route', libelle: 'Arrive dans ' + reste + ' min', progression: Math.max(0, Math.min(1, ecoule / trajet)) });
+      if (reste > 5) return Object.assign(base, { cle: 'route', libelle: (passages.length ? 'Arrive dans ' : 'En approche · ') + reste + ' min', progression: Math.max(0, Math.min(1, ecoule / trajet)) });
       if (reste > 0) return Object.assign(base, { cle: 'imminent', libelle: 'Arrivée imminente' });
       if (-reste <= seuil) return Object.assign(base, { cle: 'attendu', libelle: 'Arrivée attendue', sous: 'prévue à ' + hm(eta) });
       return Object.assign(base, { cle: 'retard', libelle: 'Retard ' + fmtEcart(-reste), sous: 'prévue à ' + hm(eta) });
     }
+    // arrivé au faisceau FA, pas encore chez nous
+    if (arr && l.fa) return { cle: 'fa', libelle: 'À FA depuis ' + hm(l.fa) };
     if (!arr && l.etape && l.etape.lib) return { cle: 'prepa', libelle: l.etape.lib, sous: l.etape.h ? 'à ' + l.etape.h : '' };
     if (!l.theo) return { cle: 'prevu', libelle: 'Prévu' };
     var m = minutesEntre(l.theo, maintenantIso);
@@ -566,6 +606,7 @@
     });
     var retards = [];
     (j.circulations || []).forEach(function (c) {
+      if (c.etat === 'nonprevu') return;
       s.circulationsPrevues++;
       var d = etatCirculation(c, j);
       if (c.etat === 'supprime') s.supprimees++;
@@ -714,17 +755,29 @@
       if (cible[k] === nouveau) return;
       cible[k] = nouveau; changes.push(texte + ' ' + valeur);
     };
+    // heure d'arrivée estimée envoyée par le Suivi trains avec le départ (colonne Heure théorique)
+    var majEta = function (c, h, theo, nom) {
+      if (!c || !c.partie || !h || hm(c.partie) !== h) return;
+      var e = heureSuivi(theo), nv = e ? combiner(j.date, e) : null;
+      if (nv && nv < c.partie) nv = combiner(ajouterJours(j.date, 1), e);
+      if ((c.eta || null) === nv) return;
+      c.eta = nv;
+      if (nv) changes.push(nom + ' arrivée estimée ' + e);
+    };
     dedoublonner(donnees.navettes, function (r) { return sansAccents(r.type) + '|' + norm(r.code); }).forEach(function (r) {
-      var type = sansAccents(r.type), code = String(r.code || '').trim(), h = heureSuivi(r.reel), arrivee = /-arr$/i.test(code);
-      var base = code.replace(/-arr$/i, '');
+      var type = sansAccents(r.type), code = String(r.code || '').trim(), h = heureSuivi(r.reel);
+      var arrivee = /-arr$/i.test(code), fa = /-fa$/i.test(code), base = code.replace(/-(arr|fa)$/i, '');
       if (type === 'navette') {
         var n = circ(base, 'A');
         reporter('N|' + code, h, n, arrivee ? 'reel' : 'partie', base + (arrivee ? ' arrivée' : ' partie'));
+        if (!arrivee) majEta(n, h, r.theo, base);
       } else if (type === 'quickboard') {
         reporter('Q|' + code, h, circ(base, 'D'), 'reel', base + ' partie');
       } else if (type === 'arrivee') {
-        var cible = corr[base.toLowerCase()] || corr[base];
-        if (cible) reporter('A|' + code, h, circ(cible, 'A'), arrivee ? 'reel' : 'partie', cible + (arrivee ? ' arrivé' : ' parti de l\'origine'));
+        var cible = corr[base.toLowerCase()] || corr[base], ca = cible ? circ(cible, 'A') : null;
+        if (!cible) return;
+        reporter('A|' + code, h, ca, arrivee ? 'reel' : (fa ? 'fa' : 'partie'), cible + (arrivee ? ' arrivé' : (fa ? ' à FA' : ' en approche')));
+        if (!arrivee && !fa) majEta(ca, h, r.theo, cible);
       }
     });
     var etapes = {};
@@ -751,6 +804,7 @@
     JOURS: JOURS, JOURS_COURTS: JOURS_COURTS, TYPES_MAIL: TYPES_MAIL, DEROULE: DEROULE, ENTETE_STATS: ENTETE_STATS,
     PARCOURS_DEFAUT: PARCOURS_DEFAUT, CORRESPONDANCES_SUIVI: CORRESPONDANCES_SUIVI, NOMS_TRAINS: NOMS_TRAINS, nomTrain: nomTrain,
     parcoursDe: parcoursDe, parcoursEnTexte: parcoursEnTexte, texteEnParcours: texteEnParcours, prochainesNavettes: prochainesNavettes,
+    assurerSurlendemain: assurerSurlendemain, journaliserCirculation: journaliserCirculation,
     appliquerSuiviTrains: appliquerSuiviTrains, heureSuivi: heureSuivi,
     p2: p2, lireDate: lireDate, iso: iso, cleDate: cleDate, ajouterJours: ajouterJours, jourSemaine: jourSemaine,
     libelleJour: libelleJour, libelleDateCourte: libelleDateCourte, hm: hm, hhmm: hhmm, normHeure: normHeure, combiner: combiner,

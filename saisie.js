@@ -21,7 +21,6 @@
   function maintenant() { return SC.iso(new Date()); }
   function uid(p) { return (p || 'm') + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
   function circDe(j, id) { return (j.circulations || []).filter(function (c) { return c.id === id; })[0] || null; }
-  function circDemainDe(j, id) { return ((j.demain && j.demain.circulations) || []).filter(function (c) { return c.id === id; })[0] || null; }
   function mouvDe(j, id) { return (j.mouvements || []).filter(function (m) { return m.id === id; })[0] || null; }
   function seuil() { return (app.params.exploitation && app.params.exploitation.seuilRetardMinutes) || 15; }
   function estJourActif() { return !app.lectureSeule && app.journee; }
@@ -240,7 +239,7 @@
         return cloturer(jv, rv.data.version, true).then(function () { return jv; }, function () { return jv; });
       });
     }).then(function (jv) {
-      var j = SC.nouvelleJournee(app.planning, cle, jv && jv.demain, new Date());
+      var j = SC.nouvelleJournee(app.planning, cle, jv && jv.demain, new Date(), jv && jv.surlendemain);
       charger(j, 0, false);
       var prep = jv && jv.demain && jv.demain.date === cle;
       sauvegarderBientot({ type: 'journee.creation', resume: 'Création de la journée' + (prep ? ' avec la préparation de la veille' : ' depuis le planning'), a: maintenant() });
@@ -517,25 +516,35 @@
     var t = maintenant();
     modifier(c.code + (c.sens === 'D' ? ' parti' : ' arrivé') + ' à ' + hm(t), 'circulation.reel', function (j) {
       var cc = circDe(j, id); cc.reel = t; if (cc.etat === 'deja') cc.etat = null;
-      var liens = SC.mouvementsActifs(j).filter(function (m) { return m.lien === id; });
-      var dernier = liens[liens.length - 1];
-      if (dernier && !dernier.reel) dernier.reel = t;
+      // ligne ajoutée au journal des mouvements si aucune ne lui est encore rattachée
+      var m = SC.journaliserCirculation(j, cc, t, app.planning, app.params, uid('m'));
+      if (m) app.nouvelle = m.id;
     });
   }
   function annulerReel(id) {
     var c = circDe(app.journee, id); if (!c) return;
     modifier('Heure réelle de ' + c.code + ' retirée', 'circulation.reel.annulation', function (j) {
       var cc = circDe(j, id); cc.reel = null;
-      SC.mouvementsActifs(j).forEach(function (m) { if (m.lien === id) m.reel = null; });
+      SC.mouvementsActifs(j).forEach(function (m) {
+        if (m.lien !== id) return;
+        if (m.auto) { m.supprime = true; m.supprimeA = maintenant(); } else m.reel = null;
+      });
     });
   }
   function basculer(id, champ, valeur, libelle) {
     modifier(libelle, 'circulation.' + champ, function (j) { var cc = circDe(j, id); cc[champ] = cc[champ] === valeur ? null : valeur; });
   }
+  /** Départ de l'origine (navette « Partie », train « En approche » depuis FA) ; l'heure d'arrivée du Suivi trains ne s'applique plus. */
   function marquerPartie(id, retirer) {
     var c = circDe(app.journee, id); if (!c) return;
+    var t = maintenant(), nom = famille(c) === 'navette' ? ' partie' : ' en approche';
+    modifier(retirer ? c.code + nom + ' : retiré' : c.code + nom + ' à ' + hm(t), 'circulation.partie', function (j) { var cc = circDe(j, id); cc.partie = retirer ? null : t; cc.eta = null; });
+  }
+  /** Train arrivé au faisceau FA, pas encore chez nous (un second clic retire l'heure). */
+  function marquerFA(id) {
+    var c = circDe(app.journee, id); if (!c) return;
     var t = maintenant();
-    modifier(retirer ? 'Départ de ' + c.code + ' retiré' : c.code + ' partie à ' + hm(t), 'circulation.partie', function (j) { circDe(j, id).partie = retirer ? null : t; });
+    modifier(c.fa ? c.code + ' : FA retiré' : c.code + ' à FA ' + hm(t), 'circulation.fa', function (j) { var cc = circDe(j, id); cc.fa = cc.fa ? null : t; });
   }
   /** Lit le classeur du Suivi trains (toutes les 15 s) et reporte départs, arrivées et déroulés dans la journée. */
   function suivreTrains() {
@@ -548,7 +557,13 @@
       if (!app.journee || app.journee.date !== date || app.lectureSeule) return;
       var changes = SC.appliquerSuiviTrains(SC.copie(app.journee), r.data, app.params);
       if (!changes.length) return;
-      modifier('Suivi trains : ' + changes.join(', '), 'suivi-trains', function (j) { SC.appliquerSuiviTrains(j, r.data, app.params); }, { sansAnnulation: true });
+      modifier('Suivi trains : ' + changes.join(', '), 'suivi-trains', function (j) {
+        var avant = {};
+        j.circulations.forEach(function (c) { avant[c.id] = c.reel; });
+        SC.appliquerSuiviTrains(j, r.data, app.params);
+        // une arrivée ou un départ validé dans le Suivi trains va aussi au journal des mouvements
+        j.circulations.forEach(function (c) { if (c.reel && !avant[c.id]) SC.journaliserCirculation(j, c, c.reel, app.planning, app.params, uid('m')); });
+      }, { sansAnnulation: true });
       toast('Suivi trains : ' + changes.join(' · '));
     }, function () { app.suiviTrains = { erreur: 'serveur injoignable', a: new Date() }; });
   }
@@ -582,6 +597,8 @@
     $('#h-jour').textContent = SC.libelleJour(j.date) + ' ' + j.date.slice(0, 4) + (j.cloture ? ' · clôturée à ' + hm(j.cloture.a) : '');
     $('#h-lecture').hidden = !app.lectureSeule;
     $('#o-demain').textContent = j.demain ? 'Demain · ' + SC.JOURS[SC.jourSemaine(j.demain.date) - 1] : 'Demain';
+    var d2 = SC.ajouterJours(j.date, 2), nom2 = SC.JOURS[SC.jourSemaine(d2) - 1];
+    $('#o-surlendemain').textContent = nom2.charAt(0).toUpperCase() + nom2.slice(1) + ' ' + SC.lireDate(d2).getDate();
     document.title = 'Saisie · ' + SC.libelleJour(j.date);
   }
   function rendreJournal() {
@@ -589,13 +606,14 @@
     var lignes = (j.mouvements || []).filter(function (m) { return voirSuppr || !m.supprime; });
     var html = lignes.map(function (m) {
       var c = m.lien ? circDe(j, m.lien) : null;
-      var cls = [m.id === app.selection ? 'choisie' : '', m.id === app.nouvelle ? 'nouvelle' : '', m.supprime ? 'supprimee' : ''].join(' ').trim();
+      var cls = [m.id === app.selection ? 'choisie' : '', m.id === app.nouvelle ? 'nouvelle' : '', m.supprime ? 'supprimee' : '', c ? 'colore' : ''].join(' ').trim();
+      var teinte = c ? ' style="--g:' + couleur(c.groupe) + '"' : '';
       var actions = app.lectureSeule ? '' : (m.supprime
         ? '<button type="button" class="bouton petit" data-act="supprimer">Rétablir</button>'
         : (m.reel ? '' : '<button type="button" class="bouton petit" data-act="reel" title="Heure réelle = maintenant">Réel</button>') +
           '<button type="button" class="bouton petit" data-act="editer">Modifier</button><button type="button" class="bouton petit danger" data-act="supprimer">Suppr.</button>');
       var compo = m.compo === 'hlp' ? 'hlp' : (m.compo ? m.compo + ' <span class="faible">' + esc(m.cv || '') + '</span>' : '<span class="faible">—</span>');
-      return '<tr data-id="' + m.id + '"' + (cls ? ' class="' + cls + '"' : '') + '>' +
+      return '<tr data-id="' + m.id + '"' + (cls ? ' class="' + cls + '"' : '') + teinte + '>' +
         '<td class="faible">' + m.n + '</td><td class="mono">' + hm(m.annonce) + '</td><td class="mono"><b>' + esc(m.num) + '</b></td>' +
         '<td>' + esc(m.ef || '') + '</td><td class="faible">' + esc(SC.deduireZone(m.num)) + '</td><td class="mono">' + esc(m.voie || '') + '</td>' +
         '<td class="mono">' + compo + '</td><td>' + (m.sit === 'libre' ? '<span class="puce fait">libre</span>' : (m.sit ? '<span class="puce neutre">occupée</span>' : '')) + '</td>' +
@@ -613,22 +631,30 @@
       app.nouvelle = null;
     }
   }
+  function bouton(act, libelle, titre, cl) {
+    return '<button type="button" class="bouton petit' + (cl ? ' ' + cl : '') + '" data-act="' + act + '"' + (titre ? ' title="' + esc(titre) + '"' : '') + '>' + esc(libelle) + '</button>';
+  }
   function boutonsCirculation(c, d, st) {
     if (app.lectureSeule) return '';
+    if (st === 'nonprevu') return bouton('nonprevu', 'Rétablir', 'Elle circule finalement : de retour sur les écrans');
+    if (st === 'supprime') return bouton('suppr', 'Rétablir');
+    if (d.reel) return bouton('annuler-reel', 'Annuler', 'Retirer l\'heure réelle');
     var b = [];
-    if (st === 'supprime') return '<button type="button" class="bouton petit" data-act="suppr">Rétablir</button>';
-    if (d.reel) return '<button type="button" class="bouton petit" data-act="annuler-reel" title="Retirer l\'heure réelle">Annuler</button>';
     if (c.sens === 'A' && famille(c) === 'navette') {
       // navette : partie de son terminal, puis arrivée (les écrans suivent son parcours entre les deux)
-      if (!c.partie) b.push('<button type="button" class="bouton petit" data-act="partie" title="La navette a quitté son terminal">Partie</button>');
-      else b.push('<button type="button" class="bouton petit" data-act="reel" title="La navette est arrivée">Arrivée</button>' +
-        '<button type="button" class="bouton petit" data-act="annuler-partie" title="Retirer l\'heure de départ ' + hm(c.partie) + '">↺</button>');
+      if (!c.partie) b.push(bouton('partie', 'Partie', 'La navette a quitté son terminal'));
+      else b.push(bouton('reel', 'Arrivée', 'La navette est arrivée') + bouton('annuler-partie', '↺', 'Retirer l\'heure de départ ' + hm(c.partie)));
     } else if (c.sens === 'A') {
-      b.push('<button type="button" class="bouton petit" data-act="reel" title="FA : le train est arrivé">FA ✅</button>');
-      b.push('<button type="button" class="bouton petit" data-act="deja" title="Le train est déjà présent">' + (c.etat === 'deja' ? 'Pas là' : 'Déjà là') + '</button>');
+      // train : FA (arrivé au faisceau, pas chez nous) → En approche (parti de FA vers chez nous) → Arrivée (chez nous)
+      b.push(bouton('fa', c.fa ? 'FA ✓ ' + hm(c.fa) : 'FA', c.fa ? 'Retirer l\'heure FA' : 'Arrivé à FA, pas encore chez nous', c.fa ? 'actif' : ''));
+      b.push(bouton('deja', c.etat === 'deja' ? 'Pas là' : 'Déjà là', 'Déjà chez nous'));
+      b.push(c.partie ? bouton('annuler-partie', 'Approche ✓ ' + hm(c.partie), 'Retirer l\'heure de départ de FA', 'actif')
+        : bouton('partie', 'En approche', 'Parti de FA vers chez nous (délai du Suivi trains)'));
+      b.push(bouton('reel', 'Arrivée', 'Arrivé chez nous'));
     } else {
-      b.push('<button type="button" class="bouton petit" data-act="reel">Parti</button>');
+      b.push(bouton('reel', 'Parti'));
     }
+    b.push(bouton('nonprevu', 'Non prévue', 'Ne circule pas aujourd\'hui : retirée des écrans', 'discret'));
     return b.join('');
   }
   function detailCirculation(c, d) {
@@ -650,35 +676,45 @@
       (dis || d.reel ? '' : ' <button type="button" class="bouton petit danger" data-act="suppr">Supprimer cette circulation</button>') + '</div></div>';
     return html;
   }
+  function estPrep(onglet) { return onglet === 'demain' || onglet === 'surlendemain'; }
+  /** Préparation de demain ou d'après-demain (créée depuis le planning si besoin). */
+  function prepDe(j, cle) { return cle === 'surlendemain' ? SC.assurerSurlendemain(j, app.planning) : j.demain; }
+  function circPrepDe(j, cle, id) { return ((prepDe(j, cle) || {}).circulations || []).filter(function (c) { return c.id === id; })[0] || null; }
+  function couleur(gid) { return SC.couleurGroupe(groupe(gid), (app.params && app.params.visuel) || {}); }
   /** Ligne du tableau de référence : heure, HLR, wagons et voie se modifient sur place et alimentent les écrans. */
-  function ligneCirculation(c, demain) {
+  function ligneCirculation(c, prep) {
     var j = app.journee;
-    var d = demain ? { annonce: null, reel: null, voie: null, wagons: null, liens: 0 } : SC.etatCirculation(c, j);
-    var st = demain ? (c.etat === 'supprime' ? 'supprime' : 'prevu') : SC.statutCirculation(c, d, maintenant(), seuil());
-    var attr = demain ? 'data-demain' : 'data-champ', dis = app.lectureSeule ? ' disabled' : '';
+    var d = prep ? { annonce: null, reel: null, voie: null, wagons: null, liens: 0 } : SC.etatCirculation(c, j);
+    var st = prep ? (c.etat === 'nonprevu' || c.etat === 'supprime' ? c.etat : 'prevu') : SC.statutCirculation(c, d, maintenant(), seuil());
+    var attr = prep ? 'data-demain' : 'data-champ', dis = app.lectureSeule ? ' disabled' : '';
     var saisie = function (k, val, indice, titre) {
       return '<input class="mono" ' + attr + '="' + k + '" value="' + esc(val == null ? '' : val) + '"' + (indice ? ' placeholder="' + esc(indice) + '"' : '') + ' title="' + esc(titre) + '"' + dis + '>';
     };
     var etat = SC.libelleStatut(st, c.sens) + (d.reel ? ' ' + hm(d.reel) : '');
-    if (!demain && !d.reel && c.partie && st !== 'supprime') { etat = 'En route · dép. ' + hm(c.partie); st = 'annonce'; }
-    if (!demain && !d.reel && c.etape && st !== 'supprime') etat = c.etape.lib + ' ' + c.etape.h;
-    if (!demain && !d.reel && c.cale && st !== 'supprime') { etat = 'Calé à ' + hm(c.cale); st = 'retard'; }
-    var boutons = demain ? (app.lectureSeule ? '' : '<button type="button" class="bouton petit danger" data-act="suppr-demain">' + (c.etat === 'supprime' ? 'Rétablir' : 'Suppr.') + '</button>')
+    var actif = !prep && !d.reel && st !== 'supprime' && st !== 'nonprevu';
+    if (actif && c.fa && !c.partie) { etat = 'À FA ' + hm(c.fa); st = 'annonce'; }
+    if (actif && c.partie) { etat = (famille(c) === 'navette' ? 'En route' : 'En approche') + ' · dép. ' + hm(c.partie); st = 'annonce'; }
+    if (actif && c.etape) etat = c.etape.lib + ' ' + c.etape.h;
+    if (actif && c.cale) { etat = 'Calé à ' + hm(c.cale); st = 'retard'; }
+    var boutons = prep ? (app.lectureSeule ? '' : bouton('nonprevu-prep', c.etat === 'nonprevu' ? 'Rétablir' : 'Non prévue', 'Retirée des écrans', 'discret') +
+      (c.etat === 'nonprevu' ? '' : bouton('suppr-demain', c.etat === 'supprime' ? 'Rétablir' : 'Suppr.', '', 'danger')))
       : boutonsCirculation(c, d, st);
-    var ouverte = !demain && app.ouverte === c.id;
-    return '<div class="circ' + (st === 'supprime' ? ' supprimee' : '') + (ouverte ? ' ouverte' : '') + '" data-id="' + c.id + '"' + (demain ? ' data-ligne-demain="1"' : '') + '>' +
+    var ouverte = !prep && app.ouverte === c.id;
+    return '<div class="circ colore' + (st === 'supprime' ? ' supprimee' : '') + (st === 'nonprevu' ? ' nonprevue' : '') + (ouverte ? ' ouverte' : '') + '" data-id="' + c.id + '"' +
+      (prep ? ' data-ligne-demain="1" data-prep="' + prep + '"' : '') + ' style="--g:' + couleur(c.groupe) + '">' +
       '<span class="code" title="' + esc(c.code) + '">' + esc(c.code) + '</span><span class="sens">' + (c.sens === 'D' ? 'Dép.' : 'Arr.') + '</span>' +
       '<span class="num">' + esc(c.numero || c.sillon || '') + '</span>' +
-      saisie('theo', hm(c.theo), 'hh:mm', 'Heure prévue') + saisie('hlr', c.hlr, c.sens === 'D' ? 'hh:mm' : '', 'HLR') +
+      // pas de HLR pour une arrivée
+      saisie('theo', hm(c.theo), 'hh:mm', 'Heure prévue') + (c.sens === 'D' ? saisie('hlr', c.hlr, 'hh:mm', 'HLR') : '<span></span>') +
       saisie('wagonsDemandes', c.wagonsDemandes, d.wagons != null ? String(d.wagons) : '', 'Wagons affichés sur les écrans' + (d.wagons != null ? ' (réels : ' + d.wagons + ')' : '')) +
       saisie('voiePrevue', c.voiePrevue, d.voie ? String(d.voie).toUpperCase() : '', 'Voie affichée sur les écrans' + (d.voie ? ' (réelle : ' + String(d.voie).toUpperCase() + ')' : '')) +
-      '<span><span class="puce ' + st + '">' + esc(etat) + '</span></span>' +
+      '<span class="etat-c" title="' + esc(etat) + '"><span class="puce ' + st + '">' + esc(etat) + '</span></span>' +
       '<span class="boutons">' + boutons + '</span></div>' + (ouverte ? detailCirculation(c, d) : '');
   }
   function rendreCirculations() {
-    var j = app.journee, demain = app.onglet === 'demain';
-    var liste = demain ? ((j.demain && j.demain.circulations) || []) : j.circulations.filter(function (c) { return famille(c) === app.onglet; });
-    var jourRef = demain ? j.demain.date : j.date, nomJour = SC.JOURS[SC.jourSemaine(jourRef) - 1];
+    var j = app.journee, prep = estPrep(app.onglet) ? app.onglet : null, demain = !!prep;
+    var liste = prep ? ((prepDe(j, prep) || {}).circulations || []) : j.circulations.filter(function (c) { return famille(c) === app.onglet; });
+    var jourRef = prep ? prepDe(j, prep).date : j.date, nomJour = SC.JOURS[SC.jourSemaine(jourRef) - 1];
     var notes = '';
     if (demain) {
       var dis = app.lectureSeule ? ' disabled' : '';
@@ -696,7 +732,12 @@
       var circs = liste.filter(function (c) { return c.groupe === g.id; });
       if (!circs.length) return;
       circs.sort(function (a, b) { return (a.theo || '9') < (b.theo || '9') ? -1 : 1; });
-      html += '<div class="groupe">' + esc(g.libelle) + '</div>' + circs.map(function (c) { return ligneCirculation(c, demain); }).join('');
+      html += '<div class="groupe" style="--g:' + couleur(g.id) + '">' + esc(g.libelle) + '</div>';
+      // arrivées puis départs, séparés
+      [['A', 'Arrivées'], ['D', 'Départs']].forEach(function (s) {
+        var part = circs.filter(function (c) { return (c.sens === 'D' ? 'D' : 'A') === s[0]; });
+        if (part.length) html += '<div class="sous-groupe" style="--g:' + couleur(g.id) + '">' + s[1] + '</div>' + part.map(function (c) { return ligneCirculation(c, prep); }).join('');
+      });
     });
     if (!liste.length) html += '<div class="vide">Aucune circulation prévue. « + Ajouter » permet d\'ajouter une circulation du planning ou exceptionnelle.</div>';
     var defile = $('#p-liste'), haut = defile.scrollTop;
@@ -859,30 +900,49 @@
   });
 
   // Planning
+  /** Numéro qui change selon le jour : n° interne pour une navette, sillon pour un train de ligne (n° interne à défaut). */
+  function cleNumero(fam, sillon) { return fam === 'navette' || !sillon ? 'numero' : 'sillon'; }
+  /** Deux lignes par circulation : les réglages, puis les numéros jour par jour (vide = numéro habituel). */
   function lignePlanning(pc) {
     var opts = (app.planning.groupes || []).map(function (g) { return '<option value="' + esc(g.id) + '"' + (g.id === pc.groupe ? ' selected' : '') + '>' + esc(g.libelle) + '</option>'; }).join('');
     var jours = SC.JOURS_COURTS.map(function (j, i) { return '<label>' + j.slice(0, 2) + '<input type="checkbox" data-jour="' + (i + 1) + '"' + ((pc.jours || []).indexOf(i + 1) >= 0 ? ' checked' : '') + '></label>'; }).join('');
     var inp = function (k, v, w) { return '<td><input data-k="' + k + '" value="' + esc(v == null ? '' : v) + '" class="mono" style="min-width:' + (w || 60) + 'px"></td>'; };
-    return '<tr data-id="' + esc(pc.id) + '"><td><select data-k="groupe">' + opts + '</select></td>' + inp('code', pc.code, 70) +
+    var cle = cleNumero(groupe(pc.groupe).famille, pc.sillon), base = pc[cle] || '';
+    // les numéros par jour sont tirés des variantes ; le reste des variantes reste en texte
+    var autres = (pc.variantes || []).map(function (va) { var x = SC.copie(va); delete x[cle]; return x; }).filter(function (x) { return Object.keys(x).length > 1; });
+    var parJour = SC.JOURS_COURTS.map(function (j, i) {
+      var n = SC.appliquerVariantes(pc, i + 1)[cle] || '';
+      return '<label>' + j.slice(0, 2) + '<input data-numjour="' + (i + 1) + '" class="mono" value="' + esc(n && n !== base ? n : '') + '" placeholder="' + esc(base) + '"></label>';
+    }).join('');
+    var teinte = ' style="--g:' + couleur(pc.groupe) + '"';
+    return '<tr data-id="' + esc(pc.id) + '"' + teinte + '><td><select data-k="groupe">' + opts + '</select></td>' + inp('code', pc.code, 70) +
       '<td><select data-k="sens"><option value="A"' + (pc.sens === 'A' ? ' selected' : '') + '>Arr.</option><option value="D"' + (pc.sens === 'D' ? ' selected' : '') + '>Dép.</option></select></td>' +
       inp('numero', pc.numero, 70) + inp('sillon', pc.sillon, 64) + inp('hlr', pc.hlr, 52) + inp('heure', pc.heure, 52) + '<td class="jours">' + jours + '</td>' +
-      inp('wagonsDemandes', pc.wagonsDemandes, 44) + inp('voiePrevue', pc.voiePrevue, 54) + inp('variantes', SC.variantesEnTexte(pc.variantes), 150) +
-      '<td><button type="button" class="bouton petit danger" data-act="retirer">Retirer</button></td></tr>';
+      inp('wagonsDemandes', pc.wagonsDemandes, 44) + inp('voiePrevue', pc.voiePrevue, 54) + inp('variantes', SC.variantesEnTexte(autres), 150) +
+      '<td><button type="button" class="bouton petit danger" data-act="retirer">Retirer</button></td></tr>' +
+      '<tr class="pl-jours"' + teinte + '><td colspan="12"><span class="faible">' + (cle === 'sillon' ? 'Sillon' : 'N°') + ' par jour (vide = ' + esc(base || 'le n° habituel') + ') :</span> ' + parJour + '</td></tr>';
   }
-  $('#b-planning').addEventListener('click', function () {
+  $('#b-planning').addEventListener('click', ouvrirPlanning);
+  $('#pa-planning').addEventListener('click', function () { fermer($('#fm-params')); ouvrirPlanning(); });
+  function ouvrirPlanning() {
     $('#pl-corps').innerHTML = (app.planning.circulations || []).map(lignePlanning).join('');
     $('#pl-erreur').textContent = '';
     ouvrir('#d-planning');
-  });
+  }
   $('#pl-ajouter').addEventListener('click', function () {
-    var tr = document.createElement('tbody');
-    tr.innerHTML = lignePlanning({ id: uid('p'), groupe: (app.planning.groupes[0] || {}).id, code: '', sens: 'A', numero: '', sillon: '', hlr: '', heure: '', jours: [1, 2, 3, 4, 5], variantes: [] });
-    $('#pl-corps').appendChild(tr.firstChild);
+    var t = document.createElement('tbody');
+    t.innerHTML = lignePlanning({ id: uid('p'), groupe: (app.planning.groupes[0] || {}).id, code: '', sens: 'A', numero: '', sillon: '', hlr: '', heure: '', jours: [1, 2, 3, 4, 5], variantes: [] });
+    while (t.firstChild) $('#pl-corps').appendChild(t.firstChild);
   });
-  $('#pl-corps').addEventListener('click', function (e) { var b = e.target.closest('[data-act="retirer"]'); if (b) b.closest('tr').remove(); });
+  $('#pl-corps').addEventListener('click', function (e) {
+    var b = e.target.closest('[data-act="retirer"]'); if (!b) return;
+    var tr = b.closest('tr'), suite = tr.nextElementSibling;
+    if (suite && suite.classList.contains('pl-jours')) suite.remove();
+    tr.remove();
+  });
   function lirePlanning() {
     var erreurs = [], circs = [];
-    $$('#pl-corps tr').forEach(function (tr, i) {
+    $$('#pl-corps tr[data-id]').forEach(function (tr, i) {
       var v = function (k) { return tr.querySelector('[data-k="' + k + '"]').value.trim(); };
       var pc = { id: tr.getAttribute('data-id'), groupe: v('groupe'), code: v('code'), sens: v('sens'), numero: v('numero'), sillon: v('sillon'), hlr: '', heure: '', jours: [], variantes: [], wagonsDemandes: null, voiePrevue: v('voiePrevue') };
       if (!pc.code) erreurs.push('Ligne ' + (i + 1) + ' : code manquant.');
@@ -890,6 +950,13 @@
       $$('[data-jour]', tr).forEach(function (cb) { if (cb.checked) pc.jours.push(+cb.getAttribute('data-jour')); });
       var w = v('wagonsDemandes'); if (w) { if (!/^\d+$/.test(w)) erreurs.push('Ligne ' + (i + 1) + ' : wagons invalides.'); pc.wagonsDemandes = +w; }
       try { pc.variantes = SC.texteEnVariantes(v('variantes')); } catch (err) { erreurs.push('Ligne ' + (i + 1) + ' : ' + err.message); }
+      // numéros jour par jour → une variante par numéro différent du numéro habituel
+      var cle = cleNumero(groupe(pc.groupe).famille, pc.sillon), parNum = {}, suite = tr.nextElementSibling;
+      if (suite && suite.classList.contains('pl-jours')) $$('[data-numjour]', suite).forEach(function (inp) {
+        var n = inp.value.trim();
+        if (n && n !== pc[cle]) (parNum[n] = parNum[n] || []).push(+inp.getAttribute('data-numjour'));
+      });
+      Object.keys(parNum).forEach(function (n) { var va = { jours: parNum[n] }; va[cle] = n; pc.variantes.push(va); });
       circs.push(pc);
     });
     return { erreurs: erreurs, planning: { schema: 1, groupes: app.planning.groupes, circulations: circs } };
@@ -906,9 +973,9 @@
   });
   /** Les wagons et voies de l'onglet affiché deviennent l'habitude de ce jour de semaine dans le planning. */
   function memoriserHabitudes() {
-    var demain = app.onglet === 'demain', j = app.journee;
-    var circs = demain ? j.demain.circulations : j.circulations.filter(function (c) { return famille(c) === app.onglet; });
-    var date = demain ? j.demain.date : j.date, nom = SC.JOURS[SC.jourSemaine(date) - 1];
+    var prep = estPrep(app.onglet) ? prepDe(app.journee, app.onglet) : null, j = app.journee;
+    var circs = prep ? prep.circulations : j.circulations.filter(function (c) { return famille(c) === app.onglet; });
+    var date = prep ? prep.date : j.date, nom = SC.JOURS[SC.jourSemaine(date) - 1];
     var r = SC.memoriserHabitudes(app.planning, circs, date);
     if (!r.modifiees) { toast('Rien de nouveau à garder pour les ' + nom + 's.'); return; }
     api('PUT', '/api/planning', JSON.stringify(r.planning, null, 2)).then(function (rep) {
@@ -917,12 +984,14 @@
       toast(r.modifiees + ' circulation' + (r.modifiees > 1 ? 's' : '') + ' : wagons et voie repris automatiquement les prochains ' + nom + 's.');
     }).catch(function (e) { toast('Planning non modifié : ' + e.message, 'crit'); });
   }
+  /** Régénère depuis le planning la préparation affichée (après-demain si cet onglet est ouvert, sinon demain). */
   function regenererDemain() {
-    modifier('Préparation de demain régénérée', 'demain.regeneration', function (j) {
-      var date = SC.ajouterJours(j.date, 1);
-      j.demain = { date: date, circulations: SC.genererCirculations(app.planning, date) };
+    var sur = app.onglet === 'surlendemain', nom = sur ? 'd\'après-demain' : 'de demain';
+    modifier('Préparation ' + nom + ' régénérée', 'demain.regeneration', function (j) {
+      var date = SC.ajouterJours(j.date, sur ? 2 : 1), p = { date: date, circulations: SC.genererCirculations(app.planning, date) };
+      if (sur) j.surlendemain = p; else j.demain = p;
     });
-    toast('Préparation de demain régénérée depuis le planning.', null, { libelle: 'Annuler', fn: annuler });
+    toast('Préparation ' + nom + ' régénérée depuis le planning.', null, { libelle: 'Annuler', fn: annuler });
   }
   $('#pl-regenerer').addEventListener('click', function () { regenererDemain(); });
 
@@ -1060,11 +1129,11 @@
   // Ajout d'une circulation
   function ouvrirAjout() {
     if (app.lectureSeule) return;
-    var demain = app.onglet === 'demain';
-    var cible = demain ? app.journee.demain.circulations : app.journee.circulations;
+    var prep = estPrep(app.onglet) ? prepDe(app.journee, app.onglet) : null;
+    var cible = prep ? prep.circulations : app.journee.circulations;
     var presents = {}; cible.forEach(function (c) { presents[c.planId || c.id] = true; });
     var dispo = (app.planning.circulations || []).filter(function (pc) { return !presents[pc.id]; });
-    $('#aj-titre').textContent = 'Ajouter une circulation · ' + (demain ? 'demain' : 'aujourd\'hui');
+    $('#aj-titre').textContent = 'Ajouter une circulation · ' + (prep ? SC.libelleJour(prep.date) : 'aujourd\'hui');
     $('#aj-planning').innerHTML = dispo.length ? dispo.map(function (pc) {
       return '<tr><td><b>' + esc(pc.code) + '</b></td><td>' + esc(groupe(pc.groupe).libelle) + '</td><td>' + (pc.sens === 'D' ? 'départ' : 'arrivée') + '</td><td class="mono">' + esc(pc.numero || pc.sillon || '') + '</td><td class="mono">' + esc(pc.heure || '') + '</td>' +
         '<td style="text-align:right"><button type="button" class="bouton petit" data-plan="' + esc(pc.id) + '">Ajouter</button></td></tr>';
@@ -1074,15 +1143,15 @@
     ouvrir('#d-ajout');
   }
   function ajouterCirculation(c, libelle) {
-    var demain = app.onglet === 'demain';
-    modifier(libelle, 'circulation.ajout', function (j) { (demain ? j.demain.circulations : j.circulations).push(c); });
-    if (!demain && famille(c) !== app.onglet) { app.onglet = famille(c); majOnglets(); rendre(); }
+    var cle = estPrep(app.onglet) ? app.onglet : null;
+    modifier(libelle, 'circulation.ajout', function (j) { (cle ? prepDe(j, cle).circulations : j.circulations).push(c); });
+    if (!cle && famille(c) !== app.onglet) { app.onglet = famille(c); majOnglets(); rendre(); }
   }
   $('#b-ajout').addEventListener('click', ouvrirAjout);
   $('#aj-planning').addEventListener('click', function (e) {
     var b = e.target.closest('[data-plan]'); if (!b) return;
     var pc = app.planning.circulations.filter(function (x) { return x.id === b.getAttribute('data-plan'); })[0];
-    var date = app.onglet === 'demain' ? app.journee.demain.date : app.journee.date;
+    var date = estPrep(app.onglet) ? prepDe(app.journee, app.onglet).date : app.journee.date;
     var c = SC.instancier(pc, date, app.planning); c.ajoutee = true;
     fermer(b); ajouterCirculation(c, pc.code + ' ajouté');
   });
@@ -1091,7 +1160,7 @@
     var code = $('#aj-code').value.trim(), h = $('#aj-heure').value.trim(), hlr = $('#aj-hlr').value.trim();
     if (!code) { $('#aj-erreur').textContent = 'Le code est obligatoire.'; return; }
     if ((h && !SC.normHeure(h)) || (hlr && !SC.normHeure(hlr))) { $('#aj-erreur').textContent = 'Heure invalide.'; return; }
-    var date = app.onglet === 'demain' ? app.journee.demain.date : app.journee.date;
+    var date = estPrep(app.onglet) ? prepDe(app.journee, app.onglet).date : app.journee.date;
     var g = $('#aj-groupe').value, sens = $('#aj-sens').value, num = $('#aj-numero').value.trim();
     var fam = groupe(g).famille;
     var c = {
@@ -1165,8 +1234,15 @@
       else if (a === 'deja') basculer(id, 'etat', 'deja', 'Déjà là');
       else if (a === 'partie') marquerPartie(id);
       else if (a === 'annuler-partie') marquerPartie(id, true);
+      else if (a === 'fa') marquerFA(id);
+      else if (a === 'nonprevu') basculer(id, 'etat', 'nonprevu', 'Non prévue / rétablie');
       else if (a === 'suppr') { basculer(id, 'etat', 'supprime', 'Suppression / rétablissement'); }
-      else if (a === 'suppr-demain') modifier('Demain : suppression / rétablissement', 'demain.suppression', function (j) { var cc = circDemainDe(j, id); cc.etat = cc.etat === 'supprime' ? null : 'supprime'; });
+      else if (a === 'suppr-demain' || a === 'nonprevu-prep') {
+        var cle = ligne.getAttribute('data-prep') || 'demain', val = a === 'suppr-demain' ? 'supprime' : 'nonprevu';
+        modifier((cle === 'demain' ? 'Demain' : 'Après-demain') + ' : ' + (val === 'supprime' ? 'suppression' : 'non prévue') + ' / rétablissement', 'demain.' + val, function (j) {
+          var cc = circPrepDe(j, cle, id); cc.etat = cc.etat === val ? null : val;
+        });
+      }
       else if (a === 'renvoyer') { var c = circDe(app.journee, id); var t2 = SC.typeMail(c, app.planning); envoyerMail(c, c.mails && c.mails[t2] ? 'r' + Date.now().toString(36) : null); }
       return;
     }
@@ -1186,9 +1262,10 @@
       var kd = el.getAttribute('data-demain'), hd = SC.normHeure(val);
       if (kd === 'wagonsDemandes' && val && !/^\d+$/.test(val)) { toast('Wagons : un nombre.', 'crit'); return; }
       if ((kd === 'theo' || kd === 'hlr') && val && !hd) { toast('Heure invalide.', 'crit'); return; }
-      modifier('Demain : ' + kd, 'demain.modification', function (j) {
-        var cc = circDemainDe(j, id);
-        if (kd === 'theo') cc.theo = hd ? SC.combiner(j.demain.date, hd) : null;
+      var cleP = ligne.getAttribute('data-prep') || 'demain';
+      modifier((cleP === 'demain' ? 'Demain' : 'Après-demain') + ' : ' + kd, 'demain.modification', function (j) {
+        var cc = circPrepDe(j, cleP, id);
+        if (kd === 'theo') cc.theo = hd ? SC.combiner(prepDe(j, cleP).date, hd) : null;
         else if (kd === 'hlr') cc.hlr = hd || '';
         else cc[kd] = kd === 'wagonsDemandes' ? (val ? +val : null) : val.toUpperCase();
       });
@@ -1231,7 +1308,7 @@
   document.addEventListener('keydown', function (e) {
     var dansChamp = /^(INPUT|TEXTAREA|SELECT)$/.test((e.target || {}).tagName || '');
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' && (!dansChamp || !e.target.value) && !document.querySelector('dialog[open]')) { e.preventDefault(); annuler(); }
-    else if (e.altKey && /^[123]$/.test(e.key)) { e.preventDefault(); app.onglet = ['navette', 'ligne', 'demain'][+e.key - 1]; majOnglets(); rendreCirculations(); }
+    else if (e.altKey && /^[1234]$/.test(e.key)) { e.preventDefault(); app.onglet = ['navette', 'ligne', 'demain', 'surlendemain'][+e.key - 1]; majOnglets(); rendreCirculations(); }
     else if (e.altKey && e.key.toLowerCase() === 'n') { e.preventDefault(); F.num.focus(); }
   });
   window.addEventListener('beforeunload', function (e) {
@@ -1302,6 +1379,23 @@
     lecteur.readAsText(f);
   }
 
+  // ----------------------------------------------------- nouvelle version
+  /** Nouvelle version publiée (version.txt) : la saisie se recharge seule dès que rien n'est en cours. */
+  var versionChargee = null;
+  function verifierVersion() {
+    if (!/^https?:/.test(location.protocol)) return;
+    fetch('version.txt?t=' + Date.now(), { cache: 'no-store' }).then(function (r) { return r.ok ? r.text() : null; }).then(function (v) {
+      v = (v || '').trim(); if (!v) return;
+      if (versionChargee === null) { versionChargee = v; return; }
+      if (v === versionChargee) return;
+      var actif = document.activeElement;
+      if (sauvegardeEnCours() || document.querySelector('dialog[open]') || F.num.value.trim() || (actif && /^(INPUT|TEXTAREA|SELECT)$/.test(actif.tagName))) return;
+      toast('Nouvelle version de la saisie : rechargement…');
+      Promise.all(['saisie.js', 'saisie.css', 'commun.js'].map(function (u) { return fetch(u, { cache: 'reload' }).catch(function () { /* sans effet */ }); }))
+        .then(function () { setTimeout(function () { location.reload(); }, 1500); });
+    }, function () { /* sans effet */ });
+  }
+
   // ------------------------------------------------------------- démarrage
   horloge(); setInterval(horloge, 1000);
   $('#b-connexion').hidden = CONNEXION.mode !== 'google';
@@ -1330,6 +1424,7 @@
       setInterval(verifierChangementJour, 30000);
       if (GOOGLE) setInterval(function () { if (estJourActif()) api('POST', '/api/battement', '').then(null, function () { /* signalé par verifierService */ }); }, 30000);
       if (GOOGLE) { suivreTrains(); setInterval(suivreTrains, 15000); }
+      verifierVersion(); setInterval(verifierVersion, 120000);
     }).catch(function (e) {
       if (e.message === 'clé refusée' || e.message === 'serveur vide') return;
       app.serviceOk = false; rendreEtats();

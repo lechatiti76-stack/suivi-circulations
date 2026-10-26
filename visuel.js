@@ -88,8 +88,8 @@
   }
   function ligneNavette(l, parcours) {
     var e = SC.etatAffichage(l, maintenant(), etat.d.seuilRetardMinutes, parcours);
-    return '<div class="r ' + (l.sens === 'D' ? 'dep' : 'arr') + '" data-k="' + esc(l.id) + '">' +
-      '<span class="code">' + esc(l.code) + '</span>' +
+    return '<div class="r ' + (l.sens === 'D' ? 'dep' : 'arr') + (e.cle === 'supprime' ? ' supprimee' : '') + '" data-k="' + esc(l.id) + '">' +
+      '<span class="code' + (e.cle === 'supprime' ? ' barre' : '') + '">' + esc(l.code) + '</span>' +
       '<span class="sens">' + (l.sens === 'D' ? 'Dép.' : 'Arr.') + '</span>' +
       celluleHeure(l, e.cle === 'supprime') + celluleEcart(l, e) +
       '<span class="wg">' + (l.wagons != null ? esc(l.wagons) + ' wgs' : '') + '</span>' +
@@ -105,8 +105,16 @@
     });
     // demainLibelle absent : diffusion publiée par une saisie pas encore rechargée
     var libelle = g.demainLibelle || (liste.length ? 'Demain · ' + (etat.d.demain || '') : '');
+    // jour suivant (après-demain) : une ligne compacte sous les cartes
+    var ensuite = '';
+    if (g.ensuite && g.ensuite.lignes && g.ensuite.lignes.length) {
+      var dep2 = g.ensuite.lignes.filter(function (l) { return l.sens === 'D'; });
+      ensuite = '<div class="ensuite"><b>' + esc(g.ensuite.libelle) + '</b>' + (dep2.length ? dep2 : g.ensuite.lignes).map(function (l) {
+        return '<span' + (l.etat === 'supprime' ? ' class="supprimee"' : '') + '>' + esc(l.code) + ' <em>' + esc(hm(l.theo) || '—') + '</em></span>';
+      }).join('') + '</div>';
+    }
     return '<div class="demain"><div class="demain-tete">Prochaines navettes' + (libelle ? ' · ' + esc(libelle) : '') + '</div>' +
-      (cartes.length ? '<div class="rots" style="--r:' + Math.min(4, cartes.length) + '">' + cartes.join('') + '</div>' : '') +
+      (cartes.length ? '<div class="rots" style="--r:' + Math.min(4, cartes.length) + '">' + cartes.join('') + '</div>' : '') + ensuite +
       (g.demainNote ? '<div class="demain-note">' + esc(g.demainNote) + '</div>' : '') + '</div>';
   }
   function blocNavettes(g) {
@@ -262,7 +270,11 @@
       if (v == null) return;
       v = v.trim();
       if (etat.version === null) etat.version = v;
-      else if (v !== etat.version) location.reload();
+      else if (v !== etat.version) {
+        // fichiers relus du réseau d'abord : sinon le navigateur peut recharger l'ancienne version gardée en cache
+        Promise.all(['visuel.js', 'visuel.css', 'commun.js'].map(function (u) { return fetch(u, { cache: 'reload' }).catch(function () { /* sans effet */ }); }))
+          .then(function () { location.reload(); });
+      }
     }).catch(function () { /* sans effet */ });
   }
 

@@ -50,6 +50,11 @@ html, body { margin: 0; height: 100%; background: var(--fond); color: var(--encr
 .r .barre { color: inherit; opacity: .55; }
 .r .ec.tard, .r .ec.tres-tard, .r .ec.tot { background: #0B141D; padding: .04rem .35rem; border-radius: .3rem; justify-self: start; }
 .r .st { background-color: #0B141D; outline: .1rem solid rgba(8, 18, 27, .55); }
+.r .vo { font-size: 1.6rem; }
+/* navette supprimée : fond rouge, écriture blanche, barré foncé et épais */
+.r.supprimee { background: #C62828; color: #FFFFFF; }
+.r.supprimee .barre, .r.supprimee .h small { color: #FFFFFF; opacity: 1; text-decoration-color: #2B0000; text-decoration-thickness: .2rem; }
+.r.supprimee .st.supprime { background: #FFFFFF; color: #B71C1C; box-shadow: none; outline: none; }
 .code { font-weight: 700; font-size: 1.4rem; letter-spacing: .02em; white-space: nowrap; }
 .sens { font-size: .78rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: color-mix(in srgb, var(--c) 55%, var(--encre)); }
 .h { font-weight: 700; font-size: 1.4rem; font-variant-numeric: tabular-nums; display: flex; align-items: baseline; gap: .3rem; white-space: nowrap; }
@@ -75,6 +80,10 @@ html, body { margin: 0; height: 100%; background: var(--fond); color: var(--encr
 .rot i { font-style: normal; font-size: .95rem; color: #c3cfdb; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .rot.supprimee { opacity: .55; text-decoration: line-through; }
 .demain-note { font-size: 1.15rem; font-weight: 700; color: var(--encre); padding: .1rem .15rem 0; }
+.ensuite { display: flex; flex-wrap: wrap; align-items: baseline; gap: .2rem .9rem; font-size: 1.1rem; font-weight: 700; padding: .1rem .15rem 0; }
+.ensuite b { color: var(--c); text-transform: uppercase; letter-spacing: .08em; font-size: .95rem; }
+.ensuite em { font-style: normal; font-variant-numeric: tabular-nums; color: #c3cfdb; }
+.ensuite .supprimee { text-decoration: line-through; opacity: .55; }
 
 /* ------------------------------------------------------------- états */
 .st { position: relative; display: inline-flex; justify-content: center; align-items: center; width: 100%; font-weight: 700; font-size: .88rem; letter-spacing: .03em; text-transform: uppercase; padding: .26rem .4rem; border-radius: .35rem; white-space: nowrap; overflow: hidden; }
@@ -85,13 +94,16 @@ html, body { margin: 0; height: 100%; background: var(--fond); color: var(--encr
 .st.prepa { background: var(--cyan); color: #04202e; }
 .etat { display: flex; flex-direction: column; gap: .1rem; min-width: 0; }
 .sous { font-size: .9rem; font-weight: 700; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.st.cale { background: #7c3aed; color: #ffffff; }
+/* train calé : rouge vif qui pulse, bien visible de loin */
+.st.cale { background: #E5251B; color: #FFFFFF; font-size: .98rem; animation: poulsRouge 1.4s ease-in-out infinite; }
+.st.fa { background: #B45309; color: #FFFFFF; }
 .st.attendu { color: var(--ambre); box-shadow: inset 0 0 0 .2rem var(--ambre); }
 .st.retard { background: var(--rouge); color: #2a0602; }
 .st.supprime { color: var(--rouge); box-shadow: inset 0 0 0 .2rem var(--rouge); }
 .st.deja { color: var(--violet); box-shadow: inset 0 0 0 .2rem var(--violet); }
 .st.prevu { color: #b9c7d5; box-shadow: inset 0 0 0 .16rem #557089; }
 @keyframes pouls { 0%, 100% { box-shadow: 0 0 0 0 rgba(255, 194, 61, .75); } 50% { box-shadow: 0 0 0 .45rem rgba(255, 194, 61, 0); } }
+@keyframes poulsRouge { 0%, 100% { box-shadow: 0 0 0 0 rgba(229, 37, 27, .9); } 50% { box-shadow: 0 0 0 .5rem rgba(229, 37, 27, 0); } }
 
 /* ------------------------------------------------------- trains de ligne */
 .panneau { background: var(--panneau); border: .08rem solid var(--trait); border-radius: .6rem; overflow: hidden; min-width: 0; }
@@ -118,6 +130,6 @@ html, body { margin: 0; height: 100%; background: var(--fond); color: var(--encr
 .flash-fen { overflow: hidden; white-space: nowrap; display: flex; align-items: center; min-height: 2.5rem; }
 .flash-txt { display: inline-block; font-weight: 700; font-size: 1.5rem; padding: .4rem 0; white-space: nowrap; will-change: transform; animation: defile var(--duree, 20s) linear infinite; }
 @keyframes defile { from { transform: translateX(var(--depart, 100%)); } to { transform: translateX(var(--fin, -100%)); } }
-@media (prefers-reduced-motion: reduce) { .flash-txt { animation: none; padding-left: 1rem; white-space: normal; } .flash-fen { white-space: normal; } .st.imminent { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .flash-txt { animation: none; padding-left: 1rem; white-space: normal; } .flash-fen { white-space: normal; } .st.imminent, .st.cale { animation: none; } }
 
 .pied { display: flex; justify-content: space-between; gap: 2rem; padding: .4rem 1.4rem .5rem; border-top: .08rem solid var(--trait); font-size: .88rem; color: var(--dim); }
