@@ -36,7 +36,7 @@ html, body { margin: 0; height: 100%; background: var(--fond); color: var(--encr
 
 /* ------------------------------------------------------------ navettes */
 .navettes { display: grid; grid-template-columns: repeat(var(--n, 3), minmax(0, 1fr)); gap: .8rem; align-items: start; }
-.nav { --c: #F28C28; --ce: #1a0f00; border-radius: .6rem; overflow: hidden; background: var(--panneau); border: .12rem solid color-mix(in srgb, var(--c) 70%, transparent); min-width: 0; }
+.nav { --c: #F28C28; --ce: #1a0f00; border-radius: .6rem; overflow: hidden; background: var(--panneau); border: .2rem solid var(--c); min-width: 0; }
 .nav-tete { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; padding: .45rem .9rem .35rem; background: var(--c); color: var(--ce); }
 .nav-tete h2 { margin: 0; font-weight: 700; font-size: 1.55rem; letter-spacing: .08em; text-transform: uppercase; }
 .nav-tete span { font-size: .9rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; opacity: .8; }
@@ -63,33 +63,34 @@ html, body { margin: 0; height: 100%; background: var(--fond); color: var(--encr
 .barre { text-decoration: line-through; text-decoration-thickness: .1rem; color: var(--dim); }
 .vide { padding: .7rem .9rem .8rem; color: var(--dim); font-size: 1.05rem; }
 
-/* Prochaines navettes (demain, ou le jour suivant qui en a) : une carte par rotation, quatre par rangée */
+/* Prochaines navettes (demain, ou le jour suivant qui en a) : une carte par départ, quatre par rangée, puis le texte libre */
 .demain { border-top: .12rem dashed color-mix(in srgb, var(--c) 45%, var(--trait)); padding: .45rem .8rem .6rem; display: grid; gap: .4rem; }
 .demain-tete { font-size: .95rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--c); }
 .rots { display: grid; grid-template-columns: repeat(var(--r, 4), minmax(0, 1fr)); gap: .4rem; }
 .rot { display: grid; gap: .15rem; padding: .3rem .5rem .35rem; border-radius: .4rem; min-width: 0;
   background: color-mix(in srgb, var(--c) 16%, var(--panneau)); border: .08rem solid color-mix(in srgb, var(--c) 50%, transparent); border-left: .35rem solid var(--c); }
-.rl { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: .45rem; white-space: nowrap; overflow: hidden; }
-.rl b { font-size: 1.2rem; }
-.rl span { font-size: 1.2rem; font-weight: 700; font-variant-numeric: tabular-nums; }
-.rl.arr b, .rl.arr span { color: color-mix(in srgb, var(--c) 35%, var(--encre)); }
-.rl i { flex-basis: 100%; font-style: normal; font-size: .85rem; color: var(--dim); }
-.rl.supprimee { opacity: .55; text-decoration: line-through; }
+.rl { display: flex; align-items: baseline; column-gap: .5rem; white-space: nowrap; overflow: hidden; }
+.rl b { font-size: 1.3rem; }
+.rl span { font-size: 1.3rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.rot i { font-style: normal; font-size: .95rem; color: #c3cfdb; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rot.supprimee { opacity: .55; text-decoration: line-through; }
+.demain-note { font-size: 1.15rem; font-weight: 700; color: var(--encre); padding: .1rem .15rem 0; }
 
 /* ------------------------------------------------------------- états */
 .st { position: relative; display: inline-flex; justify-content: center; align-items: center; width: 100%; font-weight: 700; font-size: .88rem; letter-spacing: .03em; text-transform: uppercase; padding: .26rem .4rem; border-radius: .35rem; white-space: nowrap; overflow: hidden; }
 .st.fait { background: var(--vert); color: #06210f; }
 .st.imminent { background: var(--ambre); color: #1a1200; animation: pouls 1.8s ease-in-out infinite; }
-.st.bientot, .st.route { color: var(--cyan); box-shadow: inset 0 0 0 .12rem var(--cyan); }
+.st.bientot, .st.route { color: var(--cyan); box-shadow: inset 0 0 0 .2rem var(--cyan); }
 .st .avance { position: absolute; left: 0; bottom: 0; height: .22rem; background: var(--cyan); }
 .st.prepa { background: var(--cyan); color: #04202e; }
 .etat { display: flex; flex-direction: column; gap: .1rem; min-width: 0; }
-.sous { font-size: .72rem; font-weight: 700; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; opacity: .9; }
-.st.attendu { color: var(--ambre); box-shadow: inset 0 0 0 .12rem var(--ambre); }
+.sous { font-size: .9rem; font-weight: 700; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.st.cale { background: #7c3aed; color: #ffffff; }
+.st.attendu { color: var(--ambre); box-shadow: inset 0 0 0 .2rem var(--ambre); }
 .st.retard { background: var(--rouge); color: #2a0602; }
-.st.supprime { color: var(--rouge); box-shadow: inset 0 0 0 .12rem var(--rouge); }
-.st.deja { color: var(--violet); box-shadow: inset 0 0 0 .12rem var(--violet); }
-.st.prevu { color: var(--dim); box-shadow: inset 0 0 0 .1rem var(--trait); }
+.st.supprime { color: var(--rouge); box-shadow: inset 0 0 0 .2rem var(--rouge); }
+.st.deja { color: var(--violet); box-shadow: inset 0 0 0 .2rem var(--violet); }
+.st.prevu { color: #b9c7d5; box-shadow: inset 0 0 0 .16rem #557089; }
 @keyframes pouls { 0%, 100% { box-shadow: 0 0 0 0 rgba(255, 194, 61, .75); } 50% { box-shadow: 0 0 0 .45rem rgba(255, 194, 61, 0); } }
 
 /* ------------------------------------------------------- trains de ligne */
@@ -97,14 +98,19 @@ html, body { margin: 0; height: 100%; background: var(--fond); color: var(--encr
 .p-tete { display: flex; justify-content: space-between; align-items: baseline; padding: .45rem .9rem .3rem; }
 .p-tete h2 { margin: 0; font-weight: 700; font-size: 1.55rem; letter-spacing: .08em; text-transform: uppercase; }
 .p-tete span { font-size: .9rem; color: var(--dim); letter-spacing: .06em; text-transform: uppercase; }
-.tcols, .t { display: grid; grid-template-columns: 10.2rem 5.6rem 4.4rem minmax(8rem, 1fr) 5.4rem 5.4rem 4.2rem 4.4rem 10.2rem; gap: .5rem; align-items: center; padding: 0 .9rem; overflow: hidden; }
+/* N° · état · heure · voie | provenance · entreprise · destination | N° · heure · HLR · voie · état */
+.tcols, .t { display: grid; grid-template-columns: 6.2rem 12.6rem 5.6rem 4.4rem minmax(16rem, 1fr) 6.2rem 5.6rem 4.2rem 4.4rem 12.6rem; gap: .5rem; align-items: center; padding: 0 .9rem; overflow: hidden; }
 .tcols { font-size: .74rem; letter-spacing: .08em; text-transform: uppercase; color: var(--dim); padding-bottom: .25rem; }
 .tcols .c, .t .c { text-align: center; }
-.t { min-height: 2.6rem; border-top: .08rem solid var(--trait); background: var(--ligne); }
+.t { min-height: 2.9rem; border-top: .08rem solid var(--trait); background: var(--ligne); }
+.t .st { white-space: normal; line-height: 1.1; }
 .t:nth-of-type(even) { background: var(--ligne-2); }
-.tcode { font-weight: 700; font-size: 1.65rem; letter-spacing: .06em; text-align: center; line-height: 1.02; }
-.tcode small { display: block; font-weight: 400; font-size: .74rem; letter-spacing: .02em; color: var(--dim); }
-.num { font-size: 1.15rem; font-variant-numeric: tabular-nums; }
+.tcentre { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: .8rem; min-width: 0; padding: 0 1.6rem 0 .6rem; }
+.tville { display: flex; flex-direction: column; font-weight: 700; font-size: 1.35rem; line-height: 1.05; min-width: 0; overflow-wrap: anywhere; }
+.tville small { font-weight: 400; font-size: .74rem; letter-spacing: .03em; color: var(--dim); }
+.tville.dest { align-items: flex-end; text-align: right; }
+.tef { font-weight: 700; font-size: 1.6rem; letter-spacing: .07em; text-transform: uppercase; text-align: center; white-space: nowrap; }
+.num { font-weight: 700; font-size: 1.4rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
 
 /* -------------------------------------------------------------- flash */
 .flash { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: stretch; background: var(--jaune); color: #1a1200; }

@@ -277,6 +277,7 @@
       // gardé après l'arrivée : le Suivi trains relit ce départ et ne doit pas le croire effacé
       partie: c.sens !== 'D' && c.etat !== 'supprime' ? (c.partie || null) : null,
       etape: c.sens === 'D' && !d.reel && c.etat !== 'supprime' ? (c.etape || null) : null,
+      cale: c.sens === 'D' && !d.reel && c.etat !== 'supprime' ? (c.cale || null) : null,
       etat: c.etat === 'supprime' || c.etat === 'deja' ? c.etat : null
     };
   }
@@ -339,12 +340,13 @@
         var proch = demainVisible ? prochainesNavettes(j, planning, g.id) : null;
         navettes.push({
           id: g.id, libelle: g.libelle, couleur: couleurGroupe(g, vis), parcours: parcoursDe(g.id, g, params), lignes: lignes,
-          demain: proch ? proch.lignes : [], demainLibelle: proch ? proch.libelle : ''
+          demain: proch ? proch.lignes : [], demainLibelle: proch ? proch.libelle : '',
+          demainNote: demainVisible ? String((j.notesProchaines || {})[g.id] || '').trim() : ''
         });
       } else {
         rotations(circs).forEach(function (r) {
           trains.push({
-            groupe: g.libelle, code: r.code, parcours: parcoursDe(r.code, g, params),
+            groupe: g.libelle, code: r.code, nom: nomTrain(r.code, params), parcours: parcoursDe(r.code, g, params),
             arrivee: r.arrivee ? ligneDiffusee(r.arrivee, etatCirculation(r.arrivee, j), 'ligne') : null,
             depart: r.depart ? ligneDiffusee(r.depart, etatCirculation(r.depart, j), 'ligne') : null
           });
@@ -370,6 +372,12 @@
       navettes: navettes, trains: trains,
       flash: flashActif ? { texte: String(f.texte).trim(), jusqua: f.jusqua || '' } : null
     };
+  }
+  /** Nom de ville affiché pour un train de ligne : Paramètres › visuel.nomsTrains, sinon ces valeurs, sinon le code. */
+  var NOMS_TRAINS = { VNX: 'Vénissieux', BDX: 'Bordeaux', SPCO: 'Saint-Pierre-des-Corps', VIERZN: 'Vierzon', CLERMT: 'Clermont-Ferrand' };
+  function nomTrain(code, params) {
+    var n = (params && params.visuel && params.visuel.nomsTrains) || {};
+    return n[code] || NOMS_TRAINS[code] || code;
   }
   var COULEURS_NAVETTES = { TDF: '#F28C28', TN: '#2D8CFF', ATL: '#F2C230' };
   var COULEURS_SECOURS = ['#2EB872', '#B07CFF', '#FF6FA8'];
@@ -428,6 +436,8 @@
     var seuil = seuilMin == null ? 15 : seuilMin, arr = l.sens !== 'D';
     if (l.etat === 'supprime') return { cle: 'supprime', libelle: 'Supprimé' };
     if (l.reel) return { cle: 'fait', libelle: (arr ? 'Arrivé ' : 'Parti ') + hm(l.reel) };
+    // train déclaré calé dans le Suivi trains : prioritaire, dernière étape en dessous
+    if (!arr && l.cale) return { cle: 'cale', libelle: 'Calé à ' + hm(l.cale), sous: l.etape && l.etape.lib ? l.etape.lib + ' ' + (l.etape.h || '') : '' };
     if (l.etat === 'deja') return { cle: 'deja', libelle: 'Déjà là' };
     if (l.annonce) return { cle: 'imminent', libelle: arr ? 'Arrivée imminente' : 'Départ imminent' };
     if (arr && l.partie) {
@@ -664,7 +674,7 @@
   var CORRESPONDANCES_SUIVI = { venissieux: 'VNX', spco: 'SPCO', bordeaux: 'BDX', vierzon: 'VIERZN', clermont: 'CLERMT' };
   /** Étapes du Suivi trains → champ de la circulation de départ (reel = départ pour la ligne). */
   var ETAPES_SUIVI = [
-    [/depart pour la ligne/, 'reel'], [/conducteur/, 'conducteur'], [/mise en tete/, 'miseEnTete'],
+    [/depart pour la ligne/, 'reel'], [/\bcale\b/, 'cale'], [/conducteur/, 'conducteur'], [/mise en tete/, 'miseEnTete'],
     [/bon au depart/, 'bonDepart'], [/regulateur/, 'retourRegulateur'], [/ouverture/, 'ouvertureSignal']
   ];
   function sansAccents(s) { return norm(s).normalize('NFD').replace(/[̀-ͯ]/g, ''); }
@@ -723,9 +733,10 @@
       var c = (j.circulations || []).filter(function (x) { return x.sens === 'D' && x.etat !== 'supprime' && numerosDe(x).indexOf(num) >= 0; })[0];
       if (!c) return;
       var regle = ETAPES_SUIVI.filter(function (e) { return e[0].test(lib); })[0];
-      if (regle) reporter('J|' + num + '|' + lib, h, c, regle[1] === 'reel' ? 'reel' : 'deroule.' + regle[1], c.code + ' ' + String(r.etape).trim());
+      var champ = !regle ? null : (regle[1] === 'reel' || regle[1] === 'cale' ? regle[1] : 'deroule.' + regle[1]);
+      if (champ) reporter('J|' + num + '|' + lib, h, c, champ, c.code + ' ' + String(r.etape).trim());
       // dernière étape franchie, affichée sur les écrans tant que le train n'est pas parti
-      if (h && !(regle && regle[1] === 'reel') && (!etapes[c.id] || etapes[c.id].h <= h)) etapes[c.id] = { lib: String(r.etape).trim(), h: h };
+      if (h && !(champ === 'reel' || champ === 'cale') && (!etapes[c.id] || etapes[c.id].h <= h)) etapes[c.id] = { lib: String(r.etape).trim(), h: h };
     });
     (j.circulations || []).forEach(function (c) {
       if (c.sens !== 'D') return;
@@ -738,7 +749,7 @@
 
   return {
     JOURS: JOURS, JOURS_COURTS: JOURS_COURTS, TYPES_MAIL: TYPES_MAIL, DEROULE: DEROULE, ENTETE_STATS: ENTETE_STATS,
-    PARCOURS_DEFAUT: PARCOURS_DEFAUT, CORRESPONDANCES_SUIVI: CORRESPONDANCES_SUIVI,
+    PARCOURS_DEFAUT: PARCOURS_DEFAUT, CORRESPONDANCES_SUIVI: CORRESPONDANCES_SUIVI, NOMS_TRAINS: NOMS_TRAINS, nomTrain: nomTrain,
     parcoursDe: parcoursDe, parcoursEnTexte: parcoursEnTexte, texteEnParcours: texteEnParcours, prochainesNavettes: prochainesNavettes,
     appliquerSuiviTrains: appliquerSuiviTrains, heureSuivi: heureSuivi,
     p2: p2, lireDate: lireDate, iso: iso, cleDate: cleDate, ajouterJours: ajouterJours, jourSemaine: jourSemaine,

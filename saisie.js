@@ -662,6 +662,7 @@
     var etat = SC.libelleStatut(st, c.sens) + (d.reel ? ' ' + hm(d.reel) : '');
     if (!demain && !d.reel && c.partie && st !== 'supprime') { etat = 'En route · dép. ' + hm(c.partie); st = 'annonce'; }
     if (!demain && !d.reel && c.etape && st !== 'supprime') etat = c.etape.lib + ' ' + c.etape.h;
+    if (!demain && !d.reel && c.cale && st !== 'supprime') { etat = 'Calé à ' + hm(c.cale); st = 'retard'; }
     var boutons = demain ? (app.lectureSeule ? '' : '<button type="button" class="bouton petit danger" data-act="suppr-demain">' + (c.etat === 'supprime' ? 'Rétablir' : 'Suppr.') + '</button>')
       : boutonsCirculation(c, d, st);
     var ouverte = !demain && app.ouverte === c.id;
@@ -678,7 +679,15 @@
     var j = app.journee, demain = app.onglet === 'demain';
     var liste = demain ? ((j.demain && j.demain.circulations) || []) : j.circulations.filter(function (c) { return famille(c) === app.onglet; });
     var jourRef = demain ? j.demain.date : j.date, nomJour = SC.JOURS[SC.jourSemaine(jourRef) - 1];
-    var html = '<div class="ajout note">' + (demain ? 'Préparation du ' + esc(SC.libelleJour(jourRef)) + '. ' : '') +
+    var notes = '';
+    if (demain) {
+      var dis = app.lectureSeule ? ' disabled' : '';
+      notes = '<div class="notes-prochaines"><b>Texte libre sous « Prochaines navettes » sur les écrans :</b>' +
+        (app.planning.groupes || []).filter(function (g) { return g.famille === 'navette'; }).map(function (g) {
+          return '<label>' + esc(g.libelle) + '<input data-note="' + esc(g.id) + '" maxlength="90" placeholder="ex. Mercredi : 4 navettes" value="' + esc((j.notesProchaines || {})[g.id] || '') + '"' + dis + '></label>';
+        }).join('') + '</div>';
+    }
+    var html = notes + '<div class="ajout note">' + (demain ? 'Préparation du ' + esc(SC.libelleJour(jourRef)) + '. ' : '') +
       'Heure, HLR, wagons et voie se modifient sur place et s\'affichent sur les écrans tant que le train n\'est pas annoncé. ' +
       (app.lectureSeule ? '' : '<button type="button" class="bouton petit" data-act="memoriser" title="Ces wagons et voies seront repris automatiquement les prochains ' + nomJour + 's">Garder pour tous les ' + nomJour + 's</button>' +
         (demain ? ' <button type="button" class="bouton petit" data-act="regenerer">Régénérer depuis le planning</button>' : '')) + '</div>' +
@@ -929,6 +938,8 @@
     $('#pa-diffusion').value = ((p.diffusion || {}).dossiers || []).join('\n');
     $('#pa-sauvegarde').value = (p.sauvegarde || {}).dossier || ''; $('#pa-archives').value = (p.archives || {}).dossier || '';
     $('#pa-titre').value = (p.visuel || {}).titre || ''; $('#pa-demain').value = (p.visuel || {}).demainAPartirDe || '00:00'; $('#pa-vitesse').value = (p.visuel || {}).vitesseFlash || 90;
+    var noms = Object.assign({}, SC.NOMS_TRAINS, (p.visuel || {}).nomsTrains || {});
+    $('#pa-noms').value = Object.keys(noms).map(function (k) { return k + '=' + noms[k]; }).join(', ');
     var base = p.correspondancesEF || {};
     $('#pa-base').innerHTML = Object.keys(base).sort().map(function (k) { return ligneBase(k, base[k]); }).join('');
     $('#pa-vers').value = (p.saisie || {}).versObligatoire || 'internes';
@@ -989,6 +1000,13 @@
     p.visuel = p.visuel || {}; p.visuel.titre = $('#pa-titre').value.trim() || 'Circulations du jour';
     var dm = SC.normHeure($('#pa-demain').value || '00:00'); if (!dm) err.push('Heure d\'affichage de demain invalide.'); p.visuel.demainAPartirDe = dm;
     p.visuel.vitesseFlash = Math.max(20, Math.min(400, +$('#pa-vitesse').value || 90));
+    var nomsTrains = {};
+    $('#pa-noms').value.split(/[,;]+/).forEach(function (x) {
+      x = x.trim(); if (!x) return; var k = x.split('=');
+      if (k.length !== 2 || !k[0].trim() || !k[1].trim()) { err.push('Villes des trains : « ' + x + ' » doit s\'écrire CODE=Nom.'); return; }
+      nomsTrains[k[0].trim().toUpperCase()] = k[1].trim();
+    });
+    p.visuel.nomsTrains = nomsTrains;
     var corrST = {};
     $('#pa-st-corr').value.split(/[,;]+/).forEach(function (x) {
       x = x.trim(); if (!x) return; var k = x.split('=');
@@ -1157,6 +1175,11 @@
     rendreCirculations();
   });
   $('#p-liste').addEventListener('change', function (e) {
+    if (e.target.hasAttribute('data-note')) {
+      var gn = e.target.getAttribute('data-note'), texte = e.target.value.trim();
+      modifier('Prochaines navettes ' + gn + ' : ' + (texte || 'texte retiré'), 'prochaines.texte', function (j) { j.notesProchaines = j.notesProchaines || {}; j.notesProchaines[gn] = texte; });
+      return;
+    }
     var el = e.target, ligne = el.closest('[data-id]'); if (!ligne) return;
     var id = ligne.getAttribute('data-id'), val = el.value.trim();
     if (el.hasAttribute('data-demain')) {

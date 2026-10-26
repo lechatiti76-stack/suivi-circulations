@@ -95,24 +95,19 @@
       '<span class="wg">' + (l.wagons != null ? esc(l.wagons) + ' wgs' : '') + '</span>' +
       celluleVoie(l) + celluleEtat(e) + '</div>';
   }
-  /** Prochaines navettes : une carte par rotation (LF1 + FL1, LF2 + FL2…), quatre par rangée. */
+  /** Prochaines navettes : les départs seulement (LF1, LF2…), quatre par rangée, puis le texte libre de la saisie. */
   function blocProchaines(g) {
-    var rot = {}, ordre = [];
-    g.demain.forEach(function (l) {
-      var k = String(l.code).replace(/^\D+/, '') || l.code;
-      if (!rot[k]) { rot[k] = []; ordre.push(k); }
-      rot[k].push(l);
-    });
-    var cartes = ordre.map(function (k) {
-      return '<div class="rot">' + rot[k].map(function (l) {
-        var detail = [l.wagons != null ? l.wagons + ' w' : '', l.voie || ''].filter(Boolean).join(' · ');
-        return '<div class="rl ' + (l.sens === 'D' ? 'dep' : 'arr') + (l.etat === 'supprime' ? ' supprimee' : '') + '"><b>' + esc(l.code) + '</b>' +
-          '<span>' + esc(hm(l.theo) || '—') + '</span>' + (detail ? '<i>' + esc(detail) + '</i>' : '') + '</div>';
-      }).join('') + '</div>';
+    var liste = g.demain || [], departs = liste.filter(function (l) { return l.sens === 'D'; });
+    var cartes = (departs.length ? departs : liste).map(function (l) {
+      var detail = [l.wagons != null ? l.wagons + ' wagons' : '', l.voie || ''].filter(Boolean).join(' · ');
+      return '<div class="rot' + (l.etat === 'supprime' ? ' supprimee' : '') + '"><div class="rl"><b>' + esc(l.code) + '</b><span>' + esc(hm(l.theo) || '—') + '</span></div>' +
+        (detail ? '<i>' + esc(detail) + '</i>' : '') + '</div>';
     });
     // demainLibelle absent : diffusion publiée par une saisie pas encore rechargée
-    return '<div class="demain"><div class="demain-tete">Prochaines navettes · ' + esc(g.demainLibelle || ('Demain · ' + (etat.d.demain || ''))) + '</div>' +
-      '<div class="rots" style="--r:' + Math.min(4, Math.max(1, ordre.length)) + '">' + cartes.join('') + '</div></div>';
+    var libelle = g.demainLibelle || (liste.length ? 'Demain · ' + (etat.d.demain || '') : '');
+    return '<div class="demain"><div class="demain-tete">Prochaines navettes' + (libelle ? ' · ' + esc(libelle) : '') + '</div>' +
+      (cartes.length ? '<div class="rots" style="--r:' + Math.min(4, cartes.length) + '">' + cartes.join('') + '</div>' : '') +
+      (g.demainNote ? '<div class="demain-note">' + esc(g.demainNote) + '</div>' : '') + '</div>';
   }
   function blocNavettes(g) {
     var fait = g.lignes.filter(function (l) { return l.reel; }).length;
@@ -121,7 +116,7 @@
       html += '<div class="cols"><span>Code</span><span>Sens</span><span>Heure</span><span>Écart</span><span>Wagons</span><span>Voie</span><span>État</span></div>' +
         '<div class="lignes">' + g.lignes.map(function (l) { return ligneNavette(l, g.parcours); }).join('') + '</div>';
     }
-    if (g.demain && g.demain.length) html += blocProchaines(g);
+    if ((g.demain && g.demain.length) || g.demainNote) html += blocProchaines(g);
     else if (!g.lignes.length) html += '<div class="vide">Aucune navette prévue.</div>';
     return html;
   }
@@ -130,18 +125,24 @@
   function ligneTrain(t) {
     var a = t.arrivee, d = t.depart, s = etat.d.seuilRetardMinutes, n = maintenant();
     var ea = a ? SC.etatAffichage(a, n, s, t.parcours) : null, ed = d ? SC.etatAffichage(d, n, s) : null;
-    var arr = a ? celluleEtat(ea) + celluleHeure(a, ea.cle === 'supprime') + '<span class="vo">' + esc(ea.cle === 'supprime' ? '' : (a.voie || '')) + '</span>'
-      : '<span></span><span></span><span></span>';
+    var nom = t.nom || t.code;
+    var arr = a ? '<span class="num' + (ea.cle === 'supprime' ? ' barre' : '') + '">' + esc(a.numero || '') + '</span>' + celluleEtat(ea) +
+      celluleHeure(a, ea.cle === 'supprime') + '<span class="vo">' + esc(ea.cle === 'supprime' ? '' : (a.voie || '')) + '</span>'
+      : '<span></span><span></span><span></span><span></span>';
+    // au centre : provenance à gauche, entreprise au milieu, destination à droite
+    var centre = '<span class="tcentre"><span class="tville">' + (a ? '<small>En provenance de</small>' + esc(nom) : '') + '</span>' +
+      '<span class="tef">' + esc(t.groupe) + '</span>' +
+      '<span class="tville dest">' + (d ? '<small>À destination de</small>' + esc(nom) : '') + '</span></span>';
     var dep = d ? '<span class="num' + (ed.cle === 'supprime' ? ' barre' : '') + '">' + esc(d.numero || '') + '</span>' + celluleHeure(d, ed.cle === 'supprime') +
       '<span class="ec hlr">' + (d.hlr && !d.reel && ed.cle !== 'supprime' ? esc(d.hlr) : '') + '</span>' +
       '<span class="vo">' + esc(ed.cle === 'supprime' ? '' : (d.voie || '')) + '</span>' + celluleEtat(ed)
       : '<span></span><span></span><span></span><span></span><span></span>';
-    return '<div class="t" data-k="' + esc(t.groupe + '|' + t.code + '|' + ((a && a.id) || '') + '|' + ((d && d.id) || '')) + '">' + arr +
-      '<span class="tcode">' + esc(t.code) + '<small>' + esc(t.groupe) + '</small></span>' + dep + '</div>';
+    return '<div class="t" data-k="' + esc(t.groupe + '|' + t.code + '|' + ((a && a.id) || '') + '|' + ((d && d.id) || '')) + '">' + arr + centre + dep + '</div>';
   }
   function blocTrains(trains) {
     return '<div class="p-tete"><h2>Trains de ligne</h2><span>Arrivée · train · départ</span></div>' +
-      (trains.length ? '<div class="tcols"><span>Arrivée</span><span>Heure</span><span>Voie</span><span class="c">Train</span><span>Départ</span><span>Heure</span><span>HLR</span><span>Voie</span><span>État</span></div>' +
+      (trains.length ? '<div class="tcols"><span>N°</span><span>Arrivée</span><span>Heure</span><span>Voie</span><span class="c">Provenance · entreprise · destination</span>' +
+        '<span>N°</span><span>Heure</span><span>HLR</span><span>Voie</span><span>Départ</span></div>' +
         '<div class="lignes">' + trains.map(ligneTrain).join('') + '</div>'
         : '<div class="vide">Aucun train de ligne prévu aujourd\'hui.</div>');
   }
