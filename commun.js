@@ -720,13 +720,16 @@
   ];
   function sansAccents(s) { return norm(s).normalize('NFD').replace(/[̀-ͯ]/g, ''); }
   function heureSuivi(v) { var m = /(\d{1,2})[:h](\d{2})/.exec(String(v == null ? '' : v)); return m ? normHeure(m[1] + ':' + m[2]) : null; }
-  /** Une ligne par clé : le classeur peut contenir la même étape plusieurs fois ; une heure vide ne remplace pas une heure. */
+  /**
+   * Une ligne par clé : le classeur peut contenir la même étape plusieurs fois (lignes ajoutées au lieu d'être
+   * mises à jour) ; la dernière ligne est la plus récente, y compris une heure vidée.
+   */
   function dedoublonner(lignes, cle) {
     var vus = {}, ordre = [];
     (lignes || []).forEach(function (r) {
       var k = cle(r);
-      if (!Object.prototype.hasOwnProperty.call(vus, k)) { ordre.push(k); vus[k] = r; }
-      else if (heureSuivi(r.reel) || !heureSuivi(vus[k].reel)) vus[k] = r;
+      if (!Object.prototype.hasOwnProperty.call(vus, k)) ordre.push(k);
+      vus[k] = r;
     });
     return ordre.map(function (k) { return vus[k]; });
   }
@@ -791,9 +794,12 @@
       // dernière étape franchie, affichée sur les écrans tant que le train n'est pas parti
       if (h && !(champ === 'reel' || champ === 'cale') && (!etapes[c.id] || etapes[c.id].h <= h)) etapes[c.id] = { lib: String(r.etape).trim(), h: h };
     });
+    // étape en cours : reportée seulement quand elle change dans le Suivi trains (une étape effacée dans la saisie reste effacée)
     (j.circulations || []).forEach(function (c) {
       if (c.sens !== 'D') return;
-      var e = etapes[c.id] || null;
+      var e = etapes[c.id] || null, cle = 'E|' + c.id, val = e ? e.lib + ' ' + e.h : '';
+      if (vu[cle] === val) return;
+      vu[cle] = val;
       if (JSON.stringify(c.etape || null) !== JSON.stringify(e)) { c.etape = e; if (e && !c.reel) changes.push(c.code + ' : ' + e.lib + ' ' + e.h); }
     });
     if (changes.length) st.maj = iso(new Date());

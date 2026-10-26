@@ -653,6 +653,8 @@
       b.push(bouton('reel', 'Arrivée', 'Arrivé chez nous'));
     } else {
       b.push(bouton('reel', 'Parti'));
+      // étape ou « calé » venus du Suivi trains : effaçables ici (ils restent effacés jusqu'à une nouvelle heure)
+      if (c.etape || c.cale) b.push(bouton('effacer-etape', '↺', 'Effacer « ' + (c.cale ? 'Calé' : c.etape.lib) + ' » des écrans'));
     }
     b.push(bouton('nonprevu', 'Non prévue', 'Ne circule pas aujourd\'hui : retirée des écrans', 'discret'));
     return b.join('');
@@ -1235,6 +1237,7 @@
       else if (a === 'partie') marquerPartie(id);
       else if (a === 'annuler-partie') marquerPartie(id, true);
       else if (a === 'fa') marquerFA(id);
+      else if (a === 'effacer-etape') modifier(circDe(app.journee, id).code + ' : étape du Suivi trains effacée', 'circulation.etape', function (j) { var cc = circDe(j, id); cc.etape = null; cc.cale = null; });
       else if (a === 'nonprevu') basculer(id, 'etat', 'nonprevu', 'Non prévue / rétablie');
       else if (a === 'suppr') { basculer(id, 'etat', 'supprime', 'Suppression / rétablissement'); }
       else if (a === 'suppr-demain' || a === 'nonprevu-prep') {
