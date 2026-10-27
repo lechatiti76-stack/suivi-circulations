@@ -17,6 +17,7 @@
   </div>
   <nav class="actions" aria-label="Actions">
     <button type="button" id="b-connexion" hidden>Connexion</button>
+    <button type="button" id="b-raccourcis" hidden>Raccourcis ⬇</button>
     <button type="button" id="b-flash">Flash info</button>
     <button type="button" id="b-mails">Mails<span class="compteur" id="c-mails" hidden>0</span></button>
     <button type="button" id="b-stats">Statistiques</button>
@@ -32,6 +33,7 @@
 <form id="saisie" class="saisie" autocomplete="off" novalidate>
   <div class="saisie-tete">
     <h2 id="s-titre">Nouveau mouvement</h2>
+    <span class="reste" id="s-reste" aria-live="polite"></span>
     <button type="button" class="bouton petit" id="s-annuler" hidden>Annuler la modification (Échap)</button>
   </div>
   <div class="champs">
@@ -97,6 +99,21 @@
 <div id="toasts" aria-live="polite"></div>
 
 <!-- Connexion au serveur Google (version GitHub) -->
+<dialog id="d-raccourcis" style="width:min(680px, calc(100vw - 32px))">
+  <div class="dlg-tete"><h2>Raccourcis des postes</h2><button type="button" class="bouton" data-fermer>Fermer</button></div>
+  <div class="dlg-corps">
+    <p class="note">Téléchargez le raccourci du poste, puis déplacez-le sur son bureau. Il est déjà rempli avec l'adresse de votre serveur.
+      La clé n'y figure pas : sur un nouveau poste de saisie, tapez-la une fois dans « Connexion ».</p>
+    <div class="section"><h4>Poste de saisie</h4>
+      <p class="note">Ouvre la saisie dans sa propre fenêtre Edge.</p>
+      <button type="button" class="bouton primaire" id="rc-saisie">⬇ Télécharger Saisie.bat</button></div>
+    <div class="section"><h4>PC des écrans TV</h4>
+      <p class="note">Ouvre l'écran des circulations en plein écran (Alt+F4 pour quitter).</p>
+      <button type="button" class="bouton primaire" id="rc-ecrans">⬇ Télécharger Ecrans.bat</button></div>
+    <p class="note">Si Windows affiche « Windows a protégé votre ordinateur » au premier lancement : « Informations complémentaires », puis « Exécuter quand même ».</p>
+  </div>
+</dialog>
+
 <dialog id="d-connexion" style="width:min(760px, calc(100vw - 32px))">
   <form method="dialog" id="fm-connexion">
     <div class="dlg-tete"><h2>Connexion au serveur Google</h2><button type="button" class="bouton" data-fermer>Fermer</button></div>

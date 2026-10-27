@@ -354,6 +354,7 @@
       if (!F.compo.value || app.auto.compo) placerAuto('compo', c && c.sens === 'D' && c.wagonsDemandes ? String(c.wagonsDemandes) : '');
     }
     surCompo();
+    majARemplir();
   }
   function surCompo() {
     var hlp = F.compo.value.trim().toLowerCase() === 'hlp';
@@ -381,8 +382,23 @@
       _reelInvalide: !!(F.reel.value.trim() && !SC.normHeure(F.reel.value))
     };
   }
+  /** Champs obligatoires encore vides : encadrés, et listés à côté du titre « Nouveau mouvement ». */
+  function majARemplir() {
+    var num = F.num.value.trim(), libelles = { num: 'N° train', voie: 'Voie', compo: 'Wagons', vers: 'Vers' }, manque = [];
+    var requis = ['num', 'voie', 'compo'].concat(num && SC.versObligatoire(num, app.params) ? ['vers'] : []);
+    Object.keys(libelles).forEach(function (k) {
+      var r = requis.indexOf(k) >= 0, vide = !F[k].value.trim();
+      F[k].classList.toggle('a-remplir', r && vide);
+      F[k].closest('.champ').classList.toggle('requis', r);
+      if (r && vide) manque.push(libelles[k]);
+    });
+    var reste = $('#s-reste');
+    reste.textContent = manque.length ? 'À remplir : ' + manque.join(' · ') : 'Tout est rempli : Entrée pour valider';
+    reste.classList.toggle('pret', !manque.length);
+  }
   function aide(erreurs) {
     var j = app.journee; if (!j) return;
+    majARemplir();
     var num = F.num.value.trim().toLowerCase(), morceaux = [];
     [F.voie, F.vers, F.compo, F.num, F.reel, F.annonce].forEach(function (x) { x.classList.remove('erreur', 'avert'); });
     if (erreurs && erreurs.length) morceaux.push('<span class="puce supprime">À corriger</span><span>' + esc(erreurs.join(' ')) + '</span>');
@@ -735,8 +751,8 @@
       if (!circs.length) return;
       circs.sort(function (a, b) { return (a.theo || '9') < (b.theo || '9') ? -1 : 1; });
       html += '<div class="groupe" style="--g:' + couleur(g.id) + '">' + esc(g.libelle) + '</div>';
-      // arrivées puis départs, séparés
-      [['A', 'Arrivées'], ['D', 'Départs']].forEach(function (s) {
+      // arrivées puis départs, séparés ; pour demain et après-demain, les navettes n'ont que leurs départs
+      (prep && g.famille === 'navette' ? [['D', 'Départs']] : [['A', 'Arrivées'], ['D', 'Départs']]).forEach(function (s) {
         var part = circs.filter(function (c) { return (c.sens === 'D' ? 'D' : 'A') === s[0]; });
         if (part.length) html += '<div class="sous-groupe" style="--g:' + couleur(g.id) + '">' + s[1] + '</div>' + part.map(function (c) { return ligneCirculation(c, prep); }).join('');
       });
@@ -1337,6 +1353,29 @@
   }
   function lireConnexionSaisie() { CONNEXION.url = $('#cx-url').value.trim(); CONNEXION.cle = $('#cx-cle').value.trim(); }
   $('#b-connexion').addEventListener('click', function () { ouvrirConnexion(''); });
+
+  // Raccourcis des postes : fichiers .bat remplis avec l'adresse du serveur (jamais la clé)
+  function telecharger(nom, texte) {
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([texte.replace(/\r?\n/g, '\r\n')], { type: 'application/octet-stream' }));
+    a.download = nom;
+    document.body.appendChild(a); a.click();
+    setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+  }
+  function adressePage(page) { return location.origin + location.pathname.replace(/[^/]*$/, '') + page; }
+  /** « % » est spécial dans un .bat : doublé. */
+  function pourBat(t) { return String(t).replace(/%/g, '%%'); }
+  $('#b-raccourcis').addEventListener('click', function () { ouvrir('#d-raccourcis'); });
+  $('#rc-saisie').addEventListener('click', function () {
+    telecharger('Saisie.bat', '@echo off\nrem Suivi des circulations - ouvre la SAISIE dans une fenetre Edge dediee.\n' +
+      'rem A mettre sur le bureau du poste de saisie. La cle se tape une fois dans Connexion.\n' +
+      'start "" msedge --app="' + pourBat(adressePage('saisie.html') + (CONNEXION.url ? '#url=' + CONNEXION.url : '')) + '"\n');
+  });
+  $('#rc-ecrans').addEventListener('click', function () {
+    telecharger('Ecrans.bat', '@echo off\nrem Suivi des circulations - ouvre les ECRANS en plein ecran (PC qui alimente les TV).\n' +
+      'rem Pour quitter le plein ecran : Alt+F4.\n' +
+      'start "" msedge --kiosk "' + pourBat(adressePage('visuel.html') + '?source=' + CONNEXION.url) + '" --edge-kiosk-type=fullscreen --no-first-run\n');
+  });
   $('#cx-tester').addEventListener('click', function () {
     lireConnexionSaisie();
     $('#cx-message').textContent = 'Test en cours…';
@@ -1402,6 +1441,7 @@
   // ------------------------------------------------------------- démarrage
   horloge(); setInterval(horloge, 1000);
   $('#b-connexion').hidden = CONNEXION.mode !== 'google';
+  $('#b-raccourcis').hidden = CONNEXION.mode !== 'google';
   var GOOGLE = CONNEXION.mode === 'google';
   function demarrer() {
     if (GOOGLE && !CONNEXION.url) { ouvrirConnexion('Première utilisation : indiquez l\'adresse du serveur Google (elle se termine par /exec) et la clé choisie dans Code.gs.'); return; }

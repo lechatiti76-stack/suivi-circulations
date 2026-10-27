@@ -466,7 +466,7 @@
   /**
    * État affiché sur les écrans, avec le compte à rebours. cle : supprime, fait, deja, imminent, route, bientot, prepa,
    * attendu, retard, prevu. « Annoncé » devient « Arrivée imminente » ou « Départ imminent » ; dans les 30 minutes :
-   * « Arrive dans 12 min ». Une arrivée partie de son origine suit son parcours : sous = point de passage, eta = arrivée estimée.
+   * « Prévu dans 12 min » (d'après l'heure prévue). Une arrivée partie de son origine suit son parcours : sous = point de passage, eta = arrivée estimée.
    */
   function etatAffichage(l, maintenantIso, seuilMin, parcours) {
     var seuil = seuilMin == null ? 15 : seuilMin, arr = l.sens !== 'D';
@@ -494,7 +494,8 @@
     if (!l.theo) return { cle: 'prevu', libelle: 'Prévu' };
     var m = minutesEntre(l.theo, maintenantIso);
     if (m > 30) return { cle: 'prevu', libelle: 'Prévu' };
-    if (m > 0) return { cle: 'bientot', libelle: (arr ? 'Arrive dans ' : 'Départ dans ') + m + ' min', minutes: m };
+    // d'après l'heure prévue seulement : « Prévu dans », pour ne pas le confondre avec une navette réellement en route
+    if (m > 0) return { cle: 'bientot', libelle: 'Prévu dans ' + m + ' min', minutes: m };
     if (-m <= seuil) return { cle: 'attendu', libelle: arr ? 'Attendu' : 'Départ attendu' };
     return { cle: 'retard', libelle: 'Retard ' + fmtEcart(-m) };
   }
