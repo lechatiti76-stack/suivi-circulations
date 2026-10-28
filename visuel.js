@@ -138,10 +138,15 @@
   }
 
   // ------------------------------------------------------- trains de ligne
+  /** Couleur de l'EF sur la partie départ : Naviland violet clair, Ferovergne vert, les autres bleu clair. */
+  function couleurEF(ef) {
+    var e = String(ef || '').toUpperCase();
+    return /NAVILAND/.test(e) ? '#B79CFF' : /FER+OVERGNE/.test(e) ? '#22B573' : '#8FD0FA';
+  }
   function ligneTrain(t) {
     var a = t.arrivee, d = t.depart, s = etat.d.seuilRetardMinutes, n = maintenant();
     var ea = a ? SC.etatAffichage(a, n, s, t.parcours) : null, ed = d ? SC.etatAffichage(d, n, s) : null;
-    var nom = t.nom || t.code;
+    var nom = t.nom || t.code, c = couleurEF(t.groupe);
     var arr = a ? '<span class="num' + (ea.cle === 'supprime' ? ' barre' : '') + '">' + esc(a.numero || '') + '</span>' + celluleEtat(ea) +
       celluleHeure(a, ea.cle === 'supprime') + '<span class="vo">' + esc(ea.cle === 'supprime' ? '' : (a.voie || '')) + '</span>'
       : '<span></span><span></span><span></span><span></span>';
@@ -149,11 +154,14 @@
     var centre = '<span class="tcentre"><span class="tville">' + (a ? '<small>En provenance de</small>' + esc(nom) : '') + '</span>' +
       '<span class="tef">' + esc(t.groupe) + '</span>' +
       '<span class="tville dest">' + (d ? '<small>À destination de</small>' + esc(nom) : '') + '</span></span>';
-    var dep = d ? '<span class="num' + (ed.cle === 'supprime' ? ' barre' : '') + '">' + esc(d.numero || '') + '</span>' + celluleHeure(d, ed.cle === 'supprime') +
+    // départ : bande à la couleur de l'EF (rouge si supprimé), sur les cinq dernières colonnes
+    var dep = d ? '<span class="tdep' + (ed.cle === 'supprime' ? ' supprimee' : '') + '">' +
+      '<span class="num' + (ed.cle === 'supprime' ? ' barre' : '') + '">' + esc(d.numero || '') + '</span>' + celluleHeure(d, ed.cle === 'supprime') +
       '<span class="ec hlr">' + (d.hlr && !d.reel && ed.cle !== 'supprime' ? esc(d.hlr) : '') + '</span>' +
-      '<span class="vo">' + esc(ed.cle === 'supprime' ? '' : (d.voie || '')) + '</span>' + celluleEtat(ed)
+      '<span class="vo">' + esc(ed.cle === 'supprime' ? '' : (d.voie || '')) + '</span>' + celluleEtat(ed) + '</span>'
       : '<span></span><span></span><span></span><span></span><span></span>';
-    return '<div class="t" data-k="' + esc(t.groupe + '|' + t.code + '|' + ((a && a.id) || '') + '|' + ((d && d.id) || '')) + '">' + arr + centre + dep + '</div>';
+    return '<div class="t" style="--c:' + c + ';--fd:' + c + ';--el:' + encreSur(rvb(c)) + '" data-k="' +
+      esc(t.groupe + '|' + t.code + '|' + ((a && a.id) || '') + '|' + ((d && d.id) || '')) + '">' + arr + centre + dep + '</div>';
   }
   function blocTrains(trains) {
     return '<div class="p-tete"><h2>Trains de ligne</h2><span>Arrivée · train · départ</span></div>' +
