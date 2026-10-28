@@ -4,6 +4,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Suivi des circulations · Saisie</title>
+<meta name="theme-color" content="#13202B">
+<link rel="manifest" href="manifest-saisie.webmanifest">
+<link rel="icon" href="icones/saisie-192.png" sizes="192x192" type="image/png">
+<link rel="apple-touch-icon" href="icones/saisie-192.png">
 <link rel="stylesheet" href="saisie.css">
 </head>
 <body>
@@ -17,6 +21,7 @@
   </div>
   <nav class="actions" aria-label="Actions">
     <button type="button" id="b-connexion" hidden>Connexion</button>
+    <button type="button" id="b-installer" hidden>⬇ Installer l'application</button>
     <button type="button" id="b-raccourcis" hidden>Raccourcis ⬇</button>
     <button type="button" id="b-flash">Flash info</button>
     <button type="button" id="b-mails">Mails<span class="compteur" id="c-mails" hidden>0</span></button>
@@ -102,7 +107,15 @@
 <dialog id="d-raccourcis" style="width:min(680px, calc(100vw - 32px))">
   <div class="dlg-tete"><h2>Raccourcis des postes</h2><button type="button" class="bouton" data-fermer>Fermer</button></div>
   <div class="dlg-corps">
-    <p class="note">Téléchargez le raccourci du poste, puis déplacez-le sur son bureau. Il est déjà rempli avec l'adresse de votre serveur.
+    <div class="section"><h4>Application sur le bureau (comme le Suivi trains)</h4>
+      <p class="note">L'application s'installe avec son icône sur le bureau et dans le menu Démarrer, et s'ouvre sur la petite animation LHTE.</p>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button type="button" class="bouton primaire" id="rc-installer-saisie">⬇ Installer l'application Saisie sur ce poste</button>
+        <button type="button" class="bouton" id="rc-installer-ecrans">Ouvrir la page Écrans pour l'installer sur le PC des TV ↗</button>
+      </div>
+      <p class="note" id="rc-installer-note"></p>
+    </div>
+    <p class="note">Ou, à l'ancienne, un raccourci .bat à mettre sur le bureau, déjà rempli avec l'adresse de votre serveur.
       La clé n'y figure pas : sur un nouveau poste de saisie, tapez-la une fois dans « Connexion ».</p>
     <div class="section"><h4>Poste de saisie</h4>
       <p class="note">Ouvre la saisie dans sa propre fenêtre Edge.</p>
@@ -293,6 +306,7 @@
   </form>
 </dialog>
 
+<script src="application.js" data-appli="saisie"></script>
 <script src="commun.js"></script>
 <script src="saisie.js"></script>
 </body>

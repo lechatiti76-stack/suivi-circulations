@@ -1,0 +1,19 @@
+{
+  "id": "./visuel.html",
+  "name": "Suivi des circulations · Écrans",
+  "short_name": "Écrans circulations",
+  "description": "Écran des circulations du jour (navettes et trains de ligne) pour les TV du terminal (LHTE).",
+  "start_url": "./visuel.html",
+  "scope": "./",
+  "display": "fullscreen",
+  "orientation": "landscape",
+  "background_color": "#08121B",
+  "theme_color": "#08121B",
+  "lang": "fr",
+  "dir": "ltr",
+  "icons": [
+    { "src": "icones/ecrans-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icones/ecrans-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icones/ecrans-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

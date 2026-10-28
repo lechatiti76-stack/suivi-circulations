@@ -148,3 +148,10 @@ html, body { margin: 0; height: 100%; background: var(--fond); color: var(--encr
 @media (prefers-reduced-motion: reduce) { .flash-txt { animation: none; padding-left: 1rem; white-space: normal; } .flash-fen { white-space: normal; } .st.imminent, .st.cale { animation: none; } }
 
 .pied { display: flex; justify-content: space-between; gap: 2rem; padding: .4rem 1.4rem .5rem; border-top: .08rem solid var(--trait); font-size: .88rem; color: var(--dim); }
+
+/* Proposition d'installer l'application « Écrans » (adresse ?installer=1) */
+.installer { position: fixed; right: 1.4rem; top: 5.5rem; z-index: 50; display: grid; gap: .45rem; max-width: 26rem; padding: .9rem 1.1rem;
+  border-radius: .6rem; background: #0F2235; border: .12rem solid var(--cyan); box-shadow: 0 .6rem 2rem rgba(0, 0, 0, .55); font-size: 1rem; }
+.installer b { font-size: 1.15rem; }
+.installer span { color: var(--dim); }
+.installer button { justify-self: start; padding: .5rem 1rem; border-radius: .4rem; border: 0; background: var(--cyan); color: #04202e; font: 700 1rem var(--f); cursor: pointer; }

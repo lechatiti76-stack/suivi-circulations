@@ -1,0 +1,19 @@
+{
+  "id": "./saisie.html",
+  "name": "Suivi des circulations · Saisie",
+  "short_name": "Saisie circulations",
+  "description": "Poste de saisie du suivi des circulations (LHTE) : journal des mouvements, navettes, trains de ligne.",
+  "start_url": "./saisie.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "landscape",
+  "background_color": "#08121B",
+  "theme_color": "#13202B",
+  "lang": "fr",
+  "dir": "ltr",
+  "icons": [
+    { "src": "icones/saisie-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icones/saisie-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icones/saisie-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

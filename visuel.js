@@ -8,7 +8,15 @@
   var $ = function (s) { return document.querySelector(s); };
   var esc = SC.esc, hm = SC.hm;
   var vue = (/[?&]vue=(\w+)/.exec(location.search) || [])[1] || 'tout';
-  var source = (function () { var m = /[?&]source=([^&]+)/.exec(location.search); return m ? decodeURIComponent(m[1]) : ''; })();
+  // adresse du serveur : dans l'adresse de la page, sinon la dernière connue (application installée, ouverte sans paramètre)
+  var source = (function () {
+    var m = /[?&]source=([^&]+)/.exec(location.search), s = m ? decodeURIComponent(m[1]) : '';
+    try {
+      if (s) localStorage.setItem('suivi:source', s);
+      else if (/^https:/.test(location.protocol)) s = localStorage.getItem('suivi:source') || '';
+    } catch (e) { /* stockage indisponible */ }
+    return s;
+  })();
   var etat = { d: null, cle: '', battement: null, battementVuA: 0, echecs: 0, flash: '', version: null };
 
   // ------------------------------------------------------------ réception
@@ -287,7 +295,7 @@
       else if (v !== etat.version) {
         // fichiers relus du réseau d'abord : sinon le navigateur peut recharger l'ancienne version gardée en cache
         Promise.all(['visuel.js', 'visuel.css', 'commun.js'].map(function (u) { return fetch(u, { cache: 'reload' }).catch(function () { /* sans effet */ }); }))
-          .then(function () { location.reload(); });
+          .then(function () { if (window.SuiviAppli) SuiviAppli.sansIntroAuProchainChargement(); location.reload(); });
       }
     }).catch(function () { /* sans effet */ });
   }
@@ -304,5 +312,20 @@
   setInterval(majLiaison, 2000);
   setInterval(function () { if (etat.d) rendre(); }, 15000);
   verifierVersion(); setInterval(verifierVersion, 300000);
+
+  // ?installer=1 (bouton « Raccourcis » de la saisie) : propose d'installer l'application « Écrans » sur ce PC
+  if (/[?&]installer=1\b/.test(location.search) && window.SuiviAppli && !SuiviAppli.installee()) {
+    var panneau = $('#v-installer');
+    panneau.hidden = false;
+    document.body.style.cursor = 'auto';
+    SuiviAppli.suivre(function (possible) {
+      $('#v-installer-bouton').hidden = !possible;
+      $('#v-installer-texte').textContent = possible ? 'Installez-la : elle s\'ouvrira depuis une icône du bureau, sur cet écran.'
+        : 'Si le bouton n\'apparaît pas : menu ⋯ d\'Edge › Applications › Installer ce site en tant qu\'application.';
+    });
+    $('#v-installer-bouton').addEventListener('click', function () {
+      SuiviAppli.installer().then(function (ok) { if (ok) panneau.hidden = true; });
+    });
+  }
   reveil(); ajuster(); majLiaison();
 })();

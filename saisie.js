@@ -1366,6 +1366,21 @@
   /** « % » est spécial dans un .bat : doublé. */
   function pourBat(t) { return String(t).replace(/%/g, '%%'); }
   $('#b-raccourcis').addEventListener('click', function () { ouvrir('#d-raccourcis'); });
+  // Application installable (application.js) : bouton dans la barre et dans « Raccourcis »
+  if (window.SuiviAppli) {
+    SuiviAppli.suivre(function (possible) {
+      $('#b-installer').hidden = !possible || SuiviAppli.installee();
+      $('#rc-installer-saisie').disabled = !possible;
+      $('#rc-installer-note').textContent = SuiviAppli.installee() ? 'La saisie est déjà ouverte comme application sur ce poste.'
+        : (possible ? '' : 'Déjà installée, ou proposée autrement par le navigateur : menu ⋯ d\'Edge › Applications › Installer ce site en tant qu\'application.');
+    });
+    var installerSaisie = function () { SuiviAppli.installer().then(function (ok) { if (ok) toast('Application Saisie installée : son icône est sur le bureau.'); }); };
+    $('#b-installer').addEventListener('click', installerSaisie);
+    $('#rc-installer-saisie').addEventListener('click', installerSaisie);
+  }
+  $('#rc-installer-ecrans').addEventListener('click', function () {
+    window.open(adressePage('visuel.html') + '?source=' + encodeURIComponent(CONNEXION.url) + '&installer=1', '_blank');
+  });
   $('#rc-saisie').addEventListener('click', function () {
     telecharger('Saisie.bat', '@echo off\nrem Suivi des circulations - ouvre la SAISIE dans une fenetre Edge dediee.\n' +
       'rem A mettre sur le bureau du poste de saisie. La cle se tape une fois dans Connexion.\n' +
@@ -1434,7 +1449,7 @@
       if (sauvegardeEnCours() || document.querySelector('dialog[open]') || F.num.value.trim() || (actif && /^(INPUT|TEXTAREA|SELECT)$/.test(actif.tagName))) return;
       toast('Nouvelle version de la saisie : rechargement…');
       Promise.all(['saisie.js', 'saisie.css', 'commun.js'].map(function (u) { return fetch(u, { cache: 'reload' }).catch(function () { /* sans effet */ }); }))
-        .then(function () { setTimeout(function () { location.reload(); }, 1500); });
+        .then(function () { setTimeout(function () { if (window.SuiviAppli) SuiviAppli.sansIntroAuProchainChargement(); location.reload(); }, 1500); });
     }, function () { /* sans effet */ });
   }
 

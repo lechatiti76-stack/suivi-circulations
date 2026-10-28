@@ -14,7 +14,10 @@ var PORT = +(process.argv[2] || 18780);
 var CLE = process.argv[3] || 'demo';
 var serveur = simulateur.charger(CLE);
 var racine = path.join(__dirname, '..');
-var TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'application/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.json': 'application/json' };
+var TYPES = {
+  '.html': 'text/html; charset=utf-8', '.js': 'application/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.json': 'application/json',
+  '.webmanifest': 'application/manifest+json', '.png': 'image/png', '.mp4': 'video/mp4', '.txt': 'text/plain; charset=utf-8'
+};
 
 http.createServer(function (req, res) {
   var url = new URL(req.url, 'http://localhost');
@@ -33,7 +36,7 @@ http.createServer(function (req, res) {
     res.writeHead(405); return res.end();
   }
   var nom = url.pathname === '/' ? '/index.html' : url.pathname;
-  if (!/^\/[a-z0-9-]+\.(html|js|css)$/.test(nom)) { res.writeHead(404); return res.end('introuvable'); }
+  if (!/^\/(icones\/)?[a-z0-9-]+\.(html|js|css|webmanifest|png|mp4|txt)$/.test(nom)) { res.writeHead(404); return res.end('introuvable'); }
   fs.readFile(path.join(racine, nom), function (err, contenu) {
     if (err) { res.writeHead(404); return res.end('introuvable'); }
     res.writeHead(200, { 'Content-Type': TYPES[path.extname(nom)] || 'application/octet-stream', 'Cache-Control': 'no-store' });

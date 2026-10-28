@@ -41,7 +41,11 @@ Au premier appel, le script crée dans votre Drive le dossier **« Suivi des cir
 3. **Données initiales** : choisir `donnees-initiales.json` puis **Importer**. La page se recharge avec le planning du jour.
 4. Recopier le **lien des écrans** affiché dans cette même fenêtre.
 
-### 4. Les deux raccourcis
+### 4. Les deux applications (ou raccourcis)
+
+**Application sur le bureau (recommandé, comme le Suivi trains)** : dans la saisie, bouton **⬇ Installer l'application** (ou **Raccourcis ⬇** › « Installer l'application Saisie »). Pour le PC des TV : **Raccourcis ⬇** › « Ouvrir la page Écrans pour l'installer », puis **Installer l'application** sur cette page (à faire sur le PC des TV). Chaque application a son icône sur le bureau et dans le menu Démarrer, et s'ouvre sur la petite animation LHTE (« Passer » ou une touche pour l'écourter ; pas d'animation après une mise à jour automatique). L'application Écrans retient l'adresse du serveur ; F11 pour le plein écran si besoin.
+
+**Ou des raccourcis .bat** (bouton **Raccourcis ⬇**, déjà remplis avec l'adresse du serveur) :
 
 | Poste | Fichier | Réglage |
 |---|---|---|
