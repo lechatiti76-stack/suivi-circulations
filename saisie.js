@@ -7,7 +7,7 @@
 
   var app = {
     params: null, planning: null, journee: null, version: 0, lectureSeule: false,
-    onglet: 'navette', selection: null, edition: null, ouverte: null, nouvelle: null,
+    onglet: 'navette', vue: lsLire('suivi:vue') || {}, selection: null, edition: null, ouverte: null, nouvelle: null,
     pile: [], dernierChangement: Date.now(), auto: {}, touche: {},
     sauvegarde: { enCours: false, relancer: false, evenements: [], erreur: null, a: null },
     serviceOk: null, diffusion: [], mailsEnCours: {}, reessai: null, prete: false
@@ -319,23 +319,55 @@
     $('#l-voies').innerHTML = (app.params.voies || []).map(function (v) { return '<option value="' + esc(v) + '">'; }).join('');
     $('#l-ef').innerHTML = (app.params.efConnues || []).map(function (v) { return '<option value="' + esc(v) + '">'; }).join('');
   }
-  /** Liste du champ N° : numéros du jour puis base N° → EF, avec la seule EF en libellé. */
+  /** Propositions du champ N° : numéros du jour (avec leur circulation), mouvements internes puis base N° → EF. */
   function remplirNumeros() {
-    var vus = {}, opts = [];
-    var ajouter = function (n) {
+    var vus = {}, liste = [];
+    var ajouter = function (n, c) {
       n = SC.norm(n); if (!n || vus[n]) return; vus[n] = true;
-      opts.push('<option value="' + esc(n) + '">' + esc(SC.deduireEF(n, app.journee, app.planning, app.params) || '') + '</option>');
+      var ef = SC.deduireEF(n, app.journee, app.planning, app.params) || '';
+      liste.push({ n: n, info: [ef, c ? c.code + ' ' + (c.sens === 'D' ? 'dép.' : 'arr.') + ' ' + hm(c.theo) : ''].filter(Boolean).join(' · ') });
     };
     if (app.journee) {
       app.journee.circulations.forEach(function (c) {
-        if (c.etat === 'supprime' || SC.etatCirculation(c, app.journee).reel) return;
-        SC.numerosDe(c).forEach(ajouter);
+        if (c.etat === 'supprime' || c.etat === 'nonprevu' || SC.etatCirculation(c, app.journee).reel) return;
+        SC.numerosDe(c).forEach(function (n) { ajouter(n, c); });
       });
     }
     var internes = app.params.mouvementsInternes || {};
-    Object.keys(internes).forEach(function (ef) { internes[ef].forEach(ajouter); });
-    Object.keys(app.params.correspondancesEF || {}).forEach(ajouter);
-    $('#l-numeros').innerHTML = opts.join('');
+    Object.keys(internes).forEach(function (ef) { internes[ef].forEach(function (n) { ajouter(n); }); });
+    Object.keys(app.params.correspondancesEF || {}).forEach(function (n) { ajouter(n); });
+    app.numeros = liste;
+  }
+  /**
+   * Suggestions sous le champ N° dès les premières lettres : « loc » → locom, loco, locosup…
+   * Ceux qui commencent par le texte tapé d'abord, puis ceux qui le contiennent. ↓ ↑ pour choisir, Entrée ou Tab pour prendre.
+   * Avec des lettres, la première est présélectionnée (Entrée la prend) ; avec des chiffres, il faut ↓ (un numéro neuf reste tel quel).
+   */
+  var sugg = { liste: [], choisi: -1 };
+  function proposerNumeros() {
+    var q = SC.norm(F.num.value), boite = $('#s-sugg');
+    if (!q || app.edition) { fermerSuggestions(); return; }
+    var debut = [], dedans = [], exact = false;
+    (app.numeros || []).forEach(function (o) {
+      var p = o.n.indexOf(q);
+      if (o.n === q) exact = true; else if (p === 0) debut.push(o); else if (p > 0) dedans.push(o);
+    });
+    sugg.liste = debut.concat(dedans).slice(0, 8);
+    sugg.choisi = sugg.liste.length && debut.length && !exact && /[a-z]/.test(q) ? 0 : -1;
+    if (!sugg.liste.length) { fermerSuggestions(); return; }
+    boite.innerHTML = sugg.liste.map(function (o, i) {
+      var p = o.n.indexOf(q);
+      return '<div class="sugg' + (i === sugg.choisi ? ' choisi' : '') + '" role="option" data-i="' + i + '"><span class="mono">' +
+        esc(o.n.slice(0, p)) + '<b>' + esc(o.n.slice(p, p + q.length)) + '</b>' + esc(o.n.slice(p + q.length)) + '</span><span class="info">' + esc(o.info) + '</span></div>';
+    }).join('') + '<div class="sugg-aide"><span class="touche">↓</span> <span class="touche">↑</span> choisir · <span class="touche">Entrée</span> prendre · <span class="touche">Échap</span> fermer</div>';
+    boite.hidden = false;
+  }
+  function fermerSuggestions() { sugg.liste = []; sugg.choisi = -1; $('#s-sugg').hidden = true; }
+  function prendreSuggestion(i) {
+    var o = sugg.liste[i]; if (!o) return;
+    F.num.value = o.n;
+    fermerSuggestions();
+    surNumero();
   }
   function placerAuto(champ, valeur) {
     F[champ].value = valeur || '';
@@ -606,7 +638,7 @@
   // -------------------------------------------------------------- rendu
   function rendre() {
     if (!app.journee) return;
-    rendreEntete(); rendreJournal(); rendreCirculations(); rendreAlertes(); rendreResume(); rendreEtats(); rendreBandeau(); remplirNumeros();
+    rendreEntete(); rendreJournal(); rendreCirculations(); rendreEtats(); rendreBandeau(); remplirNumeros();
   }
   function rendreEntete() {
     var j = app.journee;
@@ -631,7 +663,7 @@
       var compo = m.compo === 'hlp' ? 'hlp' : (m.compo ? m.compo + ' <span class="faible">' + esc(m.cv || '') + '</span>' : '<span class="faible">—</span>');
       return '<tr data-id="' + m.id + '"' + (cls ? ' class="' + cls + '"' : '') + teinte + '>' +
         '<td class="faible">' + m.n + '</td><td class="mono">' + hm(m.annonce) + '</td><td class="mono"><b>' + esc(m.num) + '</b></td>' +
-        '<td>' + esc(m.ef || '') + '</td><td class="faible">' + esc(SC.deduireZone(m.num)) + '</td><td class="mono">' + esc(m.voie || '') + '</td>' +
+        '<td>' + esc(m.ef || '') + '</td><td class="mono voie">' + esc(m.voie || '') + '</td><td class="faible">' + esc(SC.deduireZone(m.num)) + '</td>' +
         '<td class="mono">' + compo + '</td><td>' + (m.sit === 'libre' ? '<span class="puce fait">libre</span>' : (m.sit ? '<span class="puce neutre">occupée</span>' : '')) + '</td>' +
         '<td class="mono">' + esc(m.vers || '') + '</td><td class="mono">' + (m.reel ? hm(m.reel) : '<span class="faible">—</span>') + '</td>' +
         '<td class="com">' + esc(m.comm || '') + '</td><td>' + (c ? '<span class="puce lien">' + esc(c.code) + '</span>' : '') + '</td>' +
@@ -723,15 +755,55 @@
       '<span class="code" title="' + esc(c.code) + '">' + esc(c.code) + '</span><span class="sens">' + (c.sens === 'D' ? 'Dép.' : 'Arr.') + '</span>' +
       '<span class="num">' + esc(c.numero || c.sillon || '') + '</span>' +
       // pas de HLR pour une arrivée
-      saisie('theo', hm(c.theo), 'hh:mm', 'Heure prévue') + (c.sens === 'D' ? saisie('hlr', c.hlr, 'hh:mm', 'HLR') : '<span></span>') +
+      saisie('theo', hm(c.theo), 'hh:mm', 'Heure prévue') + (c.sens === 'D' ? saisie('hlr', c.hlr, 'hh:mm', 'HLR') : '<span class="c-hlr"></span>') +
       saisie('wagonsDemandes', c.wagonsDemandes, d.wagons != null ? String(d.wagons) : '', 'Wagons affichés sur les écrans' + (d.wagons != null ? ' (réels : ' + d.wagons + ')' : '')) +
       saisie('voiePrevue', c.voiePrevue, d.voie ? String(d.voie).toUpperCase() : '', 'Voie affichée sur les écrans' + (d.voie ? ' (réelle : ' + String(d.voie).toUpperCase() + ')' : '')) +
       '<span class="etat-c" title="' + esc(etat) + '"><span class="puce ' + st + '">' + esc(etat) + '</span></span>' +
       '<span class="boutons">' + boutons + '</span></div>' + (ouverte ? detailCirculation(c, d) : '');
   }
+  /** Choix gardé pour Navettes et Trains de ligne : un groupe (ou tous) puis départs, arrivées (ou tous). */
+  function vueDe(fam) {
+    var v = app.vue[fam] || (app.vue[fam] = { groupe: fam === 'navette' ? '' : 'tous', sens: fam === 'navette' ? 'D' : 'A' });
+    var ids = (app.planning.groupes || []).filter(function (g) { return g.famille === fam; }).map(function (g) { return g.id; });
+    if (v.groupe !== 'tous' && ids.indexOf(v.groupe) < 0) v.groupe = ids[0] || 'tous';
+    if (['D', 'A', 'tous'].indexOf(v.sens) < 0) v.sens = 'D';
+    return v;
+  }
+  function sensDe(c) { return c.sens === 'D' ? 'D' : 'A'; }
+  /** Boutons de choix ; le badge compte ce qui reste à faire (rouge s'il y a un retard). */
+  function barreFiltres(fam, v, circs) {
+    var j = app.journee, t = maintenant();
+    var reste = function (liste) {
+      var n = 0, retard = false;
+      liste.forEach(function (c) {
+        var st = SC.statutCirculation(c, SC.etatCirculation(c, j), t, seuil());
+        if (st !== 'fait' && st !== 'supprime' && st !== 'nonprevu') { n++; if (st === 'retard') retard = true; }
+      });
+      return n ? '<span class="nb' + (retard ? ' retard' : '') + '">' + n + '</span>' : '';
+    };
+    // navettes : les trois groupes ; trains : seulement les EF qui circulent aujourd'hui
+    var groupes = (app.planning.groupes || []).filter(function (g) {
+      return g.famille === fam && (fam === 'navette' || circs.some(function (c) { return c.groupe === g.id; }));
+    });
+    var dansGroupe = v.groupe === 'tous' ? circs : circs.filter(function (c) { return c.groupe === v.groupe; });
+    return '<div class="filtre-ligne">' + groupes.map(function (g) {
+      return '<button type="button" class="filtre' + (v.groupe === g.id ? ' choisi' : '') + '" data-groupe="' + esc(g.id) + '" style="--g:' + couleur(g.id) + '">' +
+        esc(g.libelle.replace(/^navettes?s+/i, '')) + reste(circs.filter(function (c) { return c.groupe === g.id; })) + '</button>';
+    }).join('') + '<button type="button" class="filtre tous' + (v.groupe === 'tous' ? ' choisi' : '') + '" data-groupe="tous">Tous' + reste(circs) + '</button></div>' +
+      '<div class="filtre-ligne">' + [['D', 'Départs'], ['A', 'Arrivées'], ['tous', 'Tous']].map(function (x) {
+        var part = x[0] === 'tous' ? dansGroupe : dansGroupe.filter(function (c) { return sensDe(c) === x[0]; });
+        return '<button type="button" class="filtre sens' + (x[0] === 'tous' ? ' tous' : '') + (v.sens === x[0] ? ' choisi' : '') + '" data-sens="' + x[0] + '">' + x[1] + reste(part) + '</button>';
+      }).join('') + '</div>';
+  }
   function rendreCirculations() {
     var j = app.journee, prep = estPrep(app.onglet) ? app.onglet : null, demain = !!prep;
     var liste = prep ? ((prepDe(j, prep) || {}).circulations || []) : j.circulations.filter(function (c) { return famille(c) === app.onglet; });
+    var v = prep ? null : vueDe(app.onglet), unSens = !!v && v.sens !== 'tous';
+    $('#p-filtres').hidden = !v;
+    if (v) {
+      $('#p-filtres').innerHTML = barreFiltres(app.onglet, v, liste);
+      liste = liste.filter(function (c) { return (v.groupe === 'tous' || c.groupe === v.groupe) && (!unSens || sensDe(c) === v.sens); });
+    }
     var jourRef = prep ? prepDe(j, prep).date : j.date, nomJour = SC.JOURS[SC.jourSemaine(jourRef) - 1];
     var notes = '';
     if (demain) {
@@ -741,11 +813,10 @@
           return '<label>' + esc(g.libelle) + '<input data-note="' + esc(g.id) + '" maxlength="90" placeholder="ex. Mercredi : 4 navettes" value="' + esc((j.notesProchaines || {})[g.id] || '') + '"' + dis + '></label>';
         }).join('') + '</div>';
     }
-    var html = notes + '<div class="ajout note">' + (demain ? 'Préparation du ' + esc(SC.libelleJour(jourRef)) + '. ' : '') +
-      'Heure, HLR, wagons et voie se modifient sur place et s\'affichent sur les écrans tant que le train n\'est pas annoncé. ' +
+    var html = notes + '<div class="ajout note">' + (demain ? 'Préparation du ' + esc(SC.libelleJour(jourRef)) + '. Heure, HLR, wagons et voie se modifient sur place. ' : '') +
       (app.lectureSeule ? '' : '<button type="button" class="bouton petit" data-act="memoriser" title="Ces wagons et voies seront repris automatiquement les prochains ' + nomJour + 's">Garder pour tous les ' + nomJour + 's</button>' +
         (demain ? ' <button type="button" class="bouton petit" data-act="regenerer">Régénérer depuis le planning</button>' : '')) + '</div>' +
-      '<div class="circ entete"><span>Code</span><span>Sens</span><span>N°</span><span>Heure</span><span>HLR</span><span>Wagons</span><span>Voie</span><span>État</span><span></span></div>';
+      '<div class="circ entete"><span>Code</span><span class="sens">Sens</span><span>N°</span><span>Heure</span><span class="c-hlr">HLR</span><span>Wagons</span><span>Voie</span><span>État</span><span></span></div>';
     (app.planning.groupes || []).forEach(function (g) {
       var circs = liste.filter(function (c) { return c.groupe === g.id; });
       if (!circs.length) return;
@@ -754,11 +825,13 @@
       // arrivées puis départs, séparés ; pour demain et après-demain, les navettes n'ont que leurs départs
       (prep && g.famille === 'navette' ? [['D', 'Départs']] : [['A', 'Arrivées'], ['D', 'Départs']]).forEach(function (s) {
         var part = circs.filter(function (c) { return (c.sens === 'D' ? 'D' : 'A') === s[0]; });
-        if (part.length) html += '<div class="sous-groupe" style="--g:' + couleur(g.id) + '">' + s[1] + '</div>' + part.map(function (c) { return ligneCirculation(c, prep); }).join('');
+        // un seul sens affiché : pas de sous-titre « Départs » / « Arrivées »
+        if (part.length) html += (unSens ? '' : '<div class="sous-groupe" style="--g:' + couleur(g.id) + '">' + s[1] + '</div>') + part.map(function (c) { return ligneCirculation(c, prep); }).join('');
       });
     });
-    if (!liste.length) html += '<div class="vide">Aucune circulation prévue. « + Ajouter » permet d\'ajouter une circulation du planning ou exceptionnelle.</div>';
+    if (!liste.length) html += '<div class="vide">' + (v ? 'Rien pour ce choix aujourd\'hui.' : 'Aucune circulation prévue.') + ' « + Ajouter » permet d\'ajouter une circulation du planning ou exceptionnelle.</div>';
     var defile = $('#p-liste'), haut = defile.scrollTop;
+    defile.className = 'defile' + (unSens ? ' vue-' + v.sens : '');
     var actif = document.activeElement, cle = actif && actif.closest && actif.closest('#p-liste') ? (actif.getAttribute('data-champ') || actif.getAttribute('data-deroule') || actif.getAttribute('data-demain')) : null;
     var cleId = cle ? (actif.closest('[data-id]') || {}).getAttribute('data-id') : null;
     defile.innerHTML = html;
@@ -767,29 +840,6 @@
       var el = defile.querySelector('[data-id="' + cleId + '"] [data-champ="' + cle + '"], [data-id="' + cleId + '"] [data-deroule="' + cle + '"], [data-id="' + cleId + '"] [data-demain="' + cle + '"]');
       if (el) el.focus();
     }
-  }
-  function alertesCourantes() {
-    var j = app.journee, out = [], t = maintenant();
-    if (app.lectureSeule) return out;
-    j.circulations.forEach(function (c) {
-      var d = SC.etatCirculation(c, j), st = SC.statutCirculation(c, d, t, seuil());
-      if (st === 'retard') out.push({ g: 'retard', t: c.code + ' ' + (c.numero || c.sillon) + ' prévu ' + hm(c.theo) + ', rien de saisi (' + SC.fmtEcart(SC.minutesEntre(t, c.theo)) + ')' });
-      else if (st === 'annonce' && c.theo && SC.minutesEntre(t, c.theo) > seuil()) out.push({ g: 'annonce', t: c.code + ' annoncé à ' + hm(d.annonce) + ', prévu ' + hm(c.theo) + ', ' + (c.sens === 'D' ? 'pas encore parti' : 'pas encore arrivé') });
-      var type = SC.typeMail(c, app.planning), m = type && c.mails && c.mails[type];
-      if (m && m.statut === 'erreur') out.push({ g: 'supprime', t: 'Mail ' + c.code + ' non parti : ' + m.message });
-    });
-    (app.diffusion || []).forEach(function (x) { if (!x.ok && !/en attente/.test(x.erreur || '')) out.push({ g: 'supprime', t: 'Écrans : ' + x.dossier + ' injoignable' }); });
-    return out;
-  }
-  function rendreAlertes() {
-    var a = alertesCourantes();
-    $('#alertes').innerHTML = a.length ? a.map(function (x) { return '<span><span class="puce ' + x.g + '">' + (x.g === 'retard' ? 'Retard' : (x.g === 'annonce' ? 'Attente' : 'Erreur')) + '</span> ' + esc(x.t) + '</span>'; }).join('')
-      : '<span>Aucune alerte.</span>';
-  }
-  function rendreResume() {
-    var s = SC.statistiques(app.journee, app.planning, app.params);
-    $('#resume').textContent = s.mouvements + ' mvts · locom matin ' + s.locom.matin.hlp + ' HLP / ' + s.locom.matin.charge + ' en charge · après-midi ' +
-      s.locom.apresMidi.hlp + ' / ' + s.locom.apresMidi.charge + ' · ' + s.realisees + '/' + (s.circulationsPrevues - s.supprimees) + ' circulations réalisées';
   }
   function placerEtat(id, classe, texte) {
     var el = $(id); el.className = 'etat ' + classe; el.querySelector('span').textContent = texte;
@@ -1163,7 +1213,14 @@
   function ajouterCirculation(c, libelle) {
     var cle = estPrep(app.onglet) ? app.onglet : null;
     modifier(libelle, 'circulation.ajout', function (j) { (cle ? prepDe(j, cle).circulations : j.circulations).push(c); });
-    if (!cle && famille(c) !== app.onglet) { app.onglet = famille(c); majOnglets(); rendre(); }
+    if (!cle) {
+      var v = vueDe(famille(c));
+      if (v.groupe !== 'tous') v.groupe = c.groupe;
+      if (v.sens !== 'tous') v.sens = sensDe(c);
+      lsEcrire('suivi:vue', app.vue);
+      if (famille(c) !== app.onglet) { app.onglet = famille(c); majOnglets(); }
+      rendre();
+    }
   }
   $('#b-ajout').addEventListener('click', ouvrirAjout);
   $('#aj-planning').addEventListener('click', function (e) {
@@ -1190,7 +1247,27 @@
   });
 
   // ------------------------------------------------------------ événements
-  F.num.addEventListener('input', surNumero);
+  F.num.addEventListener('input', function () { surNumero(); proposerNumeros(); });
+  // touches des suggestions, avant celles du formulaire (Entrée prend la suggestion puis passe au champ suivant)
+  F.num.addEventListener('keydown', function (e) {
+    var ouverte = !$('#s-sugg').hidden;
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      if (!ouverte) { if (e.key === 'ArrowDown') proposerNumeros(); return; }
+      e.preventDefault();
+      var n = sugg.liste.length;
+      sugg.choisi = e.key === 'ArrowDown' ? (sugg.choisi + 1) % n : (sugg.choisi <= 0 ? n - 1 : sugg.choisi - 1);
+      $$('#s-sugg .sugg').forEach(function (x, i) { x.classList.toggle('choisi', i === sugg.choisi); });
+    } else if (ouverte && (e.key === 'Enter' || e.key === 'Tab')) {
+      if (sugg.choisi >= 0) prendreSuggestion(sugg.choisi); else fermerSuggestions();
+    } else if (ouverte && e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); fermerSuggestions(); }
+  });
+  F.num.addEventListener('blur', function () { setTimeout(function () { if (document.activeElement !== F.num) fermerSuggestions(); }, 150); });
+  $('#s-sugg').addEventListener('mousedown', function (e) {
+    var x = e.target.closest('.sugg'); if (!x) return;
+    e.preventDefault();
+    prendreSuggestion(+x.getAttribute('data-i'));
+    avancer(F.num);
+  });
   F.compo.addEventListener('input', function () { app.auto.compo = false; F.compo.classList.remove('auto'); surCompo(); });
   ['voie', 'vers', 'reel', 'annonce', 'comm'].forEach(function (k) { F[k].addEventListener('input', function () { app.auto[k] = false; F[k].classList.remove('auto'); aide(); }); });
   F.ef.addEventListener('input', function () { app.touche.ef = !!F.ef.value; F.ef.classList.remove('auto'); });
@@ -1233,6 +1310,14 @@
 
   function majOnglets() { $$('.onglet').forEach(function (o) { o.setAttribute('aria-selected', o.getAttribute('data-onglet') === app.onglet ? 'true' : 'false'); }); }
   $$('.onglet').forEach(function (o) { o.addEventListener('click', function () { app.onglet = o.getAttribute('data-onglet'); app.ouverte = null; majOnglets(); rendreCirculations(); }); });
+  $('#p-filtres').addEventListener('click', function (e) {
+    var b = e.target.closest('.filtre'); if (!b || estPrep(app.onglet)) return;
+    var v = vueDe(app.onglet);
+    if (b.hasAttribute('data-groupe')) v.groupe = b.getAttribute('data-groupe'); else v.sens = b.getAttribute('data-sens');
+    app.ouverte = null;
+    lsEcrire('suivi:vue', app.vue);
+    rendreCirculations();
+  });
 
   $('#p-liste').addEventListener('click', function (e) {
     var b = e.target.closest('button'), ligne = e.target.closest('[data-id]');
@@ -1339,7 +1424,7 @@
     if (!app.journee) return;
     var actif = document.activeElement;
     if (!(actif && actif.closest && actif.closest('#p-liste') && /^(INPUT|SELECT)$/.test(actif.tagName))) rendreCirculations();
-    rendreAlertes(); rendreResume(); rendreEtats();
+    rendreEtats();
   }
   // ------------------------------------------- connexion au serveur Google
   function lienVisuel() {
@@ -1481,7 +1566,7 @@
       setInterval(traiterMails, 60000);
       setInterval(verifierChangementJour, 30000);
       if (GOOGLE) setInterval(function () { if (estJourActif()) api('POST', '/api/battement', '').then(null, function () { /* signalé par verifierService */ }); }, 30000);
-      if (GOOGLE) { suivreTrains(); setInterval(suivreTrains, 15000); }
+      if (GOOGLE) { suivreTrains(); setInterval(suivreTrains, 10000); }
       verifierVersion(); setInterval(verifierVersion, 120000);
     }).catch(function (e) {
       if (e.message === 'clé refusée' || e.message === 'serveur vide') return;

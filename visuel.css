@@ -52,7 +52,7 @@ html, body { margin: 0; height: 100%; background: var(--fond); color: var(--encr
 .r .h { flex-direction: column; align-items: flex-start; gap: .05rem; line-height: 1; }
 .r .wg { display: flex; flex-direction: column; line-height: 1; font-weight: 700; font-size: 1.3rem; }
 .r .wg small { font-size: .6rem; font-weight: 400; }
-.r .st { white-space: normal; line-height: 1.1; font-size: 1.02rem; }
+.r .st { white-space: normal; line-height: 1.1; font-size: 1.25rem; }
 .r.dep { background: var(--fd, var(--panneau)); }
 .r.arr { background: var(--fa, var(--panneau)); }
 .r .sens, .r .h small, .r .ec.hlr, .r .wg { color: inherit; opacity: .78; }
@@ -60,6 +60,9 @@ html, body { margin: 0; height: 100%; background: var(--fond); color: var(--encr
 .r .ec.tard, .r .ec.tres-tard, .r .ec.tot { background: #0B141D; padding: .04rem .35rem; border-radius: .3rem; justify-self: start; }
 .r .st { background-color: #0B141D; outline: .1rem solid rgba(8, 18, 27, .55); }
 .r .vo { font-size: 1.6rem; }
+.r .vo.long { font-size: 1.25rem; }
+/* texte plus large que sa case (voies multiples, étapes) : défile d'un bout à l'autre (defiler dans visuel.js) */
+.dfl { display: inline-block; white-space: nowrap; }
 /* navette supprimée : fond rouge, écriture blanche, barré foncé et épais */
 .r.supprimee { background: #C62828; color: #FFFFFF; }
 .r.supprimee .barre, .r.supprimee .h small { color: #FFFFFF; opacity: 1; text-decoration-color: #2B0000; text-decoration-thickness: .2rem; }
@@ -86,7 +89,7 @@ html, body { margin: 0; height: 100%; background: var(--fond); color: var(--encr
 .rl { display: flex; align-items: baseline; column-gap: .5rem; white-space: nowrap; overflow: hidden; }
 .rl b { font-size: 1.3rem; }
 .rl span { font-size: 1.3rem; font-weight: 700; font-variant-numeric: tabular-nums; }
-.rot i { font-style: normal; font-size: .95rem; color: #c3cfdb; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rot i { font-style: normal; font-size: .95rem; color: #c3cfdb; white-space: nowrap; overflow: hidden; }
 .rot.supprimee { opacity: .55; text-decoration: line-through; }
 .demain-tete.petit { font-size: .82rem; }
 .rots.petit .rot { padding: .18rem .45rem .22rem; border-left-width: .25rem; }
@@ -99,7 +102,7 @@ html, body { margin: 0; height: 100%; background: var(--fond); color: var(--encr
 .ensuite .supprimee { text-decoration: line-through; opacity: .55; }
 
 /* ------------------------------------------------------------- états */
-.st { position: relative; display: inline-flex; justify-content: center; align-items: center; width: 100%; font-weight: 700; font-size: .88rem; letter-spacing: .03em; text-transform: uppercase; padding: .26rem .4rem; border-radius: .35rem; white-space: nowrap; overflow: hidden; }
+.st { position: relative; display: inline-flex; justify-content: center; align-items: center; width: 100%; font-weight: 700; font-size: 1.08rem; letter-spacing: .03em; text-transform: uppercase; padding: .3rem .45rem; border-radius: .35rem; white-space: nowrap; overflow: hidden; }
 .st.fait { background: var(--vert); color: #06210f; }
 .st.imminent { background: var(--ambre); color: #1a1200; animation: pouls 1.8s ease-in-out infinite; }
 /* « Prévu dans 12 min » : simple horaire prévu, d'un autre aspect que « Arrive dans » (navette réellement partie) */
@@ -108,9 +111,9 @@ html, body { margin: 0; height: 100%; background: var(--fond); color: var(--encr
 .st .avance { position: absolute; left: 0; bottom: 0; height: .22rem; background: var(--cyan); }
 .st.prepa { background: var(--cyan); color: #04202e; }
 .etat { display: flex; flex-direction: column; gap: .1rem; min-width: 0; }
-.sous { font-size: .9rem; font-weight: 700; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sous { font-size: .95rem; font-weight: 700; text-align: center; white-space: nowrap; overflow: hidden; }
 /* train calé : rouge vif qui pulse, bien visible de loin */
-.st.cale { background: #E5251B; color: #FFFFFF; font-size: .98rem; animation: poulsRouge 1.4s ease-in-out infinite; }
+.st.cale { background: #E5251B; color: #FFFFFF; font-weight: 800; animation: poulsRouge 1.4s ease-in-out infinite; }
 .st.fa { background: #B45309; color: #FFFFFF; }
 .st.attendu { color: var(--ambre); box-shadow: inset 0 0 0 .2rem var(--ambre); }
 .st.retard { background: var(--rouge); color: #2a0602; }
@@ -130,23 +133,13 @@ html, body { margin: 0; height: 100%; background: var(--fond); color: var(--encr
 .tcols { font-size: .74rem; letter-spacing: .08em; text-transform: uppercase; color: var(--dim); padding-bottom: .25rem; }
 .tcols .c, .t .c { text-align: center; }
 .t { min-height: 2.9rem; border-top: .08rem solid var(--trait); background: var(--ligne); }
-.t .st { white-space: normal; line-height: 1.1; }
+.t .st { white-space: normal; line-height: 1.1; font-size: 1.2rem; }
 .t:nth-of-type(even) { background: var(--ligne-2); }
 .tcentre { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: .8rem; min-width: 0; padding: 0 1.6rem 0 .6rem; }
 .tville { display: flex; flex-direction: column; font-weight: 700; font-size: 1.35rem; line-height: 1.05; min-width: 0; overflow-wrap: anywhere; }
 .tville small { font-weight: 400; font-size: .74rem; letter-spacing: .03em; color: var(--dim); }
 .tville.dest { align-items: flex-end; text-align: right; }
 .tef { font-weight: 700; font-size: 1.6rem; letter-spacing: .07em; text-transform: uppercase; text-align: center; white-space: nowrap; color: var(--c, var(--encre)); }
-/* départ d'un train : bande à la couleur de l'EF (--fd, encre --el) sur ses cinq colonnes ; états sur fond sombre comme les navettes */
-.tdep { grid-column: 6 / -1; display: grid; grid-template-columns: subgrid; align-items: center; align-self: stretch; margin: 0 -.9rem 0 -.3rem; padding: .15rem .9rem .15rem .3rem; background: var(--fd); color: var(--el); }
-.tdep .h small, .tdep .ec.hlr, .tdep .sous { color: inherit; opacity: .8; }
-.tdep .barre { color: inherit; opacity: .55; }
-.tdep :where(.st) { background-color: #0B141D; outline: .1rem solid rgba(8, 18, 27, .55); }
-.tdep .vo { font-size: 1.5rem; }
-.tdep.supprimee { background: #C62828; color: #FFFFFF; }
-.tdep.supprimee .barre, .tdep.supprimee .h small { color: #FFFFFF; opacity: 1; text-decoration-color: #2B0000; text-decoration-thickness: .2rem; }
-.tdep.supprimee .st.supprime { background: #FFFFFF; color: #B71C1C; box-shadow: none; outline: none; }
-@supports not (grid-template-columns: subgrid) { .tdep { display: contents; } }
 .num { font-weight: 700; font-size: 1.4rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
 
 /* -------------------------------------------------------------- flash */

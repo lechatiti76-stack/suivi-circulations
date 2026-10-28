@@ -93,17 +93,20 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .touche { font-family: var(--f-mono); font-size: 11px; border: 1px solid var(--trait); border-bottom-width: 2px; border-radius: 4px; padding: 0 5px; background: var(--surface-2); color: var(--encre-2); white-space: nowrap; }
 
 /* ---------- corps ---------- */
-.corps { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(600px, 1fr); min-height: 0; }
+.corps { display: grid; grid-template-columns: minmax(0, 1fr) minmax(560px, 42%); min-height: 0; }
 .volet { display: grid; grid-template-rows: auto minmax(0, 1fr); min-height: 0; background: var(--surface); }
 .volet + .volet { border-left: 1px solid var(--trait); }
 .volet-tete { display: flex; gap: 10px; align-items: center; justify-content: space-between; padding: 7px 12px; border-bottom: 1px solid var(--trait); background: var(--surface-2); flex-wrap: wrap; }
-.volet-tete h3 { margin: 0; font-family: var(--f-titre); font-size: 14.5px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; }
+.volet-tete h3 { margin: 0; font-family: var(--f-titre); font-size: 16px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; }
 .volet-tete .outils { display: flex; gap: 8px; align-items: center; font-size: 12.5px; color: var(--encre-2); }
 .defile { overflow: auto; min-height: 0; }
 
 table { border-collapse: collapse; width: 100%; }
-.journal th { position: sticky; top: 0; z-index: 1; background: var(--surface-2); font-family: var(--f-titre); font-weight: 600; font-size: 11.5px; letter-spacing: .06em; text-transform: uppercase; color: var(--encre-3); text-align: left; padding: 6px 7px; border-bottom: 1px solid var(--trait); white-space: nowrap; }
-.journal td { padding: 5px 7px; border-bottom: 1px solid var(--trait); white-space: nowrap; font-variant-numeric: tabular-nums; vertical-align: middle; }
+.journal th { position: sticky; top: 0; z-index: 1; background: var(--surface-2); font-family: var(--f-titre); font-weight: 600; font-size: 13px; letter-spacing: .06em; text-transform: uppercase; color: var(--encre-3); text-align: left; padding: 6px 7px; border-bottom: 1px solid var(--trait); white-space: nowrap; }
+.journal td { padding: 9px 9px; border-bottom: 1px solid var(--trait); white-space: nowrap; font-size: 16px; font-variant-numeric: tabular-nums; vertical-align: middle; }
+.journal td.mono b { font-size: 17px; }
+.journal td.voie { font-weight: 700; }
+.journal .puce { font-size: 13.5px; }
 .journal td.com { white-space: normal; min-width: 90px; color: var(--encre-2); }
 .journal tbody tr { cursor: default; }
 .journal tbody tr:hover td { background: var(--surface-2); }
@@ -159,14 +162,8 @@ table { border-collapse: collapse; width: 100%; }
 .notes-prochaines label { display: flex; align-items: center; gap: 6px; }
 .notes-prochaines input { width: 230px; }
 
-/* ---------- pied ---------- */
-.pied { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 14px; align-items: center; padding: 6px 14px; background: var(--surface-2); border-top: 1px solid var(--trait); font-size: 12.5px; }
-.alertes { display: flex; gap: 4px 14px; flex-wrap: wrap; color: var(--encre-2); min-width: 0; max-height: 46px; overflow: auto; }
-.resume { color: var(--encre-2); white-space: nowrap; }
-.raccourcis { display: flex; gap: 10px; color: var(--encre-3); white-space: nowrap; }
-
 /* ---------- messages ---------- */
-#toasts { position: fixed; right: 16px; bottom: 54px; display: grid; gap: 8px; z-index: 50; }
+#toasts { position: fixed; right: 16px; bottom: 16px; display: grid; gap: 8px; z-index: 50; }
 .toast { background: var(--encre); color: var(--surface); padding: 9px 14px; border-radius: 8px; box-shadow: 0 6px 20px #0004; display: flex; gap: 12px; align-items: center; max-width: 460px; }
 .toast.crit { background: var(--crit); color: #fff; }
 .toast button { background: none; border: 1px solid currentColor; color: inherit; border-radius: 5px; padding: 2px 8px; cursor: pointer; font-weight: 700; }
@@ -227,3 +224,34 @@ iframe.apercu { width: 100%; height: 300px; border: 1px solid var(--trait); bord
 .champ input.a-remplir { border: 2px dashed var(--accent); background: color-mix(in srgb, var(--accent) 6%, var(--surface)); }
 .champ input:focus { border: 2px solid var(--accent); box-shadow: 0 0 0 4px var(--accent-doux); }
 .saisie.edition { background: var(--alerte-fond); box-shadow: inset 5px 0 0 var(--alerte); border-bottom-color: var(--alerte); }
+
+/* N° train : suggestions dès les premières lettres (loc → locom, loco…) */
+.champ-num { position: relative; }
+.suggestions { position: absolute; top: 100%; left: 0; z-index: 40; min-width: 330px; margin-top: 3px; padding: 4px; border: 1px solid var(--trait); border-radius: 8px; background: var(--surface); box-shadow: 0 10px 28px #0003; }
+.sugg { display: flex; justify-content: space-between; gap: 14px; align-items: baseline; padding: 6px 9px; border-radius: 5px; cursor: pointer; font-size: 15px; }
+.sugg .mono { font-family: var(--f-mono); }
+.sugg .mono b { color: var(--accent); }
+.sugg .info { font-size: 12.5px; color: var(--encre-2); white-space: nowrap; }
+.sugg:hover { background: var(--surface-2); }
+.sugg.choisi { background: var(--accent); color: var(--accent-encre); }
+.sugg.choisi .mono b, .sugg.choisi .info { color: inherit; }
+.sugg-aide { padding: 5px 9px 2px; border-top: 1px solid var(--trait); margin-top: 3px; font-size: 11.5px; color: var(--encre-3); }
+
+/* Tableau de droite : un groupe puis départs ou arrivées ; le badge compte ce qui reste à faire */
+.volet.circulations { grid-template-rows: auto auto minmax(0, 1fr); }
+.filtres { display: grid; gap: 6px; padding: 8px 12px; border-bottom: 1px solid var(--trait); background: var(--surface); }
+.filtre-ligne { display: flex; gap: 6px; flex-wrap: wrap; }
+.filtre { display: inline-flex; align-items: center; gap: 8px; padding: 6px 16px; border: 1px solid var(--trait); border-radius: 8px; background: var(--surface-2); color: var(--encre-2);
+  font: 600 14.5px var(--f-titre); letter-spacing: .05em; text-transform: uppercase; cursor: pointer; }
+.filtre:hover { border-color: var(--encre-3); }
+.filtre[style] { box-shadow: inset 5px 0 0 var(--g); }
+.filtre.choisi { background: var(--accent); border-color: var(--accent); color: var(--accent-encre); }
+.filtre[style].choisi { background: var(--g); border-color: var(--g); color: #FFFFFF; box-shadow: none; text-shadow: 0 1px 2px rgba(0, 0, 0, .45); }
+.filtre.tous { font-weight: 500; }
+.filtre .nb { min-width: 22px; padding: 0 6px; border-radius: 11px; background: var(--surface); color: var(--encre); font: 700 12.5px/1.6 var(--f-mono); text-align: center; text-shadow: none; }
+.filtre .nb.retard { background: var(--crit); color: #FFFFFF; }
+/* un seul sens affiché : plus de colonne Sens, ni HLR pour les arrivées */
+.vue-D .circ > .sens, .vue-A .circ > .sens, .vue-A .circ > .c-hlr { display: none; }
+.vue-D .circ { grid-template-columns: 56px 64px 60px 60px 54px 70px 132px minmax(0, 1fr); }
+.vue-A .circ { grid-template-columns: 56px 64px 60px 54px 70px 132px minmax(0, 1fr); }
+.vue-D .circ:not(.entete), .vue-A .circ:not(.entete) { padding-top: 7px; padding-bottom: 7px; }

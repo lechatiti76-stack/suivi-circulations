@@ -67,10 +67,16 @@
     // barre de progression seulement pour un vrai départ (en route), pas pour un simple horaire prévu
     var avance = e.cle === 'route' ? e.progression : null;
     var barre = avance != null ? '<span class="avance" style="width:' + Math.round(avance * 100) + '%"></span>' : '';
-    var sous = e.sous ? '<small class="sous">' + esc(e.sous) + (e.eta && e.cle !== 'attendu' && e.cle !== 'retard' ? ' · arr. ' + hm(e.eta) : '') + '</small>' : '';
+    var sous = e.sous ? '<small class="sous">' + dfl(esc(e.sous) + (e.eta && e.cle !== 'attendu' && e.cle !== 'retard' ? ' · arr. ' + hm(e.eta) : '')) + '</small>' : '';
     return '<span class="etat"><span class="st ' + e.cle + '">' + esc(e.libelle) + barre + '</span>' + sous + '</span>';
   }
-  function celluleVoie(l) { return '<span class="vo">' + esc(l.voie || '') + '</span>'; }
+  /** Voie : plus petite au-delà de 4 caractères (VF2,4), et défilement si elle ne tient toujours pas (VR5+VF3). */
+  function celluleVoie(l, masquer) {
+    var v = masquer ? '' : String(l.voie || '');
+    return '<span class="vo' + (v.length > 4 ? ' long' : '') + '">' + dfl(esc(v)) + '</span>';
+  }
+  /** Texte qui peut dépasser de sa case : défile doucement (voir defiler). */
+  function dfl(html) { return html ? '<span class="dfl">' + html + '</span>' : ''; }
 
   // ------------------------------------------------------------- navettes
   function rvb(hex) {
@@ -107,7 +113,7 @@
   function carteProchaine(l) {
     var detail = [l.wagons != null ? l.wagons + ' wagons' : '', l.voie || ''].filter(Boolean).join(' · ');
     return '<div class="rot' + (l.etat === 'supprime' ? ' supprimee' : '') + '"><div class="rl"><b>' + esc(l.code) + '</b><span>' + esc(hm(l.theo) || '—') + '</span></div>' +
-      (detail ? '<i>' + esc(detail) + '</i>' : '') + '</div>';
+      (detail ? '<i>' + dfl(esc(detail)) + '</i>' : '') + '</div>';
   }
   /** Prochaines navettes : les départs seulement (LF1, LF2…), quatre par rangée, puis le texte libre de la saisie. */
   function blocProchaines(g) {
@@ -138,7 +144,7 @@
   }
 
   // ------------------------------------------------------- trains de ligne
-  /** Couleur de l'EF sur la partie départ : Naviland violet clair, Ferovergne vert, les autres bleu clair. */
+  /** Couleur du nom de l'EF au centre : Naviland violet clair, Ferovergne vert, les autres bleu clair. */
   function couleurEF(ef) {
     var e = String(ef || '').toUpperCase();
     return /NAVILAND/.test(e) ? '#B79CFF' : /FER+OVERGNE/.test(e) ? '#22B573' : '#8FD0FA';
@@ -148,19 +154,17 @@
     var ea = a ? SC.etatAffichage(a, n, s, t.parcours) : null, ed = d ? SC.etatAffichage(d, n, s) : null;
     var nom = t.nom || t.code, c = couleurEF(t.groupe);
     var arr = a ? '<span class="num' + (ea.cle === 'supprime' ? ' barre' : '') + '">' + esc(a.numero || '') + '</span>' + celluleEtat(ea) +
-      celluleHeure(a, ea.cle === 'supprime') + '<span class="vo">' + esc(ea.cle === 'supprime' ? '' : (a.voie || '')) + '</span>'
+      celluleHeure(a, ea.cle === 'supprime') + celluleVoie(a, ea.cle === 'supprime')
       : '<span></span><span></span><span></span><span></span>';
     // au centre : provenance à gauche, entreprise au milieu, destination à droite
     var centre = '<span class="tcentre"><span class="tville">' + (a ? '<small>En provenance de</small>' + esc(nom) : '') + '</span>' +
       '<span class="tef">' + esc(t.groupe) + '</span>' +
       '<span class="tville dest">' + (d ? '<small>À destination de</small>' + esc(nom) : '') + '</span></span>';
-    // départ : bande à la couleur de l'EF (rouge si supprimé), sur les cinq dernières colonnes
-    var dep = d ? '<span class="tdep' + (ed.cle === 'supprime' ? ' supprimee' : '') + '">' +
-      '<span class="num' + (ed.cle === 'supprime' ? ' barre' : '') + '">' + esc(d.numero || '') + '</span>' + celluleHeure(d, ed.cle === 'supprime') +
+    var dep = d ? '<span class="num' + (ed.cle === 'supprime' ? ' barre' : '') + '">' + esc(d.numero || '') + '</span>' + celluleHeure(d, ed.cle === 'supprime') +
       '<span class="ec hlr">' + (d.hlr && !d.reel && ed.cle !== 'supprime' ? esc(d.hlr) : '') + '</span>' +
-      '<span class="vo">' + esc(ed.cle === 'supprime' ? '' : (d.voie || '')) + '</span>' + celluleEtat(ed) + '</span>'
+      celluleVoie(d, ed.cle === 'supprime') + celluleEtat(ed)
       : '<span></span><span></span><span></span><span></span><span></span>';
-    return '<div class="t" style="--c:' + c + ';--fd:' + c + ';--el:' + encreSur(rvb(c)) + '" data-k="' +
+    return '<div class="t" style="--c:' + c + '" data-k="' +
       esc(t.groupe + '|' + t.code + '|' + ((a && a.id) || '') + '|' + ((d && d.id) || '')) + '">' + arr + centre + dep + '</div>';
   }
   function blocTrains(trains) {
@@ -253,6 +257,7 @@
     racine.style.fontSize = taille + 'px';
     while (garde++ < 50 && taille > base * 0.45 && deborde()) { taille *= 0.96; racine.style.fontSize = taille + 'px'; }
     agrandirNavettes();
+    defiler();
   }
   /** Les trains de ligne restent en bas : la place libre au-dessus sert à agrandir les navettes (zoom jusqu'à 1,8). */
   function agrandirNavettes() {
@@ -265,6 +270,26 @@
       z += 0.04;
     }
     nav.style.zoom = z.toFixed(2);
+  }
+  /**
+   * Texte plus large que sa case (voies multiples, étapes du Suivi trains, détail des prochaines navettes) :
+   * il va et vient doucement pour être lu en entier. Animation sans attribut ajouté : majBloc compare le HTML des lignes.
+   */
+  function defiler() {
+    var textes = document.querySelectorAll('.dfl');
+    for (var i = 0; i < textes.length; i++) {
+      var t = textes[i], boite = t.parentNode, cs = getComputedStyle(boite);
+      var depasse = Math.ceil(t.offsetWidth - (boite.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight)));
+      if (depasse < 3) depasse = 0;
+      if (t.__depasse === depasse) continue;
+      t.__depasse = depasse;
+      if (t.getAnimations) t.getAnimations().forEach(function (a) { a.cancel(); });
+      if (!depasse || !t.animate) continue;
+      t.animate([
+        { transform: 'translateX(0)' }, { transform: 'translateX(0)', offset: 0.2 },
+        { transform: 'translateX(' + (-depasse) + 'px)', offset: 0.8 }, { transform: 'translateX(' + (-depasse) + 'px)' }
+      ], { duration: 3000 + depasse * 70, iterations: Infinity, direction: 'alternate' });
+    }
   }
   window.addEventListener('resize', function () { etat.flash = '__'; ajuster(); if (etat.d) majFlash(etat.d.flash); });
 
@@ -318,7 +343,7 @@
   tic(); setInterval(tic, 1000);
   charger(); setInterval(charger, source ? 5000 : 3000);
   setInterval(majLiaison, 2000);
-  setInterval(function () { if (etat.d) rendre(); }, 15000);
+  setInterval(function () { if (etat.d) rendre(); }, 10000);
   verifierVersion(); setInterval(verifierVersion, 300000);
 
   // ?installer=1 (bouton « Raccourcis » de la saisie) : propose d'installer l'application « Écrans » sur ce PC

@@ -42,7 +42,7 @@
     <button type="button" class="bouton petit" id="s-annuler" hidden>Annuler la modification (Échap)</button>
   </div>
   <div class="champs">
-    <div class="champ"><label for="f-num">N° train</label><input class="mono" id="f-num" list="l-numeros" placeholder="509431, locom…" spellcheck="false"></div>
+    <div class="champ champ-num"><label for="f-num">N° train</label><input class="mono" id="f-num" placeholder="509431, loc…" spellcheck="false" autocomplete="off" aria-autocomplete="list" aria-controls="s-sugg"><div class="suggestions" id="s-sugg" role="listbox" hidden></div></div>
     <div class="champ"><label for="f-ef">EF</label><input id="f-ef" list="l-ef" placeholder="auto" spellcheck="false" tabindex="-1" title="Remplie d'après la base N° → EF (Paramètres). Cliquez pour la corriger."></div>
     <div class="champ"><label for="f-voie">Voie</label><input class="mono" id="f-voie" list="l-voies" spellcheck="false"></div>
     <div class="champ"><label for="f-compo">Wagons</label><input class="mono" id="f-compo" placeholder="nb / hlp" spellcheck="false"></div>
@@ -59,7 +59,6 @@
       <label for="f-annonce">Annonce</label><input class="mono" id="f-annonce" placeholder="auto" spellcheck="false" tabindex="-1">
     </div>
   </div>
-  <datalist id="l-numeros"></datalist>
   <datalist id="l-voies"></datalist>
   <datalist id="l-ef"></datalist>
 </form>
@@ -75,13 +74,13 @@
     </div>
     <div class="defile" id="j-defile" tabindex="0">
       <table class="journal">
-        <thead><tr><th>#</th><th>Annonce</th><th>N°</th><th>EF</th><th>Zone</th><th>Voie</th><th>Wagons</th><th>Situation</th><th>Vers</th><th>Réel</th><th>Commentaire</th><th>Circulation</th><th></th></tr></thead>
+        <thead><tr><th>#</th><th>Annonce</th><th>N°</th><th>EF</th><th>Voie</th><th>Zone</th><th>Wagons</th><th>Situation</th><th>Vers</th><th>Réel</th><th>Commentaire</th><th>Circulation</th><th></th></tr></thead>
         <tbody id="j-corps"></tbody>
       </table>
       <div class="vide" id="j-vide" hidden>Aucun mouvement. Tapez un numéro de train ou « locom » dans la saisie ci-dessus.</div>
     </div>
   </section>
-  <section class="volet" aria-label="Circulations du jour">
+  <section class="volet circulations" aria-label="Circulations du jour">
     <div class="volet-tete">
       <div class="onglets" role="tablist">
         <button type="button" class="onglet" role="tab" aria-selected="true" data-onglet="navette">Navettes</button>
@@ -91,15 +90,10 @@
       </div>
       <div class="outils"><button type="button" class="bouton petit" id="b-ajout">+ Ajouter</button></div>
     </div>
+    <div class="filtres" id="p-filtres" hidden></div>
     <div class="defile" id="p-liste"></div>
   </section>
 </main>
-
-<footer class="pied">
-  <div class="alertes" id="alertes"></div>
-  <div class="resume" id="resume"></div>
-  <div class="raccourcis"><span><span class="touche">Entrée</span> champ suivant</span><span><span class="touche">Ctrl+Entrée</span> valider</span><span><span class="touche">F2</span> réel = maintenant</span><span><span class="touche">Échap</span> effacer</span><span><span class="touche">Ctrl+Z</span> annuler</span></div>
-</footer>
 
 <div id="toasts" aria-live="polite"></div>
 
@@ -236,7 +230,7 @@
         </div>
       </div>
       <div class="section"><h4>Suivi trains (lecture automatique, version Google)</h4>
-        <p class="note">Toutes les 15 secondes, la saisie lit le classeur Google du Suivi trains (onglets « Navettes » et « Journal ») :
+        <p class="note">Toutes les 10 secondes, la saisie lit le classeur Google du Suivi trains (onglets « Navettes » et « Journal ») :
           navette FL1 validée → FL1 « en route » sur les écrans avec ses points de passage et son heure d'arrivée estimée ;
           arrivée, tableau des départs (LF1…) et départ pour la ligne → heure réelle ; étapes du train → déroulé du départ.</p>
         <div class="formgrid">
