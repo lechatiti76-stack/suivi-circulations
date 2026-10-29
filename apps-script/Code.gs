@@ -15,7 +15,7 @@
  */
 
 const CLE = 'CHANGER-CE-MOT-DE-PASSE';
-const VERSION = '2.1.0';
+const VERSION = '2.1.1';
 const FUSEAU = 'Europe/Paris';
 const NOM_DOSSIER = 'Suivi des circulations - données';
 
@@ -62,7 +62,8 @@ function router_(m, c, corps) {
 /**
  * Lignes du jour du classeur de l'application « Suivi trains » (Paramètres › suiviTrains.classeur) :
  * onglet Navettes (Date | Type | Code | Libellé | Heure théorique | Heure réelle…) et onglet Journal
- * (Date | Train | Étape | Heure théorique | Heure réelle…). Lecture seule, gardée 20 s en cache.
+ * (Date | Train | Étape | Heure théorique | Heure réelle…). Lecture seule, gardée 8 s en cache
+ * (moins que les 10 s entre deux lectures de la saisie : un seul poste lit toujours des données fraîches).
  * Le classeur doit appartenir au compte qui a déployé ce serveur (ou lui être partagé).
  */
 function suiviTrains_(date) {
@@ -77,7 +78,7 @@ function suiviTrains_(date) {
   const out = { date: date, lu: maintenant_(), navettes: [], journal: [] };
   lignesDuJour_(ss.getSheetByName('Navettes'), date).forEach(r => out.navettes.push({ type: r[1], code: r[2], theo: r[4], reel: r[5] }));
   lignesDuJour_(ss.getSheetByName('Journal'), date).forEach(r => out.journal.push({ train: r[1], etape: r[2], theo: r[3], reel: r[4] }));
-  cache.put(cle, JSON.stringify(out), 20);
+  cache.put(cle, JSON.stringify(out), 8);
   return ok_(out);
 }
 /** Identifiant d'un classeur à partir de son adresse (…/spreadsheets/d/<id>/edit) ou de l'identifiant seul. */
