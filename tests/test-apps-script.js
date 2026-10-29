@@ -90,6 +90,15 @@ test('publication seule (POST /api/diffusion) sans changer la journée', functio
   assert.strictEqual(JSON.parse(G.doGet({ action: 'diffusion' }).getContent()).diffusion.flash, null);
   assert.strictEqual(G.appel('POST', '/api/diffusion', 'pas du json').status, 500);
 });
+test('publication d\'une fenêtre restée sur une ancienne version : refusée, l\'affichage reste à jour', function () {
+  var vieille = JSON.parse(JSON.stringify(diffusion)); vieille.version = 1; vieille.flash = { texte: 'ancienne' };
+  var r = G.appel('POST', '/api/diffusion', JSON.stringify(vieille));
+  assert.strictEqual(r.status, 409); assert.strictEqual(r.data.version, 2);
+  assert.strictEqual(JSON.parse(G.doGet({ action: 'diffusion' }).getContent()).diffusion.flash, null);
+  vieille.version = 2;
+  assert.strictEqual(G.appel('POST', '/api/diffusion', JSON.stringify(vieille)).status, 200);
+  assert.strictEqual(JSON.parse(G.doGet({ action: 'diffusion' }).getContent()).diffusion.flash.texte, 'ancienne');
+});
 
 console.log('Mails');
 var mail = { id: '2026-10-22_TDF-LF1_navetteDepart', mode: 'simulation', to: ['gare@exemple.test'], cc: ['copie@exemple.test'], bcc: [], sujet: 'Départ navette LF1 vers TDF à 7h27', html: '<p>Départ LF1</p><!--signature-->' };

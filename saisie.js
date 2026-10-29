@@ -113,7 +113,8 @@
   }
   function envoyer() {
     var s = app.sauvegarde;
-    if (s.enCours) { s.relancer = true; return; }
+    // une publication seule en cours : attendue, pour que le serveur ne la reçoive pas après cet enregistrement
+    if (s.enCours || app.publication) { s.relancer = true; return; }
     if (!s.evenements.length || app.lectureSeule) return;
     s.enCours = true;
     var evts = s.evenements.splice(0, s.evenements.length);
@@ -154,12 +155,42 @@
     });
   }
   function publier() {
-    if (!estJourActif() || !app.prete) return;
+    // un enregistrement en cours publie déjà l'affichage avec la journée
+    if (!estJourActif() || !app.prete || app.publication || sauvegardeEnCours()) return;
     var d = SC.projeterDiffusion(app.journee, app.planning, app.params, maintenant());
+    app.publication = true;
     api('POST', '/api/diffusion', JSON.stringify(d)).then(function (r) {
       if (r.status === 200) { app.diffusion = r.data.diffusion || []; app.serviceOk = true; }
+      // refusée par le serveur : cette fenêtre a une version dépassée de la journée (une saisie faite entre-temps
+      // part d'abord : le serveur la refusera aussi et la journée sera relue)
+      if (r.status === 409 && !sauvegardeEnCours()) conflit();
       rendreEtats();
-    }, function () { app.serviceOk = false; rendreEtats(); rendreBandeau(); });
+    }, function () { app.serviceOk = false; rendreEtats(); rendreBandeau(); }).then(function () {
+      app.publication = false;
+      var s = app.sauvegarde;
+      if (s.relancer && !s.enCours && !app.reessai) { s.relancer = false; envoyer(); }
+    });
+  }
+  /**
+   * Toutes les minutes : republie l'affichage (heures qui passent). Une autre fenêtre de saisie a pu modifier la journée
+   * entre-temps : elle est relue d'abord, pour ne jamais remettre aux écrans et au Suivi trains un état dépassé
+   * (navette de nouveau « pas partie »).
+   */
+  function publierPeriodique() {
+    if (!estJourActif() || !app.prete || app.publication || sauvegardeEnCours()) return;
+    var date = app.journee.date, version = app.version;
+    api('GET', '/api/journee/' + date).then(function (r) {
+      if (r.status !== 200 || !estJourActif() || app.journee.date !== date || app.version !== version || sauvegardeEnCours()) return;
+      if (r.data.version !== version) {
+        // modification en cours dans le tableau : relu à la minute suivante, sans publier d'ici là
+        var actif = document.activeElement;
+        if (actif && actif.closest && actif.closest('#p-liste, #j-corps, dialog[open]') && /^(INPUT|SELECT|TEXTAREA)$/.test(actif.tagName)) return;
+        app.journee = r.data.journee; app.version = r.data.version; app.pile = [];
+        rendre();
+        toast('Journée modifiée depuis une autre fenêtre de saisie : affichage mis à jour.');
+      }
+      publier();
+    }, function () { /* signalé par verifierService */ });
   }
   function verifierService() {
     api('GET', '/api/sante').then(function (r) {
@@ -440,7 +471,7 @@
       morceaux.push('<span class="puce ' + st + '">' + esc(SC.libelleStatut(st, c.sens)) + '</span><span><b class="mono">' + esc(num) + '</b> = <b>' + esc(c.code) + '</b> · ' +
         esc(groupe(c.groupe).libelle) + ' · ' + (c.sens === 'D' ? 'départ' : 'arrivée') + (c.theo ? ' prévu ' + hm(c.theo) : '') +
         (c.voiePrevue ? ' · voie prévue ' + esc(c.voiePrevue) : '') + (c.wagonsDemandes ? ' · ' + c.wagonsDemandes + ' wgs demandés' : '') + '</span>');
-      if (!d.reel) morceaux.push('<span><span class="touche">F2</span> ' + (c.sens === 'D' ? 'parti' : 'arrivé') + ' maintenant</span>');
+      if (!d.reel) morceaux.push('<span><span class="touche">F2</span> ' + (c.sens === 'D' ? 'parti' : 'arrivée') + ' maintenant</span>');
     } else if (SC.estNumeroTrain(num)) {
       var z = SC.deduireZone(num);
       morceaux.push('<span>Pas de circulation prévue avec ce numéro' + (z ? ' · zone <b>' + esc(z) + '</b>' : '') + '</span>');
@@ -562,7 +593,7 @@
   function marquerReel(id) {
     var c = circDe(app.journee, id); if (!c) return;
     var t = maintenant();
-    modifier(c.code + (c.sens === 'D' ? ' parti' : ' arrivé') + ' à ' + hm(t), 'circulation.reel', function (j) {
+    modifier(c.code + (c.sens === 'D' ? ' parti' : ' arrivée') + ' à ' + hm(t), 'circulation.reel', function (j) {
       var cc = circDe(j, id); cc.reel = t; if (cc.etat === 'deja') cc.etat = null;
       // ligne ajoutée au journal des mouvements si aucune ne lui est encore rattachée
       var m = SC.journaliserCirculation(j, cc, t, app.planning, app.params, uid('m'));
@@ -594,7 +625,7 @@
     var t = maintenant();
     modifier(c.fa ? c.code + ' : FA retiré' : c.code + ' à FA ' + hm(t), 'circulation.fa', function (j) { var cc = circDe(j, id); cc.fa = cc.fa ? null : t; });
   }
-  /** Lit le classeur du Suivi trains (toutes les 15 s) et reporte départs, arrivées et déroulés dans la journée. */
+  /** Lit le classeur du Suivi trains (toutes les 10 s) et reporte départs, arrivées et déroulés dans la journée. */
   function suivreTrains() {
     var cfg = app.params && app.params.suiviTrains;
     if (!GOOGLE || !cfg || !cfg.classeur || !app.prete || app.lectureSeule || !estJourActif()) return;
@@ -796,6 +827,8 @@
       }).join('') + '</div>';
   }
   function rendreCirculations() {
+    // onglet cliqué pendant le chargement : la journée n'est pas encore là
+    if (!app.journee) return;
     var j = app.journee, prep = estPrep(app.onglet) ? app.onglet : null, demain = !!prep;
     var liste = prep ? ((prepDe(j, prep) || {}).circulations || []) : j.circulations.filter(function (c) { return famille(c) === app.onglet; });
     var v = prep ? null : vueDe(app.onglet), unSens = !!v && v.sens !== 'tous';
@@ -1083,13 +1116,26 @@
     var st = p.suiviTrains || {}, corr = st.correspondances || SC.CORRESPONDANCES_SUIVI;
     $('#pa-st-classeur').value = st.classeur || '';
     $('#pa-st-corr').value = Object.keys(corr).map(function (k) { return k + '=' + corr[k]; }).join(', ');
-    $('#pa-st-parcours').value = SC.parcoursEnTexte(Object.assign({}, SC.PARCOURS_DEFAUT, p.parcours || {}));
+    // temps d'arrivée des trains de ligne : un champ par train, retirés du texte des parcours
+    var trajets = p.parcours || {}, codesT = codesArriveesTrains(), parcours = Object.assign({}, SC.PARCOURS_DEFAUT, trajets);
+    $('#pa-arrivees').innerHTML = codesT.map(function (k) {
+      return '<div class="champ"><label for="pa-arr-' + esc(k) + '">' + esc(k) + ' · ' + esc(SC.nomTrain(k, p)) + ' (min)</label>' +
+        '<input id="pa-arr-' + esc(k) + '" class="mono" data-arrivee="' + esc(k) + '" inputmode="numeric" placeholder="180" value="' + (trajets[k] ? esc(trajets[k].trajet) : '') + '"></div>';
+    }).join('') || '<p class="note">Aucun train de ligne à l\'arrivée dans le planning.</p>';
+    codesT.forEach(function (k) { delete parcours[k]; });
+    $('#pa-st-parcours').value = SC.parcoursEnTexte(parcours);
     var lu = app.suiviTrains;
     $('#pa-st-etat').textContent = !GOOGLE ? 'Disponible avec la version Google seulement.' : (!st.classeur ? 'Désactivé.' :
       (!lu ? 'Pas encore lu.' : (lu.erreur ? 'Dernière lecture ' + hm(SC.iso(lu.a)) + ' : ' + lu.erreur : 'Dernière lecture ' + hm(SC.iso(lu.a)) + ' : ' + lu.lignes + ' ligne' + (lu.lignes > 1 ? 's' : '') + ' du jour.')));
     $('#pa-erreur').textContent = '';
     ouvrir('#d-params');
   });
+  /** Codes des trains de ligne qui arrivent ici (planning), pour régler leur temps d'arrivée. */
+  function codesArriveesTrains() {
+    var vus = {};
+    (app.planning.circulations || []).forEach(function (c) { if (c.sens === 'A' && c.code && famille(c) === 'ligne') vus[String(c.code).toUpperCase()] = true; });
+    return Object.keys(vus).sort();
+  }
   function ligneBase(num, ef) {
     return '<tr><td><input class="mono" data-base="num" value="' + esc(num || '') + '"></td><td><input data-base="ef" list="l-ef" value="' + esc(ef || '') + '"></td>' +
       '<td><button type="button" class="bouton petit danger" data-act="retirer-base">Retirer</button></td></tr>';
@@ -1152,6 +1198,14 @@
     });
     p.suiviTrains = { classeur: $('#pa-st-classeur').value.trim(), correspondances: corrST };
     try { p.parcours = SC.texteEnParcours($('#pa-st-parcours').value); } catch (ex) { err.push('Parcours : ' + ex.message); }
+    // temps d'arrivée des trains : les points de passage déjà réglés pour ce train sont gardés
+    $$('#pa-arrivees [data-arrivee]').forEach(function (inp) {
+      var k = inp.getAttribute('data-arrivee'), v = inp.value.trim(), avant = (app.params.parcours || {})[k];
+      if (!p.parcours) return;
+      if (!v) { delete p.parcours[k]; return; }
+      if (!/^\d{1,3}$/.test(v) || +v < 1 || +v > 600) { err.push('Temps d\'arrivée de ' + k + ' : un nombre de minutes, de 1 à 600.'); return; }
+      p.parcours[k] = { trajet: +v, passages: (avant && avant.passages) || [] };
+    });
     if (err.length) { $('#pa-erreur').textContent = err.join(' '); return; }
     enregistrerParametres(p, 'Paramètres enregistrés.').then(function () {
       fermer($('#fm-params')); verifierService();
@@ -1561,7 +1615,7 @@
       publier(); traiterMails(); verifierService();
       F.num.focus();
       setInterval(rafraichirPeriodique, 20000);
-      setInterval(publier, 60000);
+      setInterval(publierPeriodique, 60000);
       setInterval(verifierService, GOOGLE ? 30000 : 10000);
       setInterval(traiterMails, 60000);
       setInterval(verifierChangementJour, 30000);

@@ -220,7 +220,7 @@
     return 'prevu';
   }
   function libelleStatut(st, sens) {
-    return { nonprevu: 'Non prévue', supprime: 'Supprimé', fait: sens === 'D' ? 'Parti' : 'Arrivé', deja: 'Déjà là', annonce: 'Annoncé', retard: 'Retard', prevu: 'Prévu' }[st] || '';
+    return { nonprevu: 'Non prévue', supprime: 'Supprimé', fait: sens === 'D' ? 'Parti' : 'Arrivée', deja: 'Déjà là', annonce: 'Annoncé', retard: 'Retard', prevu: 'Prévu' }[st] || '';
   }
   function derniereVoie(j, num) {
     var s = norm(num), mv = mouvementsActifs(j);
@@ -244,7 +244,7 @@
     var m = {
       id: id, n: prochainNumeroLigne(j), annonce: t, num: num, ef: deduireEF(num, j, planning, params) || '',
       voie: c.voiePrevue ? normaliserVoie(c.voiePrevue, params) : '', compo: c.wagonsDemandes != null ? String(c.wagonsDemandes) : '',
-      cv: '', sit: '', vers: '', reel: t, comm: c.code + (c.sens === 'D' ? ' parti' : ' arrivé') + ' (saisie)', lien: c.id, supprime: false, auto: true
+      cv: '', sit: '', vers: '', reel: t, comm: c.code + (c.sens === 'D' ? ' parti' : ' arrivée') + ' (saisie)', lien: c.id, supprime: false, auto: true
     };
     j.mouvements = j.mouvements || [];
     j.mouvements.push(m);
@@ -467,11 +467,12 @@
    * État affiché sur les écrans, avec le compte à rebours. cle : supprime, fait, deja, imminent, route, bientot, prepa,
    * attendu, retard, prevu. « Annoncé » devient « Arrivée imminente » ou « Départ imminent » ; dans les 30 minutes :
    * « Prévu dans 12 min » (d'après l'heure prévue). Une arrivée partie de son origine suit son parcours : sous = point de passage, eta = arrivée estimée.
+   * urgent : plus que 5 minutes (clignote en rouge sur les écrans).
    */
   function etatAffichage(l, maintenantIso, seuilMin, parcours) {
     var seuil = seuilMin == null ? 15 : seuilMin, arr = l.sens !== 'D';
     if (l.etat === 'supprime') return { cle: 'supprime', libelle: 'Supprimé' };
-    if (l.reel) return { cle: 'fait', libelle: (arr ? 'Arrivé ' : 'Parti ') + hm(l.reel) };
+    if (l.reel) return { cle: 'fait', libelle: (arr ? 'Arrivée ' : 'Parti ') + hm(l.reel) };
     // train déclaré calé dans le Suivi trains : prioritaire, dernière étape en dessous
     if (!arr && l.cale) return { cle: 'cale', libelle: 'Calé à ' + hm(l.cale), sous: l.etape && l.etape.lib ? l.etape.lib + ' ' + (l.etape.h || '') : '' };
     if (l.etat === 'deja') return { cle: 'deja', libelle: 'Déjà là' };
@@ -484,7 +485,8 @@
       var passe = passages.filter(function (p) { return p.min <= ecoule; }).pop();
       var base = { eta: eta, ecartEta: l.theo ? minutesEntre(eta, l.theo) : null, sous: passe ? passe.lib : 'Départ ' + hm(l.partie) };
       if (reste > 5) return Object.assign(base, { cle: 'route', libelle: (passages.length ? 'Arrive dans ' : 'En approche · ') + reste + ' min', progression: Math.max(0, Math.min(1, ecoule / trajet)) });
-      if (reste > 0) return Object.assign(base, { cle: 'imminent', libelle: 'Arrivée imminente' });
+      // urgent : 5 minutes ou moins avant l'heure, clignote en rouge sur les écrans
+      if (reste > 0) return Object.assign(base, { cle: 'imminent', libelle: 'Arrivée imminente', urgent: true });
       if (-reste <= seuil) return Object.assign(base, { cle: 'attendu', libelle: 'Arrivée attendue', sous: 'prévue à ' + hm(eta) });
       return Object.assign(base, { cle: 'retard', libelle: 'Retard ' + fmtEcart(-reste), sous: 'prévue à ' + hm(eta) });
     }
@@ -495,7 +497,7 @@
     var m = minutesEntre(l.theo, maintenantIso);
     if (m > 30) return { cle: 'prevu', libelle: 'Prévu' };
     // d'après l'heure prévue seulement : « Prévu dans », pour ne pas le confondre avec une navette réellement en route
-    if (m > 0) return { cle: 'bientot', libelle: 'Prévu dans ' + m + ' min', minutes: m };
+    if (m > 0) return { cle: 'bientot', libelle: 'Prévu dans ' + m + ' min', minutes: m, urgent: m <= 5 };
     if (-m <= seuil) return { cle: 'attendu', libelle: arr ? 'Attendu' : 'Départ attendu' };
     return { cle: 'retard', libelle: 'Retard ' + fmtEcart(-m) };
   }
@@ -780,7 +782,7 @@
       } else if (type === 'arrivee') {
         var cible = corr[base.toLowerCase()] || corr[base], ca = cible ? circ(cible, 'A') : null;
         if (!cible) return;
-        reporter('A|' + code, h, ca, arrivee ? 'reel' : (fa ? 'fa' : 'partie'), cible + (arrivee ? ' arrivé' : (fa ? ' à FA' : ' en approche')));
+        reporter('A|' + code, h, ca, arrivee ? 'reel' : (fa ? 'fa' : 'partie'), cible + (arrivee ? ' arrivée' : (fa ? ' à FA' : ' en approche')));
         if (!arrivee && !fa) majEta(ca, h, r.theo, cible);
       }
     });

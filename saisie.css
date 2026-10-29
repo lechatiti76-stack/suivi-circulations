@@ -93,7 +93,8 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .touche { font-family: var(--f-mono); font-size: 11px; border: 1px solid var(--trait); border-bottom-width: 2px; border-radius: 4px; padding: 0 5px; background: var(--surface-2); color: var(--encre-2); white-space: nowrap; }
 
 /* ---------- corps ---------- */
-.corps { display: grid; grid-template-columns: minmax(0, 1fr) minmax(560px, 42%); min-height: 0; }
+/* tableau de droite assez large pour ses boutons sur une ligne ; le journal garde le reste */
+.corps { display: grid; grid-template-columns: minmax(0, 1fr) clamp(600px, 52%, 920px); min-height: 0; }
 .volet { display: grid; grid-template-rows: auto minmax(0, 1fr); min-height: 0; background: var(--surface); }
 .volet + .volet { border-left: 1px solid var(--trait); }
 .volet-tete { display: flex; gap: 10px; align-items: center; justify-content: space-between; padding: 7px 12px; border-bottom: 1px solid var(--trait); background: var(--surface-2); flex-wrap: wrap; }
@@ -102,8 +103,12 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .defile { overflow: auto; min-height: 0; }
 
 table { border-collapse: collapse; width: 100%; }
-.journal th { position: sticky; top: 0; z-index: 1; background: var(--surface-2); font-family: var(--f-titre); font-weight: 600; font-size: 13px; letter-spacing: .06em; text-transform: uppercase; color: var(--encre-3); text-align: left; padding: 6px 7px; border-bottom: 1px solid var(--trait); white-space: nowrap; }
-.journal td { padding: 9px 9px; border-bottom: 1px solid var(--trait); white-space: nowrap; font-size: 16px; font-variant-numeric: tabular-nums; vertical-align: middle; }
+.journal th { position: sticky; top: 0; z-index: 1; background: var(--surface-2); font-family: var(--f-titre); font-weight: 600; font-size: 13px; letter-spacing: .03em; text-transform: uppercase; color: var(--encre-3); text-align: left; padding: 6px 6px; border-bottom: 1px solid var(--trait); white-space: nowrap; }
+.journal td { padding: 9px 6px; border-bottom: 1px solid var(--trait); white-space: nowrap; font-size: 16px; font-variant-numeric: tabular-nums; vertical-align: middle; }
+/* Modifier / Suppr. toujours à portée : collés au bord droit du journal, même quand il est plus large que sa place */
+.journal th:last-child, .journal td:last-child { position: sticky; right: 0; z-index: 1; }
+.journal th:last-child { z-index: 2; }
+.journal tbody tr:hover td:last-child, .journal tr.choisie td:last-child { box-shadow: -10px 0 10px -8px rgba(0, 0, 0, .3); }
 .journal td.mono b { font-size: 17px; }
 .journal td.voie { font-weight: 700; }
 .journal .puce { font-size: 13.5px; }
@@ -252,6 +257,7 @@ iframe.apercu { width: 100%; height: 300px; border: 1px solid var(--trait); bord
 .filtre .nb.retard { background: var(--crit); color: #FFFFFF; }
 /* un seul sens affiché : plus de colonne Sens, ni HLR pour les arrivées */
 .vue-D .circ > .sens, .vue-A .circ > .sens, .vue-A .circ > .c-hlr { display: none; }
-.vue-D .circ { grid-template-columns: 56px 64px 60px 60px 54px 70px 132px minmax(0, 1fr); }
-.vue-A .circ { grid-template-columns: 56px 64px 60px 54px 70px 132px minmax(0, 1fr); }
+.vue-D .circ { grid-template-columns: 52px 60px 58px 58px 52px 66px 124px minmax(0, 1fr); }
+.vue-A .circ { grid-template-columns: 52px 60px 58px 52px 66px 124px minmax(0, 1fr); }
+.circ .bouton.petit { padding: 2px 6px; font-size: 12px; }
 .vue-D .circ:not(.entete), .vue-A .circ:not(.entete) { padding-top: 7px; padding-bottom: 7px; }

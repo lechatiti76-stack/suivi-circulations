@@ -68,12 +68,52 @@
     var avance = e.cle === 'route' ? e.progression : null;
     var barre = avance != null ? '<span class="avance" style="width:' + Math.round(avance * 100) + '%"></span>' : '';
     var sous = e.sous ? '<small class="sous">' + dfl(esc(e.sous) + (e.eta && e.cle !== 'attendu' && e.cle !== 'retard' ? ' · arr. ' + hm(e.eta) : '')) + '</small>' : '';
-    return '<span class="etat"><span class="st ' + e.cle + '">' + esc(e.libelle) + barre + '</span>' + sous + '</span>';
+    // urgent : 5 minutes ou moins, clignote en rouge
+    return '<span class="etat"><span class="st ' + e.cle + (e.urgent ? ' urgent' : '') + '">' + esc(e.libelle) + barre + '</span>' + sous + '</span>';
   }
-  /** Voie : plus petite au-delà de 4 caractères (VF2,4), et défilement si elle ne tient toujours pas (VR5+VF3). */
+  /**
+   * Voie : plus petite au-delà de 4 caractères (VF2,4) ; voies multiples (VR5+VF3) sur deux lignes, coupées au séparateur
+   * le plus proche du milieu. Ce qui ne tient toujours pas est resserré ou défile (voir defiler).
+   */
   function celluleVoie(l, masquer) {
-    var v = masquer ? '' : String(l.voie || '');
+    var v = masquer ? '' : String(l.voie || '').trim(), coupe = -1;
+    if (v.length > 5) {
+      v.replace(/[+,\/ ]/g, function (s, i) {
+        if (i > 0 && i < v.length - 1 && (coupe < 0 || Math.abs(i - v.length / 2) < Math.abs(coupe - v.length / 2))) coupe = i;
+        return s;
+      });
+    }
+    if (coupe > 0) return '<span class="vo duo"><span>' + dfl(esc(v.slice(0, coupe + 1).trim())) + '</span><span>' + dfl(esc(v.slice(coupe + 1).trim())) + '</span></span>';
     return '<span class="vo' + (v.length > 4 ? ' long' : '') + '">' + dfl(esc(v)) + '</span>';
+  }
+  /** Trains de ligne : toujours l'heure prévue ; l'heure réelle est dans l'état (« Parti 10:02 », « Arrivée 10:42 »). */
+  function celluleHeureTrain(l, barre) {
+    var h = hm(l.theo);
+    return '<span class="h' + (barre ? ' barre' : '') + '">' + (h || '—') + '</span>';
+  }
+
+  // ------------------------------------------- départs des trains : volets
+  /** Libellé des volets, court comme sur un tableau d'aéroport. */
+  function texteVolets(e) {
+    var court = { prevu: 'Prévu', supprime: 'Supprimé', deja: 'Déjà là', attendu: 'Départ attendu' }[e.cle];
+    if (court) return court;
+    if (e.cle === 'bientot') return 'Dans ' + e.minutes + ' min';
+    return e.libelle;
+  }
+  /** Dernier texte affiché par départ : seules les lettres qui changent tournent, une fois. */
+  var volets = {};
+  function celluleVolets(cle, e) {
+    var texte = texteVolets(e).toUpperCase(), sig = e.cle + (e.urgent ? ' urgent' : '') + '|' + texte, v = volets[cle];
+    if (!v || v.sig !== sig) {
+      var avant = v ? v.texte : '';
+      var lettres = texte.split('').map(function (ch, i) {
+        return '<b' + (ch !== avant.charAt(i) ? ' class="f" style="--i:' + i + '"' : '') + '>' + (ch === ' ' ? '' : esc(ch)) + '</b>';
+      }).join('');
+      // volets aussi grands que la case le permet (13,9 rem utiles, volet de 0,8 em + 0,1 rem d'écart)
+      var taille = Math.min(1.45, (13.9 / Math.max(1, texte.length) - 0.1) / 0.8).toFixed(2);
+      v = volets[cle] = { sig: sig, texte: texte, html: '<span class="sf ' + e.cle + (e.urgent ? ' urgent' : '') + '" style="font-size:' + taille + 'rem" title="' + esc(e.libelle) + '">' + lettres + '</span>' };
+    }
+    return '<span class="etat volets">' + v.html + (e.sous ? '<small class="sous">' + dfl(esc(e.sous)) + '</small>' : '') + '</span>';
   }
   /** Texte qui peut dépasser de sa case : défile doucement (voir defiler). */
   function dfl(html) { return html ? '<span class="dfl">' + html + '</span>' : ''; }
@@ -154,15 +194,15 @@
     var ea = a ? SC.etatAffichage(a, n, s, t.parcours) : null, ed = d ? SC.etatAffichage(d, n, s) : null;
     var nom = t.nom || t.code, c = couleurEF(t.groupe);
     var arr = a ? '<span class="num' + (ea.cle === 'supprime' ? ' barre' : '') + '">' + esc(a.numero || '') + '</span>' + celluleEtat(ea) +
-      celluleHeure(a, ea.cle === 'supprime') + celluleVoie(a, ea.cle === 'supprime')
+      celluleHeureTrain(a, ea.cle === 'supprime') + celluleVoie(a, ea.cle === 'supprime')
       : '<span></span><span></span><span></span><span></span>';
     // au centre : provenance à gauche, entreprise au milieu, destination à droite
     var centre = '<span class="tcentre"><span class="tville">' + (a ? '<small>En provenance de</small>' + esc(nom) : '') + '</span>' +
       '<span class="tef">' + esc(t.groupe) + '</span>' +
       '<span class="tville dest">' + (d ? '<small>À destination de</small>' + esc(nom) : '') + '</span></span>';
-    var dep = d ? '<span class="num' + (ed.cle === 'supprime' ? ' barre' : '') + '">' + esc(d.numero || '') + '</span>' + celluleHeure(d, ed.cle === 'supprime') +
+    var dep = d ? '<span class="num' + (ed.cle === 'supprime' ? ' barre' : '') + '">' + esc(d.numero || '') + '</span>' + celluleHeureTrain(d, ed.cle === 'supprime') +
       '<span class="ec hlr">' + (d.hlr && !d.reel && ed.cle !== 'supprime' ? esc(d.hlr) : '') + '</span>' +
-      celluleVoie(d, ed.cle === 'supprime') + celluleEtat(ed)
+      celluleVoie(d, ed.cle === 'supprime') + celluleVolets(d.id || t.code, ed)
       : '<span></span><span></span><span></span><span></span><span></span>';
     return '<div class="t" style="--c:' + c + '" data-k="' +
       esc(t.groupe + '|' + t.code + '|' + ((a && a.id) || '') + '|' + ((d && d.id) || '')) + '">' + arr + centre + dep + '</div>';
@@ -185,13 +225,27 @@
       Array.prototype.every.call(tmp.children, function (c, i) { return c.className === el.children[i].className; });
     if (memeStructure && anc.children.length === neu.children.length &&
       Array.prototype.every.call(neu.children, function (c, i) { return c.getAttribute('data-k') === anc.children[i].getAttribute('data-k'); })) {
-      Array.prototype.forEach.call(tmp.children, function (c, i) { if (c.className !== 'lignes' && c.outerHTML !== el.children[i].outerHTML) el.replaceChild(c.cloneNode(true), el.children[i]); });
-      Array.prototype.forEach.call(neu.children, function (c, i) { if (c.outerHTML !== anc.children[i].outerHTML) anc.replaceChild(c.cloneNode(true), anc.children[i]); });
+      Array.prototype.forEach.call(tmp.children, function (c, i) { if (c.className !== 'lignes') majElement(el.children[i], c); });
+      Array.prototype.forEach.call(neu.children, function (c, i) { majElement(anc.children[i], c); });
     } else {
       el.innerHTML = html;
     }
     el.__html = html;
     return true;
+  }
+  /**
+   * Ligne changée : seules ses cases changées sont remplacées. Le reste continue son animation
+   * (défilement d'une voie, clignotement, volets) au lieu de repartir de zéro à chaque minute.
+   */
+  function majElement(anc, neu) {
+    if (anc.outerHTML === neu.outerHTML) return;
+    var cases = anc.tagName === neu.tagName && anc.children.length && anc.children.length === neu.children.length &&
+      anc.childNodes.length === anc.children.length && neu.childNodes.length === neu.children.length &&
+      Array.prototype.every.call(neu.children, function (c, i) { return c.tagName === anc.children[i].tagName; });
+    if (!cases) { anc.parentNode.replaceChild(neu.cloneNode(true), anc); return; }
+    Array.prototype.slice.call(neu.attributes).forEach(function (a) { if (anc.getAttribute(a.name) !== a.value) anc.setAttribute(a.name, a.value); });
+    Array.prototype.slice.call(anc.attributes).forEach(function (a) { if (!neu.hasAttribute(a.name)) anc.removeAttribute(a.name); });
+    Array.prototype.forEach.call(neu.children, function (c, i) { if (c.outerHTML !== anc.children[i].outerHTML) anc.replaceChild(c.cloneNode(true), anc.children[i]); });
   }
   function rendre() {
     var d = etat.d; if (!d) return;
@@ -214,7 +268,6 @@
     trains.className = 'trains panneau';
     change = majBloc(trains, blocTrains(d.trains || [])) || change;
     majFlash(d.flash);
-    $('#v-maj').textContent = 'Mis à jour ' + (d.publieA ? d.publieA.slice(11) : '') + ' · version ' + d.version;
     if (change) ajuster();
   }
 
@@ -272,23 +325,32 @@
     nav.style.zoom = z.toFixed(2);
   }
   /**
-   * Texte plus large que sa case (voies multiples, étapes du Suivi trains, détail des prochaines navettes) :
-   * il va et vient doucement pour être lu en entier. Animation sans attribut ajouté : majBloc compare le HTML des lignes.
+   * Texte plus large que sa case (voies multiples, étapes du Suivi trains, détail des prochaines navettes) : un léger
+   * dépassement est resserré, sinon le texte va et vient à vitesse lisible (pause à chaque bout). Les animations sont
+   * calées sur l'horloge de la page : une case recréée reprend au même endroit. Sans attribut ajouté : majBloc compare le HTML.
    */
   function defiler() {
     var textes = document.querySelectorAll('.dfl');
     for (var i = 0; i < textes.length; i++) {
       var t = textes[i], boite = t.parentNode, cs = getComputedStyle(boite);
-      var depasse = Math.ceil(t.offsetWidth - (boite.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight)));
+      var place = boite.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight), large = t.offsetWidth;
+      var depasse = Math.ceil(large - place);
       if (depasse < 3) depasse = 0;
       if (t.__depasse === depasse) continue;
       t.__depasse = depasse;
       if (t.getAnimations) t.getAnimations().forEach(function (a) { a.cancel(); });
-      if (!depasse || !t.animate) continue;
-      t.animate([
-        { transform: 'translateX(0)' }, { transform: 'translateX(0)', offset: 0.2 },
-        { transform: 'translateX(' + (-depasse) + 'px)', offset: 0.8 }, { transform: 'translateX(' + (-depasse) + 'px)' }
-      ], { duration: 3000 + depasse * 70, iterations: Infinity, direction: 'alternate' });
+      if (!depasse || !t.animate || place <= 0) continue;
+      if (place / large >= 0.86) {
+        // dépassement léger : texte resserré en largeur, sans mouvement
+        t.animate([{ transform: 'scaleX(' + (place / large).toFixed(3) + ')' }, { transform: 'scaleX(' + (place / large).toFixed(3) + ')' }], { duration: 1000, fill: 'forwards' });
+        continue;
+      }
+      var pause = 1400, trajet = Math.max(900, depasse / 0.03), duree = trajet + 2 * pause;
+      var a = t.animate([
+        { transform: 'translateX(0)' }, { transform: 'translateX(0)', offset: pause / duree },
+        { transform: 'translateX(' + (-depasse) + 'px)', offset: (pause + trajet) / duree }, { transform: 'translateX(' + (-depasse) + 'px)' }
+      ], { duration: duree, iterations: Infinity, direction: 'alternate' });
+      try { a.startTime = 0; } catch (e) { /* horloge de la page indisponible : départ immédiat */ }
     }
   }
   window.addEventListener('resize', function () { etat.flash = '__'; ajuster(); if (etat.d) majFlash(etat.d.flash); });

@@ -61,8 +61,12 @@ html, body { margin: 0; height: 100%; background: var(--fond); color: var(--encr
 .r .st { background-color: #0B141D; outline: .1rem solid rgba(8, 18, 27, .55); }
 .r .vo { font-size: 1.6rem; }
 .r .vo.long { font-size: 1.25rem; }
-/* texte plus large que sa case (voies multiples, étapes) : défile d'un bout à l'autre (defiler dans visuel.js) */
-.dfl { display: inline-block; white-space: nowrap; }
+/* texte plus large que sa case (étapes, voie très longue) : resserré ou défile d'un bout à l'autre (defiler dans visuel.js) */
+.dfl { display: inline-block; white-space: nowrap; transform-origin: 0 50%; }
+/* voies multiples (VR5+VF3) : sur deux lignes */
+.vo.duo { display: flex; flex-direction: column; justify-content: center; line-height: 1.02; font-size: 1.05rem; }
+.vo.duo > span { overflow: hidden; white-space: nowrap; }
+.r .vo.duo { font-size: 1.2rem; }
 /* navette supprimée : fond rouge, écriture blanche, barré foncé et épais */
 .r.supprimee { background: #C62828; color: #FFFFFF; }
 .r.supprimee .barre, .r.supprimee .h small { color: #FFFFFF; opacity: 1; text-decoration-color: #2B0000; text-decoration-thickness: .2rem; }
@@ -120,6 +124,9 @@ html, body { margin: 0; height: 100%; background: var(--fond); color: var(--encr
 .st.supprime { color: var(--rouge); box-shadow: inset 0 0 0 .2rem var(--rouge); }
 .st.deja { color: var(--violet); box-shadow: inset 0 0 0 .2rem var(--violet); }
 .st.prevu { color: #b9c7d5; box-shadow: inset 0 0 0 .16rem #557089; }
+/* 5 minutes ou moins : clignote en rouge */
+.st.urgent { animation: clignRouge 1.1s steps(1, end) infinite; }
+@keyframes clignRouge { 0% { background: #E5251B; color: #FFFFFF; box-shadow: none; } 50% { background: #3B0B08; color: #FF8A80; box-shadow: inset 0 0 0 .2rem #E5251B; } }
 @keyframes pouls { 0%, 100% { box-shadow: 0 0 0 0 rgba(255, 194, 61, .75); } 50% { box-shadow: 0 0 0 .45rem rgba(255, 194, 61, 0); } }
 @keyframes poulsRouge { 0%, 100% { box-shadow: 0 0 0 0 rgba(229, 37, 27, .9); } 50% { box-shadow: 0 0 0 .5rem rgba(229, 37, 27, 0); } }
 
@@ -128,8 +135,8 @@ html, body { margin: 0; height: 100%; background: var(--fond); color: var(--encr
 .p-tete { display: flex; justify-content: space-between; align-items: baseline; padding: .45rem .9rem .3rem; }
 .p-tete h2 { margin: 0; font-weight: 700; font-size: 1.55rem; letter-spacing: .08em; text-transform: uppercase; }
 .p-tete span { font-size: .9rem; color: var(--dim); letter-spacing: .06em; text-transform: uppercase; }
-/* N° · état · heure · voie | provenance · entreprise · destination | N° · heure · HLR · voie · état */
-.tcols, .t { display: grid; grid-template-columns: 6.2rem 12.6rem 5.6rem 4.4rem minmax(16rem, 1fr) 6.2rem 5.6rem 4.2rem 4.4rem 12.6rem; gap: .5rem; align-items: center; padding: 0 .9rem; overflow: hidden; }
+/* N° · état · heure prévue · voie | provenance · entreprise · destination | N° · heure prévue · HLR · voie · état en volets */
+.tcols, .t { display: grid; grid-template-columns: 6.2rem 12.6rem 4.4rem 3.8rem minmax(15rem, 1fr) 6.2rem 4.4rem 4.2rem 3.8rem 14.4rem; gap: .5rem; align-items: center; padding: 0 .9rem; overflow: hidden; }
 .tcols { font-size: .74rem; letter-spacing: .08em; text-transform: uppercase; color: var(--dim); padding-bottom: .25rem; }
 .tcols .c, .t .c { text-align: center; }
 .t { min-height: 2.9rem; border-top: .08rem solid var(--trait); background: var(--ligne); }
@@ -142,15 +149,42 @@ html, body { margin: 0; height: 100%; background: var(--fond); color: var(--encr
 .tef { font-weight: 700; font-size: 1.6rem; letter-spacing: .07em; text-transform: uppercase; text-align: center; white-space: nowrap; color: var(--c, var(--encre)); }
 .num { font-weight: 700; font-size: 1.4rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
 
+/* Départs des trains : état en lettres à volets sur fond noir, comme un tableau d'aéroport ; la couleur dit l'état */
+.etat.volets { align-items: center; }
+.sf { --sf: #F2F5F8; display: inline-flex; justify-content: center; gap: .1rem; max-width: 100%; padding: .2rem .25rem; border-radius: .3rem; overflow: hidden;
+  background: #000000; box-shadow: inset 0 0 0 .08rem #2A2A2A; color: var(--sf); font-size: 1.2rem; perspective: 12em; }
+.sf b { position: relative; flex: none; display: inline-flex; justify-content: center; align-items: center; width: .8em; height: 1.3em; border-radius: .12em;
+  background: linear-gradient(#2A2A2A 0 50%, #1E1E1E 50% 100%); font-weight: 700; line-height: 1; }
+/* la fente au milieu de chaque volet */
+.sf b::after { content: ""; position: absolute; left: 0; right: 0; top: calc(50% - .03em); height: .06em; background: rgba(0, 0, 0, .9); }
+/* une lettre qui change tourne, de gauche à droite */
+.sf b.f { animation: volet .6s cubic-bezier(.2, .8, .3, 1.15) both; animation-delay: calc(var(--i) * 55ms); }
+@keyframes volet { 0% { transform: rotateX(-90deg); opacity: .25; } 55% { opacity: 1; } 100% { transform: none; } }
+.sf.bientot { --sf: #FFD54A; }
+.sf.attendu, .sf.imminent { --sf: var(--ambre); }
+.sf.retard { --sf: var(--rouge); }
+.sf.fait { --sf: var(--vert); }
+.sf.supprime { --sf: #FF4D4D; }
+.sf.prepa { --sf: var(--cyan); }
+.sf.deja { --sf: var(--violet); }
+.sf.cale { --sf: #FFFFFF; }
+.sf.cale b { background: linear-gradient(#C81E14 0 50%, #A3170F 50% 100%); }
+/* 5 minutes ou moins : les volets clignotent en rouge (après avoir tourné) */
+.sf.urgent b { animation: clignVolet 1.1s steps(1, end) infinite; }
+.sf.urgent b.f { animation: volet .6s cubic-bezier(.2, .8, .3, 1.15) both, clignVolet 1.1s steps(1, end) .8s infinite; animation-delay: calc(var(--i) * 55ms), .8s; }
+@keyframes clignVolet { 0% { background: #D7261B; color: #FFFFFF; } 50% { background: #1A0402; color: #FF6B5E; } }
+
 /* -------------------------------------------------------------- flash */
 .flash { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: stretch; background: var(--jaune); color: #1a1200; }
 .flash-lib { display: flex; align-items: center; font-weight: 700; font-size: 1.15rem; letter-spacing: .12em; text-transform: uppercase; padding: 0 1.1rem; background: #C42B1C; color: #FFFFFF; }
 .flash-fen { overflow: hidden; white-space: nowrap; display: flex; align-items: center; min-height: 2.5rem; }
 .flash-txt { display: inline-block; font-weight: 700; font-size: 1.5rem; padding: .4rem 0; white-space: nowrap; will-change: transform; animation: defile var(--duree, 20s) linear infinite; }
 @keyframes defile { from { transform: translateX(var(--depart, 100%)); } to { transform: translateX(var(--fin, -100%)); } }
-@media (prefers-reduced-motion: reduce) { .flash-txt { animation: none; padding-left: 1rem; white-space: normal; } .flash-fen { white-space: normal; } .st.imminent, .st.cale { animation: none; } }
-
-.pied { display: flex; justify-content: space-between; gap: 2rem; padding: .4rem 1.4rem .5rem; border-top: .08rem solid var(--trait); font-size: .88rem; color: var(--dim); }
+@media (prefers-reduced-motion: reduce) {
+  .flash-txt { animation: none; padding-left: 1rem; white-space: normal; } .flash-fen { white-space: normal; }
+  .st.imminent, .st.cale, .sf b.f { animation: none; }
+  .st.urgent, .sf.urgent b, .sf.urgent b.f { animation: none; background: #E5251B; color: #FFFFFF; }
+}
 
 /* Proposition d'installer l'application « Écrans » (adresse ?installer=1) */
 .installer { position: fixed; right: 1.4rem; top: 5.5rem; z-index: 50; display: grid; gap: .45rem; max-width: 26rem; padding: .9rem 1.1rem;

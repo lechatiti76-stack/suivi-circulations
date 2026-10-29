@@ -15,7 +15,7 @@
  */
 
 const CLE = 'CHANGER-CE-MOT-DE-PASSE';
-const VERSION = '2.1.1';
+const VERSION = '2.2.0';
 const FUSEAU = 'Europe/Paris';
 const NOM_DOSSIER = 'Suivi des circulations - données';
 
@@ -50,7 +50,7 @@ function router_(m, c, corps) {
     if (m === 'GET') return lireJournee_(r[1]);
     if (m === 'PUT') return avecVerrou_(() => ecrireJournee_(r[1], corps));
   }
-  if (m === 'POST' && c === '/api/diffusion') return avecVerrou_(() => { publierDiffusion_(corps); return ok_({ diffusion: etatDiffusion_() }); });
+  if (m === 'POST' && c === '/api/diffusion') return avecVerrou_(() => publierSiAJour_(corps));
   if (m === 'POST' && c === '/api/battement') return ok_({ battement: battre_() });
   if (m === 'POST' && c === '/api/mail') return avecVerrou_(() => mail_(JSON.parse(corps)));
   if (m === 'POST' && c === '/api/archives') return avecVerrou_(() => archives_(JSON.parse(corps)));
@@ -213,6 +213,17 @@ function publierDiffusion_(texte) {
   cache.putAll({ diffusion: texte, battement: String(meta.battement), ecritA: meta.ecritA }, 21600);
   ecrireTexte_('diffusion.json', texte);
   proprietes_().setProperty('DIFFUSION_A', meta.ecritA);
+}
+/**
+ * Publication seule (toutes les minutes depuis la saisie) : refusée si elle vient d'une fenêtre restée sur une version
+ * plus ancienne de la journée. Sinon cette fenêtre remettrait aux écrans (et au Suivi trains) une navette « pas partie ».
+ */
+function publierSiAJour_(corps) {
+  const d = JSON.parse(corps);
+  const courante = d && /^\d{4}-\d{2}-\d{2}$/.test(String(d.date || '')) ? versionJournee_(d.date) : 0;
+  if (d && d.version != null && Number(d.version) < courante) return { status: 409, data: { erreur: 'journée modifiée depuis une autre fenêtre', version: courante } };
+  publierDiffusion_(corps);
+  return ok_({ diffusion: etatDiffusion_() });
 }
 function battre_() {
   const cache = CacheService.getScriptCache();
