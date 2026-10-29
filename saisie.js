@@ -989,9 +989,14 @@
   // Statistiques
   $('#b-stats').addEventListener('click', function () {
     var s = SC.statistiques(app.journee, app.planning, app.params), cp = (app.params.exploitation || {}).coupurePoste || '13:30';
-    var l = function (lib, o) { return '<tr><td>' + lib + '</td><td>' + o.matin.hlp + '</td><td>' + o.matin.charge + '</td><td><b>' + (o.matin.hlp + o.matin.charge) + '</b></td><td>' + o.apresMidi.hlp + '</td><td>' + o.apresMidi.charge + '</td><td><b>' + (o.apresMidi.hlp + o.apresMidi.charge) + '</b></td></tr>'; };
-    $('#st-corps').innerHTML = '<div class="section"><h4>Mouvements de locomotive (coupure ' + esc(cp) + ')</h4><div class="tableau"><table class="stats"><thead><tr><th></th><th>Matin HLP</th><th>Matin en charge</th><th>Matin total</th><th>Après-midi HLP</th><th>Après-midi en charge</th><th>Après-midi total</th></tr></thead><tbody>' +
-      l('Locom', s.locom) + l('Locosup', s.locosup) + '</tbody></table></div></div>' +
+    var l = function (lib, o) {
+      var m = o.matin.hlp + o.matin.charge, a = o.apresMidi.hlp + o.apresMidi.charge;
+      return '<tr><td>' + lib + '</td><td>' + o.matin.hlp + '</td><td>' + o.matin.charge + '</td><td><b>' + m + '</b></td><td>' + o.apresMidi.hlp + '</td><td>' + o.apresMidi.charge + '</td><td><b>' + a + '</b></td>' +
+        '<td>' + (o.matin.hlp + o.apresMidi.hlp) + '</td><td>' + (o.matin.charge + o.apresMidi.charge) + '</td><td><b>' + (m + a) + '</b></td></tr>';
+    };
+    // LHTE (locom, loco), locosup et manœuvres NRS : HLP ou chargé, matin ou après-midi, puis la journée
+    $('#st-corps').innerHTML = '<div class="section"><h4>Mouvements de locomotive (coupure ' + esc(cp) + ')</h4><div class="tableau"><table class="stats"><thead><tr><th></th><th>Matin HLP</th><th>Matin chargé</th><th>Matin total</th><th>Après-midi HLP</th><th>Après-midi chargé</th><th>Après-midi total</th><th>Jour HLP</th><th>Jour chargé</th><th>Jour total</th></tr></thead><tbody>' +
+      l('LHTE (locom, loco)', s.locom) + l('Locosup', s.locosup) + l('NRS (nrs1, nrs2…)', s.nrs) + '</tbody></table></div></div>' +
       '<div class="section"><h4>Journée</h4><div class="tableau"><table class="stats"><tbody>' +
       [['Mouvements saisis', s.mouvements], ['Trains numérotés', s.trainsNumerotes], ['Manœuvres NRS', s.manoeuvresNrs], ['Mouvements HLP', s.hlp],
         ['Circulations prévues', s.circulationsPrevues], ['Réalisées', s.realisees], ['Supprimées', s.supprimees], ['Déjà là', s.dejaLa],
@@ -1100,8 +1105,16 @@
   $('#b-params').addEventListener('click', function () {
     var p = app.params, m = p.mails || {};
     $('#pa-mode').value = m.mode || 'simulation'; $('#pa-signature').value = m.signature || '';
-    $('#pa-copie').value = (m.copieNavettes || []).join('; '); $('#pa-cci').value = m.listeCopieCacheeLignes || '';
-    $('#pa-listes').value = Object.keys(m.listes || {}).map(function (k) { return k + ': ' + m.listes[k].join('; '); }).join('\n');
+    // adresses par EF (trains de ligne) et par groupe (navettes), puis les copies ; les autres listes restent en texte
+    var listes = m.listes || {}, nomCci = m.listeCopieCacheeLignes || '', utilisees = {};
+    var trainsM = listesMailGroupes('ligne'), navettesM = listesMailGroupes('navette');
+    trainsM.concat(navettesM).forEach(function (x) { utilisees[x.nom] = true; });
+    if (nomCci) utilisees[nomCci] = true;
+    $('#pa-mails-trains').innerHTML = trainsM.map(function (x) { return ligneMail(x.libelles.join(' · '), 'data-liste="' + esc(x.nom) + '"', listes[x.nom]); }).join('') +
+      ligneMail('Copie cachée de tous les mails trains', 'data-copie="cci"', nomCci ? listes[nomCci] : [], 'copie');
+    $('#pa-mails-navettes').innerHTML = navettesM.map(function (x) { return ligneMail(x.libelles.join(' · '), 'data-liste="' + esc(x.nom) + '"', listes[x.nom]); }).join('') +
+      ligneMail('Copie de tous les mails navettes', 'data-copie="navettes"', m.copieNavettes, 'copie');
+    $('#pa-listes').value = Object.keys(listes).filter(function (k) { return !utilisees[k]; }).map(function (k) { return k + ': ' + listes[k].join('; '); }).join('\n');
     $('#pa-seuil').value = (p.exploitation || {}).seuilRetardMinutes || 15; $('#pa-coupure').value = (p.exploitation || {}).coupurePoste || '13:30';
     $('#pa-site').value = p.site || ''; $('#pa-voies').value = (p.voies || []).join(' ');
     $('#pa-alias').value = Object.keys(p.aliasVoies || {}).map(function (k) { return k + '=' + p.aliasVoies[k]; }).join(', ');
@@ -1130,6 +1143,22 @@
     $('#pa-erreur').textContent = '';
     ouvrir('#d-params');
   });
+  /** Une ligne d'adresses par liste de mails : celle du groupe (Planning), sinon son identifiant ; une liste partagée n'apparaît qu'une fois. */
+  function listesMailGroupes(fam) {
+    var lignes = [], parNom = {};
+    (app.planning.groupes || []).forEach(function (g) {
+      if (g.famille !== fam) return;
+      var nom = g.listeMail || g.id;
+      if (!parNom[nom]) { parNom[nom] = { nom: nom, libelles: [] }; lignes.push(parNom[nom]); }
+      parNom[nom].libelles.push(g.libelle || g.id);
+    });
+    return lignes;
+  }
+  function ligneMail(libelle, attr, adresses, classe) {
+    // toutes les adresses visibles : la case s'agrandit selon leur nombre
+    var texte = (adresses || []).join('; '), lignes = Math.max(1, Math.min(4, Math.ceil(texte.length / 95)));
+    return '<tr' + (classe ? ' class="' + classe + '"' : '') + '><th>' + esc(libelle) + '</th><td><textarea class="mono" ' + attr + ' rows="' + lignes + '" placeholder="adresse@exemple.fr; …" spellcheck="false">' + esc(texte) + '</textarea></td></tr>';
+  }
   /** Codes des trains de ligne qui arrivent ici (planning), pour régler leur temps d'arrivée. */
   function codesArriveesTrains() {
     var vus = {};
@@ -1160,14 +1189,29 @@
     p.saisie = p.saisie || {}; p.saisie.versObligatoire = $('#pa-vers').value;
     p.mails = p.mails || {};
     p.mails.mode = $('#pa-mode').value; p.mails.signature = $('#pa-signature').value.trim();
-    p.mails.copieNavettes = $('#pa-copie').value.split(/[;,\s]+/).filter(Boolean);
-    p.mails.listeCopieCacheeLignes = $('#pa-cci').value.trim();
-    var listes = {};
+    var adresses = function (texte, quoi) {
+      var l = String(texte || '').split(/[;,\s]+/).filter(Boolean);
+      l.forEach(function (a) { if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(a)) err.push('Mails ' + quoi + ' : « ' + a + ' » n\'est pas une adresse.'); });
+      return l;
+    };
+    var listes = {}, noms = {};
     $('#pa-listes').value.split(/\r?\n/).forEach(function (l) {
       l = l.trim(); if (!l) return; var i = l.indexOf(':');
       if (i < 1) { err.push('Liste sans « : » : ' + l); return; }
-      listes[l.slice(0, i).trim()] = l.slice(i + 1).split(/[;,\s]+/).filter(Boolean);
+      listes[l.slice(0, i).trim()] = adresses(l.slice(i + 1), l.slice(0, i).trim());
     });
+    // une ligne par EF (trains) ou par groupe (navettes) : elle l'emporte sur une liste du même nom
+    $$('#pa-mails-trains [data-liste], #pa-mails-navettes [data-liste]').forEach(function (inp) {
+      var k = inp.getAttribute('data-liste'), l = adresses(inp.value, inp.closest('tr').querySelector('th').textContent);
+      noms[k] = true;
+      if (l.length) listes[k] = l; else delete listes[k];
+    });
+    // copie cachée des trains : sa propre liste (son ancien nom si aucune EF ne l'utilise)
+    var cci = adresses($('#pa-mails-trains [data-copie="cci"]').value, 'copie cachée des trains');
+    var nomCci = p.mails.listeCopieCacheeLignes && !noms[p.mails.listeCopieCacheeLignes] ? p.mails.listeCopieCacheeLignes : 'Copie trains';
+    if (cci.length) listes[nomCci] = cci;
+    p.mails.listeCopieCacheeLignes = cci.length ? nomCci : '';
+    p.mails.copieNavettes = adresses($('#pa-mails-navettes [data-copie="navettes"]').value, 'copie des navettes');
     p.mails.listes = listes;
     p.exploitation = p.exploitation || {};
     var s = +$('#pa-seuil').value; if (!(s >= 1 && s <= 240)) err.push('Seuil de retard entre 1 et 240 minutes.'); p.exploitation.seuilRetardMinutes = s;

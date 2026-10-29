@@ -93,17 +93,30 @@
   }
 
   // ------------------------------------------- départs des trains : volets
-  /** Libellé des volets, court comme sur un tableau d'aéroport. */
-  function texteVolets(e) {
-    var court = { prevu: 'Prévu', supprime: 'Supprimé', deja: 'Déjà là', attendu: 'Départ attendu' }[e.cle];
+  /** Libellé des volets, court comme sur un tableau d'aéroport (arrivée : le compte à rebours en route aussi). */
+  function texteVolets(e, arrivee) {
+    var court = arrivee ? { prevu: 'Prévu', supprime: 'Supprimé', deja: 'Déjà là', attendu: 'Attendue', imminent: 'Imminente' }[e.cle]
+      : { prevu: 'Prévu', supprime: 'Supprimé', deja: 'Déjà là', attendu: 'Départ attendu' }[e.cle];
     if (court) return court;
     if (e.cle === 'bientot') return 'Dans ' + e.minutes + ' min';
+    var n = /(\d+) min/.exec(e.libelle);
+    if (e.cle === 'route' && n) return 'Dans ' + n[1] + ' min';
+    if (e.cle === 'fa') return e.libelle.replace(' depuis', '');
     return e.libelle;
   }
-  /** Dernier texte affiché par départ : seules les lettres qui changent tournent, une fois. */
+  /** Ligne sous les volets d'une arrivée : en approche, heure d'arrivée estimée ou prévue. */
+  function sousVoletsArrivee(e) {
+    if (e.cle === 'route') return 'En approche' + (e.eta ? ' · arr. ' + hm(e.eta) : '');
+    if (e.cle === 'imminent' && e.eta) return 'arr. ' + hm(e.eta);
+    return e.sous || '';
+  }
+  /**
+   * Dernier texte affiché par départ ou arrivée : seules les lettres qui changent tournent, une fois.
+   * Arrivées : rotation plus lente (classe « lent »).
+   */
   var volets = {};
-  function celluleVolets(cle, e) {
-    var texte = texteVolets(e).toUpperCase(), sig = e.cle + (e.urgent ? ' urgent' : '') + '|' + texte, v = volets[cle];
+  function celluleVolets(cle, e, arrivee) {
+    var texte = texteVolets(e, arrivee).toUpperCase(), sig = e.cle + (e.urgent ? ' urgent' : '') + '|' + texte, v = volets[cle];
     if (!v || v.sig !== sig) {
       var avant = v ? v.texte : '';
       var lettres = texte.split('').map(function (ch, i) {
@@ -111,9 +124,10 @@
       }).join('');
       // volets aussi grands que la case le permet (13,9 rem utiles, volet de 0,8 em + 0,1 rem d'écart)
       var taille = Math.min(1.45, (13.9 / Math.max(1, texte.length) - 0.1) / 0.8).toFixed(2);
-      v = volets[cle] = { sig: sig, texte: texte, html: '<span class="sf ' + e.cle + (e.urgent ? ' urgent' : '') + '" style="font-size:' + taille + 'rem" title="' + esc(e.libelle) + '">' + lettres + '</span>' };
+      v = volets[cle] = { sig: sig, texte: texte, html: '<span class="sf ' + e.cle + (e.urgent ? ' urgent' : '') + (arrivee ? ' lent' : '') + '" style="font-size:' + taille + 'rem" title="' + esc(e.libelle) + '">' + lettres + '</span>' };
     }
-    return '<span class="etat volets">' + v.html + (e.sous ? '<small class="sous">' + dfl(esc(e.sous)) + '</small>' : '') + '</span>';
+    var sous = arrivee ? sousVoletsArrivee(e) : e.sous;
+    return '<span class="etat volets">' + v.html + (sous ? '<small class="sous">' + dfl(esc(sous)) + '</small>' : '') + '</span>';
   }
   /** Texte qui peut dépasser de sa case : défile doucement (voir defiler). */
   function dfl(html) { return html ? '<span class="dfl">' + html + '</span>' : ''; }
@@ -193,7 +207,7 @@
     var a = t.arrivee, d = t.depart, s = etat.d.seuilRetardMinutes, n = maintenant();
     var ea = a ? SC.etatAffichage(a, n, s, t.parcours) : null, ed = d ? SC.etatAffichage(d, n, s) : null;
     var nom = t.nom || t.code, c = couleurEF(t.groupe);
-    var arr = a ? '<span class="num' + (ea.cle === 'supprime' ? ' barre' : '') + '">' + esc(a.numero || '') + '</span>' + celluleEtat(ea) +
+    var arr = a ? '<span class="num' + (ea.cle === 'supprime' ? ' barre' : '') + '">' + esc(a.numero || '') + '</span>' + celluleVolets((a.id || t.code) + '|arrivée', ea, true) +
       celluleHeureTrain(a, ea.cle === 'supprime') + celluleVoie(a, ea.cle === 'supprime')
       : '<span></span><span></span><span></span><span></span>';
     // au centre : provenance à gauche, entreprise au milieu, destination à droite

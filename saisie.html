@@ -212,11 +212,16 @@
         <div class="formgrid">
           <div class="champ"><label for="pa-mode">Mode</label><select id="pa-mode"><option value="simulation">Simulation (rien n'est envoyé)</option><option value="brouillon">Brouillon Outlook à valider</option><option value="auto">Envoi automatique</option><option value="desactive">Désactivé</option></select></div>
           <div class="champ"><label for="pa-signature">Image de signature</label><input id="pa-signature" class="mono"></div>
-          <div class="champ"><label for="pa-copie">Copie des mails navettes</label><input id="pa-copie" class="mono"></div>
-          <div class="champ"><label for="pa-cci">Liste en copie cachée (trains de ligne)</label><input id="pa-cci" class="mono"></div>
         </div>
-        <p class="note">Une liste par ligne : <span class="mono">Naviland: adresse1; adresse2</span></p>
-        <textarea id="pa-listes" style="min-height:150px"></textarea>
+        <p class="note">Adresses séparées par « ; ». Sans adresse, pas de mail pour cette EF ou ce groupe.</p>
+        <h5 class="sous-titre">Trains de ligne (arrivée et départ) : une ligne par EF</h5>
+        <div class="tableau"><table class="mails-ef"><tbody id="pa-mails-trains"></tbody></table></div>
+        <h5 class="sous-titre">Navettes (départ) : une ligne par groupe</h5>
+        <div class="tableau"><table class="mails-ef"><tbody id="pa-mails-navettes"></tbody></table></div>
+        <details class="autres-listes"><summary>Autres listes</summary>
+          <p class="note">Listes qui ne sont rattachées à aucune EF ni aucun groupe, une par ligne : <span class="mono">Nom: adresse1; adresse2</span></p>
+          <textarea id="pa-listes" style="min-height:70px"></textarea>
+        </details>
       </div>
       <div class="section"><h4>Exploitation</h4>
         <div class="formgrid">

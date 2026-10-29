@@ -15,7 +15,7 @@
  */
 
 const CLE = 'CHANGER-CE-MOT-DE-PASSE';
-const VERSION = '2.2.0';
+const VERSION = '2.3.0';
 const FUSEAU = 'Europe/Paris';
 const NOM_DOSSIER = 'Suivi des circulations - données';
 
@@ -297,6 +297,8 @@ function archives_(a) {
   if (a.statistiques) {
     const entete = String(a.statistiques.entete).split(';'), ligne = String(a.statistiques.ligne).split(';');
     const f = feuille_('Statistiques', entete), valeurs = f.getDataRange().getValues();
+    // colonnes ajoutées en fin d'en-tête (ex. manœuvres NRS) : la première ligne du registre est complétée
+    if ((valeurs[0] || []).filter(String).length < entete.length) f.getRange(1, 1, 1, entete.length).setValues([entete]);
     let rang = -1;
     for (let i = 1; i < valeurs.length; i++) {
       const v = valeurs[i][0], d = v instanceof Date ? Utilities.formatDate(v, FUSEAU, 'yyyy-MM-dd') : String(v);

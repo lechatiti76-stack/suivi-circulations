@@ -131,6 +131,10 @@ test('fichiers CSV avec BOM dans Drive › archives › année, statistiques san
   G.appel('POST', '/api/archives', JSON.stringify(a));
   var stats = G.etat.classeurs[G.etat.proprietes.REGISTRE_ID].feuilles.Statistiques.lignes;
   assert.strictEqual(stats.length, 2); assert.strictEqual(stats[1][1], '2');
+  // nouvelles colonnes en fin d'en-tête : la première ligne du registre est complétée
+  a.statistiques = { entete: 'date;mouvements;nrs_hlp_matin', ligne: '2026-10-22;2;5' };
+  G.appel('POST', '/api/archives', JSON.stringify(a));
+  assert.strictEqual(stats[0].join(';'), 'date;mouvements;nrs_hlp_matin'); assert.strictEqual(stats.length, 2);
   var csv = Object.keys(G.etat.fichiers).map(function (k) { return G.etat.fichiers[k]; }).filter(function (f) { return f.nom === '2026-10-22_mouvements.csv'; })[0];
   assert.strictEqual(csv.contenu.charCodeAt(0), 0xFEFF);
   assert.strictEqual(G.appel('POST', '/api/archives', JSON.stringify({ date: '2026-10-22', fichiers: [{ nom: '../x.csv', contenu: '' }] })).status, 400);

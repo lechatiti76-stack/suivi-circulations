@@ -135,15 +135,15 @@ html, body { margin: 0; height: 100%; background: var(--fond); color: var(--encr
 .p-tete { display: flex; justify-content: space-between; align-items: baseline; padding: .45rem .9rem .3rem; }
 .p-tete h2 { margin: 0; font-weight: 700; font-size: 1.55rem; letter-spacing: .08em; text-transform: uppercase; }
 .p-tete span { font-size: .9rem; color: var(--dim); letter-spacing: .06em; text-transform: uppercase; }
-/* N° · état · heure prévue · voie | provenance · entreprise · destination | N° · heure prévue · HLR · voie · état en volets */
-.tcols, .t { display: grid; grid-template-columns: 6.2rem 12.6rem 4.4rem 3.8rem minmax(15rem, 1fr) 6.2rem 4.4rem 4.2rem 3.8rem 14.4rem; gap: .5rem; align-items: center; padding: 0 .9rem; overflow: hidden; }
+/* N° · état en volets · heure prévue · voie | provenance · entreprise · destination | N° · heure prévue · HLR · voie · état en volets */
+.tcols, .t { display: grid; grid-template-columns: 6.2rem 14.4rem 4.4rem 3.8rem minmax(13.4rem, 1fr) 6.2rem 4.4rem 4.2rem 3.8rem 14.4rem; gap: .5rem; align-items: center; padding: 0 .9rem; overflow: hidden; }
 .tcols { font-size: .74rem; letter-spacing: .08em; text-transform: uppercase; color: var(--dim); padding-bottom: .25rem; }
 .tcols .c, .t .c { text-align: center; }
 .t { min-height: 2.9rem; border-top: .08rem solid var(--trait); background: var(--ligne); }
 .t .st { white-space: normal; line-height: 1.1; font-size: 1.2rem; }
 .t:nth-of-type(even) { background: var(--ligne-2); }
-.tcentre { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: .8rem; min-width: 0; padding: 0 1.6rem 0 .6rem; }
-.tville { display: flex; flex-direction: column; font-weight: 700; font-size: 1.35rem; line-height: 1.05; min-width: 0; overflow-wrap: anywhere; }
+.tcentre { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: .6rem; min-width: 0; padding: 0 .8rem 0 .4rem; }
+.tville { display: flex; flex-direction: column; font-weight: 700; font-size: 1.25rem; line-height: 1.05; min-width: 0; overflow-wrap: anywhere; }
 .tville small { font-weight: 400; font-size: .74rem; letter-spacing: .03em; color: var(--dim); }
 .tville.dest { align-items: flex-end; text-align: right; }
 .tef { font-weight: 700; font-size: 1.6rem; letter-spacing: .07em; text-transform: uppercase; text-align: center; white-space: nowrap; color: var(--c, var(--encre)); }
@@ -165,7 +165,8 @@ html, body { margin: 0; height: 100%; background: var(--fond); color: var(--encr
 .sf.retard { --sf: var(--rouge); }
 .sf.fait { --sf: var(--vert); }
 .sf.supprime { --sf: #FF4D4D; }
-.sf.prepa { --sf: var(--cyan); }
+.sf.prepa, .sf.route { --sf: var(--cyan); }
+.sf.fa { --sf: #F59E0B; }
 .sf.deja { --sf: var(--violet); }
 .sf.cale { --sf: #FFFFFF; }
 .sf.cale b { background: linear-gradient(#C81E14 0 50%, #A3170F 50% 100%); }
@@ -173,6 +174,9 @@ html, body { margin: 0; height: 100%; background: var(--fond); color: var(--encr
 .sf.urgent b { animation: clignVolet 1.1s steps(1, end) infinite; }
 .sf.urgent b.f { animation: volet .6s cubic-bezier(.2, .8, .3, 1.15) both, clignVolet 1.1s steps(1, end) .8s infinite; animation-delay: calc(var(--i) * 55ms), .8s; }
 @keyframes clignVolet { 0% { background: #D7261B; color: #FFFFFF; } 50% { background: #1A0402; color: #FF6B5E; } }
+/* arrivées : les lettres tournent plus lentement */
+.sf.lent b.f { animation-duration: 1s; animation-delay: calc(var(--i) * 95ms); }
+.sf.lent.urgent b.f { animation: volet 1s cubic-bezier(.2, .8, .3, 1.15) both, clignVolet 1.1s steps(1, end) 1.4s infinite; animation-delay: calc(var(--i) * 95ms), 1.4s; }
 
 /* -------------------------------------------------------------- flash */
 .flash { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: stretch; background: var(--jaune); color: #1a1200; }

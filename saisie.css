@@ -230,6 +230,39 @@ iframe.apercu { width: 100%; height: 300px; border: 1px solid var(--trait); bord
 .champ input:focus { border: 2px solid var(--accent); box-shadow: 0 0 0 4px var(--accent-doux); }
 .saisie.edition { background: var(--alerte-fond); box-shadow: inset 5px 0 0 var(--alerte); border-bottom-color: var(--alerte); }
 
+/* Bandeau à remplir bien visible : fond bleu soutenu, champs blancs, ce qui reste à remplir en jaune (même rendu en thème sombre) */
+.saisie { background: linear-gradient(180deg, #2466B8 0%, #194E91 100%); color: #FFFFFF; border-bottom: 3px solid var(--signal); box-shadow: none; }
+.saisie .saisie-tete h2 { color: #FFFFFF; }
+.saisie .champ label, .saisie .secondaires { color: #D5E4F7; }
+.saisie .champ input, .saisie .champ select, .saisie .secondaires input { background: #FFFFFF; color: #13202B; border: 1px solid #FFFFFF; }
+.saisie .champ input#f-ef, .saisie .champ input.auto { background: #E6EDF6; color: #3A4856; }
+.saisie .champ input::placeholder, .saisie .secondaires input::placeholder { color: #7D8A97; }
+.saisie .champ input.a-remplir { border: 2px dashed var(--signal); background: #FFF6D2; }
+.saisie .champ input:focus, .saisie .champ select:focus { border: 2px solid var(--signal); box-shadow: 0 0 0 4px rgba(242, 183, 5, .5); }
+.saisie .champ input.erreur, .saisie .champ select.erreur { border: 2px solid #FF6B5E; box-shadow: 0 0 0 3px rgba(255, 107, 94, .5); }
+.saisie .champ input.avert { border: 2px solid #FFC23D; }
+.saisie .reste { padding: 2px 12px; border-radius: 999px; background: var(--signal); color: var(--signal-encre); }
+.saisie .reste.pret { background: #45D68B; color: #06210F; }
+.saisie .reste:empty { display: none; }
+.saisie .aide { color: #E3ECF7; }
+.saisie .aide b { color: #FFFFFF; }
+.saisie .touche { background: rgba(255, 255, 255, .14); border-color: rgba(255, 255, 255, .45); color: #FFFFFF; }
+.saisie #s-valider { background: var(--signal); border-color: var(--signal); color: var(--signal-encre); font-weight: 700; }
+.saisie #s-annuler { background: #FFFFFF; color: #13202B; }
+.saisie .suggestions { color: var(--encre); }
+.saisie .suggestions .touche { background: var(--surface-2); border-color: var(--trait); color: var(--encre-2); }
+/* modification d'une ligne du journal : le bandeau passe en orange */
+.saisie.edition { background: linear-gradient(180deg, #B86E0B 0%, #93560A 100%); border-bottom-color: #FFFFFF; }
+
+/* Paramètres › Mails : une ligne d'adresses par EF (trains) et par groupe (navettes) */
+.sous-titre { margin: 12px 0 6px; font-family: var(--f-titre); font-size: 13px; font-weight: 600; color: var(--encre-2); }
+.mails-ef th { width: 30%; padding: 6px 8px; border-top: 1px solid var(--trait); background: var(--surface-2); font-size: 13.5px; font-weight: 600; text-transform: none; letter-spacing: 0; color: var(--encre); white-space: normal; position: static; }
+.mails-ef tr:first-child th, .mails-ef tr:first-child td { border-top: 0; }
+.mails-ef tr.copie th { font-weight: 500; font-style: italic; color: var(--encre-2); }
+.mails-ef td textarea { display: block; width: 100%; min-height: 32px; padding: 5px 7px; border: 1px solid var(--trait); border-radius: 4px; background: var(--surface); font-size: 13px; line-height: 1.45; resize: vertical; }
+.autres-listes { margin-top: 10px; }
+.autres-listes summary { cursor: pointer; font-size: 13px; color: var(--encre-2); }
+
 /* N° train : suggestions dès les premières lettres (loc → locom, loco…) */
 .champ-num { position: relative; }
 .suggestions { position: absolute; top: 100%; left: 0; z-index: 40; min-width: 330px; margin-top: 3px; padding: 4px; border: 1px solid var(--trait); border-radius: 8px; background: var(--surface); box-shadow: 0 10px 28px #0003; }

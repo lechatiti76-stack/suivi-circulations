@@ -542,7 +542,8 @@
     var g = groupeDe(planning, c.groupe) || {};
     var m = (params && params.mails) || {};
     var listes = m.listes || {};
-    var to = (g.listeMail && listes[g.listeMail]) || [];
+    // liste du groupe (Planning), sinon celle qui porte son identifiant (Paramètres › Mails, une ligne par EF ou groupe)
+    var to = listes[g.listeMail || g.id] || [];
     if (!to.length) return null;
     var d = etatCirculation(c, j);
     if (!d.reel) return null;
@@ -594,6 +595,7 @@
       date: j.date, mouvements: mv.length, trainsNumerotes: 0, manoeuvresNrs: 0, hlp: 0,
       locom: { matin: { hlp: 0, charge: 0 }, apresMidi: { hlp: 0, charge: 0 } },
       locosup: { matin: { hlp: 0, charge: 0 }, apresMidi: { hlp: 0, charge: 0 } },
+      nrs: { matin: { hlp: 0, charge: 0 }, apresMidi: { hlp: 0, charge: 0 } },
       circulationsPrevues: 0, realisees: 0, supprimees: 0, dejaLa: 0, retardMoyenNavettes: null, retardMaxNavettes: null
     };
     mv.forEach(function (m) {
@@ -601,7 +603,8 @@
       if (hlp) s.hlp++;
       if (estNumeroTrain(n)) s.trainsNumerotes++;
       if (/^nrs/.test(n)) s.manoeuvresNrs++;
-      var mobile = n === 'locom' || n === 'loco' ? 'locom' : (n === 'locosup' || n === 'locosupp' ? 'locosup' : null);
+      // LHTE (locom, loco), locosup et manœuvres NRS (nrs1…) : HLP ou en charge, matin ou après-midi
+      var mobile = n === 'locom' || n === 'loco' ? 'locom' : (n === 'locosup' || n === 'locosupp' ? 'locosup' : (/^nrs/.test(n) ? 'nrs' : null));
       if (mobile) {
         var poste = minutesDuJour(hm(m.annonce)) < coupure ? 'matin' : 'apresMidi';
         s[mobile][poste][hlp ? 'hlp' : 'charge']++;
@@ -652,13 +655,17 @@
   var ENTETE_STATS = ['date', 'mouvements', 'trains_numerotes', 'manoeuvres_nrs', 'hlp',
     'locom_hlp_matin', 'locom_charge_matin', 'locom_hlp_apres_midi', 'locom_charge_apres_midi',
     'locosup_hlp_matin', 'locosup_charge_matin', 'locosup_hlp_apres_midi', 'locosup_charge_apres_midi',
-    'circulations_prevues', 'realisees', 'supprimees', 'deja_la', 'retard_moyen_navettes_min', 'retard_max_navettes_min'];
+    'circulations_prevues', 'realisees', 'supprimees', 'deja_la', 'retard_moyen_navettes_min', 'retard_max_navettes_min',
+    // ajoutées en fin de ligne : les colonnes déjà présentes dans statistiques.csv et le registre ne bougent pas
+    'nrs_hlp_matin', 'nrs_charge_matin', 'nrs_hlp_apres_midi', 'nrs_charge_apres_midi'];
   function ligneStatistiques(s) {
+    var nrs = s.nrs || { matin: { hlp: 0, charge: 0 }, apresMidi: { hlp: 0, charge: 0 } };
     return [s.date, s.mouvements, s.trainsNumerotes, s.manoeuvresNrs, s.hlp,
       s.locom.matin.hlp, s.locom.matin.charge, s.locom.apresMidi.hlp, s.locom.apresMidi.charge,
       s.locosup.matin.hlp, s.locosup.matin.charge, s.locosup.apresMidi.hlp, s.locosup.apresMidi.charge,
       s.circulationsPrevues, s.realisees, s.supprimees, s.dejaLa,
-      s.retardMoyenNavettes == null ? '' : s.retardMoyenNavettes, s.retardMaxNavettes == null ? '' : s.retardMaxNavettes].map(csvCellule).join(';');
+      s.retardMoyenNavettes == null ? '' : s.retardMoyenNavettes, s.retardMaxNavettes == null ? '' : s.retardMaxNavettes,
+      nrs.matin.hlp, nrs.matin.charge, nrs.apresMidi.hlp, nrs.apresMidi.charge].map(csvCellule).join(';');
   }
 
   // ------------------------------------------------------ planning : variantes
