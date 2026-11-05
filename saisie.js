@@ -633,6 +633,7 @@
     api('POST', '/api/suivi-trains', JSON.stringify({ date: date })).then(function (r) {
       if (r.status !== 200) { app.suiviTrains = { erreur: (r.data && r.data.erreur) || ('erreur ' + r.status), a: new Date() }; return; }
       app.suiviTrains = { a: new Date(), lignes: (r.data.navettes || []).length + (r.data.journal || []).length };
+      majCoupons(r.data, date);
       if (!app.journee || app.journee.date !== date || app.lectureSeule) return;
       var changes = SC.appliquerSuiviTrains(SC.copie(app.journee), r.data, app.params);
       if (!changes.length) return;
@@ -646,6 +647,64 @@
       toast('Suivi trains : ' + changes.join(' · '));
     }, function () { app.suiviTrains = { erreur: 'serveur injoignable', a: new Date() }; });
   }
+  // ------------------------------------------------ coupons navettes (Suivi trains)
+  /**
+   * Coupons saisis dans le Suivi trains (bouton 🎫 Coupons, onglet « Coupons » de son classeur), relus avec le reste
+   * toutes les 10 s : fenêtre 🎫 Coupons (par navette, total de wagons par site) et pastille sur chaque départ de navette
+   * (LF1 « 🎫 3 · 54 wg »). Lecture seule ici : la saisie des coupons se fait dans le Suivi trains.
+   */
+  app.coupons = { jour: [], demain: [], date: null, a: null };
+  app.ongletCoupons = 'jour';
+  function majCoupons(data, date) {
+    var avant = JSON.stringify([app.coupons.jour, app.coupons.demain]);
+    app.coupons = { jour: data.coupons || [], demain: data.couponsDemain || [], date: date, a: new Date() };
+    var c = $('#c-coupons');
+    if (c) { c.textContent = app.coupons.jour.length; c.hidden = !app.coupons.jour.length; }
+    if (avant !== JSON.stringify([app.coupons.jour, app.coupons.demain])) {
+      if ($('#d-coupons').open) rendreCoupons();
+      rendreCirculations();
+    }
+  }
+  function couponsParNavette(liste) {
+    var par = {};
+    (liste || []).forEach(function (c) { var k = String(c.navette || '').toUpperCase(); (par[k] = par[k] || []).push(c); });
+    return par;
+  }
+  function totalWagons(liste) { return (liste || []).reduce(function (s, c) { var w = parseFloat(c.wagons); return s + (isNaN(w) ? 0 : w); }, 0); }
+  /** Pastille « 🎫 3 · 54 wg » d'une navette (départ) qui a des coupons, ou ''. */
+  function pastilleCoupons(c, prep) {
+    if (c.sens !== 'D' || (prep && prep !== 'demain')) return '';
+    var liste = couponsParNavette(prep ? app.coupons.demain : app.coupons.jour)[String(c.code || '').toUpperCase()];
+    if (!liste || !liste.length) return '';
+    return '<span class="pastille-coupons" title="' + esc(liste.length + ' coupon(s) : ' + liste.map(function (x) { return x.numero + ' ' + x.site + ' ' + x.dateCoupon + ' · ' + x.wagons + ' wg'; }).join(' | ')) + '">🎫 ' +
+      liste.length + ' · ' + totalWagons(liste) + ' wg</span>';
+  }
+  var SITES_COUPONS = [{ p: 'LF', site: 'LHTTDF', lib: 'TDF', coul: '#F28C28' }, { p: 'LN', site: 'LHTTMS', lib: 'TN', coul: '#2D8CFF' }, { p: 'LA', site: 'LHTATL', lib: 'ATL', coul: '#F2C230' }];
+  function rendreCoupons() {
+    var demain = app.ongletCoupons === 'demain', liste = demain ? app.coupons.demain : app.coupons.jour, par = couponsParNavette(liste);
+    $$('#d-coupons [data-cp]').forEach(function (b) { b.setAttribute('aria-selected', String(b.getAttribute('data-cp') === app.ongletCoupons)); });
+    var cfg = app.params && app.params.suiviTrains;
+    if (!cfg || !cfg.classeur) { $('#cp-corps').innerHTML = '<p class="note">Renseignez l\'adresse du classeur Suivi trains dans Paramètres pour reprendre ses coupons.</p>'; return; }
+    if (!app.coupons.a) { $('#cp-corps').innerHTML = '<p class="note">Lecture du Suivi trains en cours…</p>'; return; }
+    var blocs = SITES_COUPONS.map(function (s) {
+      var navs = Object.keys(par).filter(function (k) { return k.indexOf(s.p) === 0; }).sort(function (a, b) { return parseInt(a.slice(2), 10) - parseInt(b.slice(2), 10); });
+      var tous = []; navs.forEach(function (k) { tous = tous.concat(par[k]); });
+      var cartes = navs.map(function (k) {
+        var l = par[k].slice().sort(function (a, b) { return (+a.ligne || 0) - (+b.ligne || 0); });
+        return '<div class="cp-carte"><div class="cp-tete"><b>' + esc(k) + '</b><span>' + l.length + ' coupon' + (l.length > 1 ? 's' : '') + ' · <b>' + totalWagons(l) + '</b> wg</span></div>' +
+          '<table class="cp-table"><thead><tr><th>C</th><th>N°</th><th>Site</th><th>Date</th><th>Wgs</th></tr></thead><tbody>' +
+          l.map(function (x) { return '<tr><td>' + esc(x.ligne) + '</td><td class="mono"><b>' + esc(x.numero) + '</b></td><td>' + esc(x.site) + '</td><td class="mono">' + esc(x.dateCoupon) + '</td><td class="mono"><b>' + esc(x.wagons) + '</b>' + (x.note ? ' <small>' + esc(x.note) + '</small>' : '') + '</td></tr>'; }).join('') +
+          '</tbody></table></div>';
+      }).join('');
+      return '<section class="cp-site" style="--g:' + s.coul + '"><h4>' + s.lib + ' <small>' + s.site + '</small><span>' + (tous.length ? tous.length + ' coupon' + (tous.length > 1 ? 's' : '') + ' · ' + totalWagons(tous) + ' wagons' : 'aucun coupon') + '</span></h4>' +
+        (cartes ? '<div class="cp-cartes">' + cartes + '</div>' : '') + '</section>';
+    }).join('');
+    $('#cp-corps').innerHTML = (liste.length ? '<p class="cp-total">Total ' + (demain ? 'de demain' : 'du jour') + ' : <b>' + liste.length + '</b> coupons · <b>' + totalWagons(liste) + '</b> wagons</p>' : '<p class="note">Aucun coupon saisi pour ' + (demain ? 'demain' : 'aujourd\'hui') + ' dans le Suivi trains.</p>') + blocs;
+    $('#cp-pied').textContent = 'Repris du Suivi trains (bouton 🎫 Coupons), relu toutes les 10 secondes · dernière lecture ' + hm(SC.iso(app.coupons.a)) + '.';
+  }
+  $('#b-coupons').addEventListener('click', function () { rendreCoupons(); ouvrir('#d-coupons'); });
+  $$('#d-coupons [data-cp]').forEach(function (b) { b.addEventListener('click', function () { app.ongletCoupons = b.getAttribute('data-cp'); rendreCoupons(); }); });
+
   function reelSurSaisie() {
     var c = SC.trouverCirculation(app.journee, F.num.value);
     if (c && !SC.etatCirculation(c, app.journee).reel) { marquerReel(c.id); viderFormulaire(); F.num.focus(); return true; }
@@ -783,7 +842,7 @@
     var ouverte = !prep && app.ouverte === c.id;
     return '<div class="circ colore' + (st === 'supprime' ? ' supprimee' : '') + (st === 'nonprevu' ? ' nonprevue' : '') + (ouverte ? ' ouverte' : '') + '" data-id="' + c.id + '"' +
       (prep ? ' data-ligne-demain="1" data-prep="' + prep + '"' : '') + ' style="--g:' + couleur(c.groupe) + '">' +
-      '<span class="code" title="' + esc(c.code) + '">' + esc(c.code) + '</span><span class="sens">' + (c.sens === 'D' ? 'Dép.' : 'Arr.') + '</span>' +
+      '<span class="code" title="' + esc(c.code) + '">' + esc(c.code) + pastilleCoupons(c, prep) + '</span><span class="sens">' + (c.sens === 'D' ? 'Dép.' : 'Arr.') + '</span>' +
       '<span class="num">' + esc(c.numero || c.sillon || '') + '</span>' +
       // pas de HLR pour une arrivée
       saisie('theo', hm(c.theo), 'hh:mm', 'Heure prévue') + (c.sens === 'D' ? saisie('hlr', c.hlr, 'hh:mm', 'HLR') : '<span class="c-hlr"></span>') +

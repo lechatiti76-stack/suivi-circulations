@@ -30,6 +30,7 @@
     majLiaison();
   };
   function charger() {
+    if (DEMO) { window.__diffusion(diffusionDemo(), { battement: Math.floor(Date.now() / 1000) }); return; }
     if (source) {
       fetch(source + (source.indexOf('?') < 0 ? '?' : '&') + 'action=diffusion&t=' + Date.now(), { cache: 'no-store', redirect: 'follow' })
         .then(function (r) { return r.json(); })
@@ -229,6 +230,227 @@
         : '<div class="vide">Aucun train de ligne prévu aujourd\'hui.</div>');
   }
 
+
+  // ======================================================= VEDETTES (écran dynamique)
+  /*
+   * Une navette ou un train qui part / arrive dans les prochaines minutes (ou qui vient de le faire) passe « en vedette » :
+   * - navettes : son carré, à la couleur du groupe, prend toute la partie haute de l'écran ; plusieurs en même temps se
+   *   partagent la largeur ; une fois terminé (1 min après), retour aux fenêtres TDF / TN / ATL ;
+   * - trains de ligne : une bande animée (train qui entre ou qui sort) recouvre la partie basse ; plusieurs = empilées.
+   * Réglages par l'adresse de la page : ?avant=5 (minutes avant), ?apres=1 (minutes après), ?vedette=0 pour désactiver,
+   * ?horizon=180 (fenêtre d'un groupe agrandie s'il a une navette dans les 180 min), ?groupes=tous (toujours tout afficher),
+   * ?demo=1 (démonstration autonome, sans serveur).
+   */
+  function paramNum(nom, defaut) { var m = new RegExp('[?&]' + nom + '=([\\d.]+)').exec(location.search); return m ? +m[1] : defaut; }
+  var DEMO = /[?&]demo=1\b/.test(location.search);
+  var VED = {
+    actif: !/[?&]vedette=0\b/.test(location.search),
+    avant: paramNum('avant', DEMO ? 1.5 : 5),
+    apres: paramNum('apres', DEMO ? 0.5 : 1),
+    horizon: paramNum('horizon', DEMO ? 2.5 : 180),
+    tousGroupes: /[?&]groupes=tous\b/.test(location.search)
+  };
+  function dateIso(s) { var p = /^(\d{4})-(\d\d)-(\d\d)T(\d\d):(\d\d)(?::(\d\d))?/.exec(s || ''); return p ? new Date(+p[1], +p[2] - 1, +p[3], +p[4], +p[5], +(p[6] || 0)) : null; }
+  function secAvant(cible) { var d = dateIso(cible); return d ? (d.getTime() - Date.now()) / 1000 : null; }
+  /** Phase « vedette » d'une ligne (navette ou train), ou null. */
+  function phaseVedette(l, parcours) {
+    if (!l || l.etat === 'supprime' || l.etat === 'deja') return null;
+    var arr = l.sens !== 'D', avant = VED.avant * 60, apres = VED.apres * 60;
+    if (l.reel) { var depuis = -secAvant(l.reel); return depuis >= 0 && depuis <= apres ? { cle: 'fait', heure: l.reel, sec: depuis } : null; }
+    if (arr) {
+      if (l.partie) {
+        var trajet = ((parcours && parcours.trajet) || 35) * 60;
+        var eta = l.eta || SC.iso(new Date(dateIso(l.partie).getTime() + trajet * 1000));
+        var reste = secAvant(eta), depuisPartie = -secAvant(l.partie);
+        if (reste <= avant && reste >= -120) return { cle: 'approche', heure: eta, sec: reste };
+        if (depuisPartie >= 0 && depuisPartie <= apres) return { cle: 'partie', heure: l.partie, sec: reste, eta: eta };
+        return null;
+      }
+      if (l.annonce) return { cle: 'approche', heure: l.theo, sec: l.theo ? secAvant(l.theo) : null };
+      return null;
+    }
+    if (l.cale) return null;
+    if (l.annonce) return { cle: 'bientot', heure: l.theo, sec: l.theo ? secAvant(l.theo) : 0 };
+    if (!l.theo) return null;
+    var s = secAvant(l.theo);
+    return s <= avant && s >= -120 ? { cle: 'bientot', heure: l.theo, sec: s } : null;
+  }
+  function compte(sec) {
+    if (sec == null) return '';
+    var a = Math.max(0, Math.round(Math.abs(sec)));
+    if (a < 60) return a + ' s';
+    var m = Math.floor(a / 60), r = a % 60;
+    return m + ' min' + (m < 3 && r ? ' ' + (r < 10 ? '0' : '') + r + ' s' : '');
+  }
+  /** Phrase principale et sous-titre d'une vedette. */
+  function textesVedette(ph, arr) {
+    if (ph.cle === 'fait') return { gros: arr ? 'Arrivée' : (ph.train ? 'Parti' : 'Partie'), sous: hm(ph.heure), fait: true };
+    if (ph.cle === 'partie') return { gros: 'En route', sous: 'arrivée prévue ' + hm(ph.eta) + ' · dans ' + compte(ph.sec) };
+    if (arr) return ph.sec != null && ph.sec > 0 ? { gros: 'Arrive dans', sous: compte(ph.sec) } : { gros: 'Arrivée imminente', sous: ph.heure ? 'prévue ' + hm(ph.heure) : '' };
+    return ph.sec != null && ph.sec > 0 ? { gros: 'Départ dans', sous: compte(ph.sec) } : { gros: 'Départ imminent', sous: ph.heure ? 'prévu ' + hm(ph.heure) : '' };
+  }
+  var SVG_TRAIN = '<svg class="ved-loco" viewBox="0 0 160 46" aria-hidden="true"><rect x="2" y="8" width="96" height="28" rx="5"/><rect x="100" y="12" width="56" height="24" rx="4"/>' +
+    '<path d="M98 36h4M2 36h156" stroke="currentColor" stroke-width="2"/><rect x="10" y="14" width="18" height="10" rx="2" class="vit"/><rect x="34" y="14" width="18" height="10" rx="2" class="vit"/>' +
+    '<rect x="58" y="14" width="18" height="10" rx="2" class="vit"/><circle cx="20" cy="40" r="5"/><circle cx="80" cy="40" r="5"/><circle cx="115" cy="40" r="5"/><circle cx="142" cy="40" r="5"/></svg>';
+  /** Carré géant d'une navette en vedette. */
+  function tuileNavette(v) {
+    var l = v.l, arr = l.sens !== 'D', t = textesVedette(v.ph, arr);
+    var detail = [l.wagons != null ? l.wagons + ' wagons' : '', l.voie ? 'voie ' + l.voie : '', l.numero ? 'n° ' + l.numero : ''].filter(Boolean).join(' · ');
+    var urgent = !t.fait && v.ph.sec != null && v.ph.sec <= 60;
+    return '<div class="ved-tuile ' + (arr ? 'arr' : 'dep') + ' ' + v.ph.cle + (urgent ? ' urgent' : '') + '" style="--c:' + v.g.couleur + ';--ce:' + encreSur(rvb(v.g.couleur)) + '">' +
+      '<div class="ved-groupe">' + esc(v.g.libelle) + '</div>' +
+      '<div class="ved-code">' + esc(l.code) + '</div>' +
+      '<div class="ved-sens">' + (arr ? '▼ Arrivée' : '▲ Départ') + (l.theo ? ' · prévu ' + hm(l.theo) : '') + '</div>' +
+      '<div class="ved-gros">' + (t.fait ? '✓ ' : '') + esc(t.gros) + '</div>' +
+      '<div class="ved-sous">' + esc(t.sous) + '</div>' +
+      (detail ? '<div class="ved-detail">' + esc(detail) + '</div>' : '') +
+      '<div class="ved-rail ' + (arr ? 'entre' : 'sort') + (t.fait ? ' fini' : '') + '">' + SVG_TRAIN + '</div></div>';
+  }
+  /** Bande animée d'un train de ligne en vedette. */
+  function bandeTrain(v) {
+    var l = v.l, arr = l.sens !== 'D', t = textesVedette(v.ph, arr), c = couleurEF(v.t.groupe);
+    var urgent = !t.fait && v.ph.sec != null && v.ph.sec <= 60;
+    return '<div class="ved-bande ' + (arr ? 'arr' : 'dep') + ' ' + v.ph.cle + (urgent ? ' urgent' : '') + '" style="--c:' + c + '">' +
+      '<div class="ved-b-sens">' + (arr ? '▼<b>Arrivée</b>' : '▲<b>Départ</b>') + '</div>' +
+      '<div class="ved-b-id"><span class="ved-b-num">' + esc(l.numero || v.t.code) + '</span><span class="ved-b-ef">' + esc(v.t.groupe) + '</span></div>' +
+      '<div class="ved-b-ville"><small>' + (arr ? 'En provenance de' : 'À destination de') + '</small>' + esc(v.t.nom || v.t.code) + '</div>' +
+      '<div class="ved-b-etat"><b>' + (t.fait ? '✓ ' : '') + esc(t.gros) + '</b><span>' + esc(t.sous) + '</span></div>' +
+      '<div class="ved-b-voie">' + (l.voie ? '<small>Voie</small>' + esc(l.voie) : '') + '</div>' +
+      '<div class="ved-rail ' + (arr ? 'entre' : 'sort') + (t.fait ? ' fini' : '') + '">' + SVG_TRAIN + '</div></div>';
+  }
+  function vedettesNavettes(d) {
+    var out = [];
+    (d.navettes || []).forEach(function (g) {
+      g.lignes.forEach(function (l) { var ph = phaseVedette(l, g.parcours); if (ph) out.push({ g: g, l: l, ph: ph }); });
+    });
+    return out.sort(function (a, b) { return (a.ph.sec == null ? 0 : a.ph.sec) - (b.ph.sec == null ? 0 : b.ph.sec); });
+  }
+  function vedettesTrains(d) {
+    var out = [];
+    (d.trains || []).forEach(function (t) {
+      [t.arrivee, t.depart].forEach(function (l) {
+        var ph = phaseVedette(l, l && l.sens !== 'D' ? t.parcours : null);
+        if (ph) { ph.train = true; out.push({ t: t, l: l, ph: ph }); }
+      });
+    });
+    return out.sort(function (a, b) { return (a.ph.sec == null ? 0 : a.ph.sec) - (b.ph.sec == null ? 0 : b.ph.sec); });
+  }
+  var dernierVed = { nav: '', trains: '' };
+  function majVedettes() {
+    var d = etat.d, cNav = $('#v-ved-nav'), cTr = $('#v-ved-trains'), grille = $('#v-grille');
+    if (!cNav || !cTr) return;
+    if (!d || !VED.actif) { cNav.hidden = cTr.hidden = true; grille.classList.remove('ved-nav-on', 'ved-trains-on'); return; }
+    var vn = vue === 'trains' ? [] : vedettesNavettes(d), vt = vue === 'navettes' ? [] : vedettesTrains(d);
+    // navettes : 4 carrés au plus côte à côte (les plus proches) ; le reste est compté
+    var htmlNav = vn.length ? '<div class="ved-tuiles" style="--n:' + Math.min(4, vn.length) + '">' + vn.slice(0, 4).map(tuileNavette).join('') + '</div>' +
+      (vn.length > 4 ? '<div class="ved-plus">+ ' + (vn.length - 4) + ' autre(s)</div>' : '') : '';
+    var htmlTr = vt.length ? '<div class="ved-bandes" style="--n:' + Math.min(3, vt.length) + '">' + vt.slice(0, 3).map(bandeTrain).join('') + '</div>' : '';
+    // positions mesurées à l'écran (les navettes peuvent être agrandies par zoom), relatives à la grille
+    var rg = grille.getBoundingClientRect(), rn = $('#v-navettes').getBoundingClientRect(), rt = $('#v-trains').getBoundingClientRect();
+    var avecTrains = vue !== 'navettes' && rt.height > 0;
+    var poser = function (calque, haut, bas, gauche, largeur) {
+      calque.style.top = Math.max(0, haut) + 'px'; calque.style.height = Math.max(0, bas - haut) + 'px';
+      calque.style.left = gauche + 'px'; calque.style.width = largeur + 'px';
+    };
+    var limiteNav = Infinity;
+    if (htmlTr) {
+      if (htmlTr !== dernierVed.trains) { cTr.innerHTML = htmlTr; dernierVed.trains = htmlTr; }
+      // au moins 40 % de la hauteur : la bande doit se voir de loin, même si le panneau des trains est petit
+      var basTr = rt.bottom - rg.top, hautTr = Math.min(rt.top - rg.top, basTr - rg.height * 0.4);
+      poser(cTr, hautTr, basTr, rt.left - rg.left, rt.width);
+      limiteNav = Math.min(limiteNav, hautTr - 10);
+      cTr.hidden = false;
+    } else { cTr.hidden = true; dernierVed.trains = ''; }
+    if (htmlNav) {
+      if (htmlNav !== dernierVed.nav) { cNav.innerHTML = htmlNav; dernierVed.nav = htmlNav; }
+      // toute la partie haute : du haut des navettes jusqu'aux trains de ligne (ou jusqu'en bas sans trains)
+      var basNav = Math.min(avecTrains ? rt.top - rg.top - 10 : rg.height - 10, limiteNav);
+      poser(cNav, rn.top - rg.top, htmlTr ? basNav : Math.max(rn.bottom - rg.top, basNav), rn.left - rg.left, rn.width || rg.width);
+      cNav.hidden = false;
+    } else { cNav.hidden = true; dernierVed.nav = ''; }
+    grille.classList.toggle('ved-nav-on', !!htmlNav);
+    grille.classList.toggle('ved-trains-on', !!htmlTr);
+  }
+
+  // =========================================== fenêtres navettes : 2 ou 3 selon l'heure
+  /**
+   * Un groupe a une grande fenêtre s'il a une navette à faire dans les `horizon` minutes (ou en route, ou terminée il y a
+   * moins de 20 min). Sinon il passe en colonne étroite « au repos » : prochaine navette du jour et coupons de demain /
+   * après-demain (Prochaines navettes) ; sans rien à montrer, il disparaît. Le matin (TDF + TN seulement), 2 fenêtres ;
+   * l'après-midi, ATL revient dès que sa navette approche.
+   */
+  function etatGroupe(g) {
+    if (VED.tousGroupes) return 'actif';
+    var maintenantMs = Date.now(), hor = VED.horizon * 60000, prochaine = null, actif = false;
+    g.lignes.forEach(function (l) {
+      if (l.etat === 'supprime') return;
+      if (l.reel) { var r = dateIso(l.reel); if (r && maintenantMs - r.getTime() < 20 * 60000) actif = true; return; }
+      if (l.partie) { actif = true; return; }
+      var t = dateIso(l.theo);
+      if (!t) return;
+      if (t.getTime() - maintenantMs <= hor) actif = true;
+      if (!prochaine || t < prochaine) prochaine = t;
+    });
+    if (actif) return 'actif';
+    var aDemain = (g.demain && g.demain.length) || (g.ensuite && g.ensuite.lignes && g.ensuite.lignes.length) || g.demainNote;
+    if (prochaine || aDemain) return 'repos';
+    return g.lignes.length ? 'repos' : 'cache';
+  }
+  function blocRepos(g) {
+    var restantes = g.lignes.filter(function (l) { return !l.reel && l.etat !== 'supprime'; });
+    var p = restantes[0];
+    var html = '<div class="nav-tete"><h2>' + esc(g.libelle) + '</h2><span>' + (p ? 'plus tard' : 'terminé') + '</span></div>' +
+      '<div class="repos-info">' + (p ? 'Prochaine : <b>' + esc(p.code) + '</b> à <b>' + esc(hm(p.theo) || '—') + '</b>' + (restantes.length > 1 ? ' <small>(+' + (restantes.length - 1) + ')</small>' : '')
+        : (g.lignes.length ? 'Navettes du jour terminées' : 'Pas de navette aujourd\'hui')) + '</div>';
+    if ((g.demain && g.demain.length) || g.demainNote || (g.ensuite && g.ensuite.lignes && g.ensuite.lignes.length)) html += blocProchaines(g);
+    return html;
+  }
+
+  // ================================================================ DÉMO
+  /** Journée simulée qui tourne en boucle (5 min) : départs et arrivées simultanés, ATL qui arrive en cours de cycle. */
+  function diffusionDemo() {
+    var C = 420, t0 = Math.floor(Date.now() / 1000 / C) * C * 1000;
+    var at = function (s) { return SC.iso(new Date(t0 + s * 1000)); };
+    var passe = function (s) { return Date.now() >= t0 + s * 1000; };
+    var reel = function (s) { return passe(s) ? at(s) : null; };
+    var demain = SC.iso(new Date(Date.now() + 864e5)).slice(0, 10), apres = SC.iso(new Date(Date.now() + 2 * 864e5)).slice(0, 10);
+    var carte = function (code, h, w, v, jour) { return { id: code + jour, code: code, sens: 'D', theo: jour + 'T' + h + ':00', wagons: w, voie: v }; };
+    var ln = function (id, code, sens, theoS, o) { o = o || {}; return Object.assign({ id: id, code: code, sens: sens, theo: at(theoS), hlr: '', annonce: false, reel: null, wagons: 18, voie: 'VF3', partie: null, eta: null, fa: null, etape: null, cale: null, etat: null }, o); };
+    var pass = [{ lib: 'Départ FS', min: 0.3 }, { lib: 'Entrée GB', min: 1 }, { lib: 'Sortie GB', min: 1.6 }];
+    var nav = [
+      { id: 'TDF', libelle: 'TDF', couleur: '#F28C28', parcours: { trajet: 2, passages: pass }, lignes: [
+        ln('fl1', 'FL1', 'A', -200, { reel: at(-190), wagons: 20, voie: 'VR2' }),
+        ln('lf1', 'LF1', 'D', 160, { reel: reel(165), wagons: 22, voie: 'VF3' }),
+        ln('fl2', 'FL2', 'A', 290, { partie: reel(150), eta: at(280), reel: reel(285), wagons: 16, voie: 'VR4' }),
+        ln('lf2', 'LF2', 'D', 990, { wagons: 18, voie: 'VF1' })],
+        demain: [carte('LF1', '06:10', 22, 'VF3', demain), carte('LF2', '09:40', 18, 'VF1', demain), carte('LF3', '13:20', 20, 'VF2', demain)],
+        demainLibelle: 'Demain', ensuite: { libelle: 'Après-demain', lignes: [carte('LF1', '06:10', 21, 'VF3', apres), carte('LF2', '09:40', 19, 'VF1', apres)] } },
+      { id: 'TN', libelle: 'TN', couleur: '#2D8CFF', parcours: { trajet: 2, passages: pass }, lignes: [
+        ln('nl0', 'NL0', 'A', -320, { reel: at(-300), wagons: 21, voie: 'VR1' }),
+        ln('ln1', 'LN1', 'D', 160, { reel: reel(170), wagons: 24, voie: 'VF5' }),
+        ln('nl1', 'NL1', 'A', 230, { partie: reel(110), eta: at(230), reel: reel(235), wagons: 19, voie: 'VR1' }),
+        ln('ln2', 'LN2', 'D', 1200, { wagons: 20, voie: 'VF5' })],
+        demain: [carte('LN1', '07:00', 24, 'VF5', demain), carte('LN2', '14:30', 20, 'VF5', demain)], demainLibelle: 'Demain',
+        ensuite: { libelle: 'Après-demain', lignes: [carte('LN1', '07:00', 23, 'VF5', apres)] } },
+      { id: 'ATL', libelle: 'ATL', couleur: '#F2C230', parcours: { trajet: 2, passages: pass }, lignes: [
+        ln('la2', 'LA2', 'D', 340, { reel: reel(345), wagons: 14, voie: 'VF7' })],
+        demain: [carte('LA1', '08:15', 15, 'VF7', demain)], demainLibelle: 'Demain', ensuite: null }
+    ];
+    var tr = [
+      { groupe: 'NAVILAND', code: 'VNX', nom: 'Vénissieux', parcours: { trajet: 2.5, passages: [] },
+        arrivee: ln('vnx-a', 'VNX', 'A', 250, { numero: '50237', partie: reel(100), eta: at(250), reel: reel(255), voie: 'VR5' }),
+        depart: ln('vnx-d', 'VNX', 'D', 370, { numero: '50238', reel: reel(375), voie: 'VR5', hlr: '' }) },
+      { groupe: 'FEROVERGNE', code: 'CLERMT', nom: 'Clermont-Ferrand', parcours: { trajet: 3, passages: [] },
+        arrivee: null, depart: ln('cf-d', 'CLERMT', 'D', 250, { numero: '52232', reel: reel(260), voie: 'VF2' }) },
+      { groupe: 'NAVILAND', code: 'BDX', nom: 'Bordeaux', parcours: { trajet: 3, passages: [] },
+        arrivee: ln('bdx-a', 'BDX', 'A', 3000, { numero: '50275', voie: 'VR3' }), depart: ln('bdx-d', 'BDX', 'D', 5000, { numero: '50276', voie: 'VR3' }) }
+    ];
+    var jour = SC.cleDate(new Date());
+    return { schema: 1, date: jour, jour: SC.libelleJour(jour), demain: 'Demain', titre: 'Circulations du jour · DÉMO', seuilRetardMinutes: 15,
+      vitesseFlash: 90, alerteSansNouvellesSecondes: 45, version: 1, publieA: SC.iso(new Date()), navettes: nav, trains: tr,
+      flash: { texte: 'DÉMONSTRATION : départs et arrivées simulés en boucle toutes les 7 minutes (navettes en haut, trains en bas).' } };
+  }
+
   // ------------------------------------------------ mises à jour sans clignotement
   /** Remplace seulement ce qui a changé ; une ligne identique garde son animation en cours. */
   function majBloc(el, html) {
@@ -269,20 +491,28 @@
     var grille = $('#v-grille');
     grille.classList.toggle('navettes-seules', vue === 'navettes');
     grille.classList.toggle('trains-seuls', vue === 'trains');
-    var change = false, zone = $('#v-navettes'), nav = d.navettes || [];
+    var change = false, zone = $('#v-navettes');
+    // 2 ou 3 grandes fenêtres selon l'heure : un groupe sans navette proche passe en colonne étroite « au repos »
+    var tous = (d.navettes || []).map(function (g) { return { g: g, e: etatGroupe(g) }; }).filter(function (x) { return x.e !== 'cache'; });
+    if (!tous.some(function (x) { return x.e === 'actif'; })) tous.forEach(function (x) { if (x.g.lignes.length) x.e = 'actif'; });
+    var nav = tous.map(function (x) { return x.g; });
     zone.style.setProperty('--n', Math.max(1, nav.length));
+    zone.style.gridTemplateColumns = tous.map(function (x) { return x.e === 'repos' ? 'minmax(0, .55fr)' : 'minmax(0, 1fr)'; }).join(' ') || '';
     while (zone.children.length > nav.length) zone.removeChild(zone.lastChild);
-    nav.forEach(function (g, i) {
-      var el = zone.children[i];
-      if (!el) { el = document.createElement('div'); el.className = 'nav'; zone.appendChild(el); }
+    tous.forEach(function (x, i) {
+      var g = x.g, el = zone.children[i];
+      if (!el) { el = document.createElement('div'); zone.appendChild(el); }
+      var cls = 'nav' + (x.e === 'repos' ? ' repos' : '');
+      if (el.className !== cls) { el.className = cls; el.__html = null; }
       couleursGroupe(el, g.couleur);
-      change = majBloc(el, blocNavettes(g)) || change;
+      change = majBloc(el, x.e === 'repos' ? blocRepos(g) : blocNavettes(g)) || change;
     });
     var trains = $('#v-trains');
     trains.className = 'trains panneau';
     change = majBloc(trains, blocTrains(d.trains || [])) || change;
     majFlash(d.flash);
     if (change) ajuster();
+    majVedettes();
   }
 
   // ----------------------------------------------------------- flash info
@@ -367,7 +597,7 @@
       try { a.startTime = 0; } catch (e) { /* horloge de la page indisponible : départ immédiat */ }
     }
   }
-  window.addEventListener('resize', function () { etat.flash = '__'; ajuster(); if (etat.d) majFlash(etat.d.flash); });
+  window.addEventListener('resize', function () { etat.flash = '__'; ajuster(); if (etat.d) majFlash(etat.d.flash); dernierVed.nav = dernierVed.trains = ''; majVedettes(); });
 
   // ------------------------------------------------------- état de liaison
   function majLiaison() {
@@ -417,7 +647,8 @@
   document.addEventListener('visibilitychange', function () { if (!document.hidden) reveil(); });
 
   tic(); setInterval(tic, 1000);
-  charger(); setInterval(charger, source ? 5000 : 3000);
+  charger(); setInterval(charger, DEMO ? 2000 : (source ? 5000 : 3000));
+  setInterval(majVedettes, 1000);
   setInterval(majLiaison, 2000);
   setInterval(function () { if (etat.d) rendre(); }, 10000);
   verifierVersion(); setInterval(verifierVersion, 300000);

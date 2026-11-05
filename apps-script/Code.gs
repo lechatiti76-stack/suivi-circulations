@@ -15,7 +15,7 @@
  */
 
 const CLE = 'CHANGER-CE-MOT-DE-PASSE';
-const VERSION = '2.3.0';
+const VERSION = '2.4.0';
 const FUSEAU = 'Europe/Paris';
 const NOM_DOSSIER = 'Suivi des circulations - données';
 
@@ -75,9 +75,14 @@ function suiviTrains_(date) {
   let ss;
   try { ss = SpreadsheetApp.openById(id); }
   catch (e) { return { status: 502, data: { erreur: 'classeur Suivi trains inaccessible : vérifiez l\'adresse et que ce compte Google peut l\'ouvrir' } }; }
-  const out = { date: date, lu: maintenant_(), navettes: [], journal: [] };
+  const out = { date: date, lu: maintenant_(), navettes: [], journal: [], coupons: [], couponsDemain: [] };
   lignesDuJour_(ss.getSheetByName('Navettes'), date).forEach(r => out.navettes.push({ type: r[1], code: r[2], theo: r[4], reel: r[5] }));
   lignesDuJour_(ss.getSheetByName('Journal'), date).forEach(r => out.journal.push({ train: r[1], etape: r[2], theo: r[3], reel: r[4] }));
+  // coupons navettes saisis dans le Suivi trains (onglet Coupons) : la journée et le lendemain
+  const coupon = r => ({ navette: r[1], ligne: r[2], numero: r[3], site: r[4], dateCoupon: r[5], wagons: r[6], note: r[7] });
+  const demain = Utilities.formatDate(new Date(new Date(date + 'T12:00:00').getTime() + 864e5), FUSEAU, 'yyyy-MM-dd');
+  lignesDuJour_(ss.getSheetByName('Coupons'), date).forEach(r => out.coupons.push(coupon(r)));
+  lignesDuJour_(ss.getSheetByName('Coupons'), demain).forEach(r => out.couponsDemain.push(coupon(r)));
   cache.put(cle, JSON.stringify(out), 8);
   return ok_(out);
 }

@@ -25,6 +25,7 @@
     <button type="button" id="b-raccourcis" hidden>Raccourcis ⬇</button>
     <button type="button" id="b-flash">Flash info</button>
     <button type="button" id="b-mails">Mails<span class="compteur" id="c-mails" hidden>0</span></button>
+    <button type="button" id="b-coupons" class="b-coupons" title="Coupons navettes saisis dans le Suivi trains (onglet Coupons)">🎫 Coupons<span class="compteur" id="c-coupons" hidden>0</span></button>
     <button type="button" id="b-stats">Statistiques</button>
     <button type="button" id="b-planning">Planning</button>
     <button type="button" id="b-params">Paramètres</button>
@@ -173,6 +174,16 @@
 </dialog>
 
 <!-- Statistiques -->
+<dialog id="d-coupons" style="width:min(1100px, calc(100vw - 32px))">
+  <div>
+    <div class="dlg-tete"><h2>🎫 Coupons navettes</h2>
+      <div class="onglets" role="tablist"><button type="button" class="onglet" data-cp="jour" aria-selected="true">Aujourd'hui</button><button type="button" class="onglet" data-cp="demain" aria-selected="false">Demain</button></div>
+      <button type="button" class="bouton" data-fermer>Fermer</button></div>
+    <div class="dlg-corps" id="cp-corps"></div>
+    <div class="dlg-pied"><span class="gauche" id="cp-pied">Repris du Suivi trains (bouton 🎫 Coupons), relu toutes les 10 secondes.</span></div>
+  </div>
+</dialog>
+
 <dialog id="d-stats">
   <div>
     <div class="dlg-tete"><h2>Statistiques de la journée</h2><button type="button" class="bouton" data-fermer>Fermer</button></div>

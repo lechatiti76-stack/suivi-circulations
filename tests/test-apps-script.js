@@ -141,7 +141,7 @@ test('fichiers CSV avec BOM dans Drive › archives › année, statistiques san
 });
 
 console.log('Suivi trains');
-test('lecture des onglets Navettes et Journal du jour, adresse vérifiée', function () {
+test('lecture des onglets Navettes, Journal et Coupons du jour, adresse vérifiée', function () {
   var g = simulateur.charger('secret-essai');
   g.appel('PUT', '/api/parametres', JSON.stringify({ voies: ['vf1'] }));
   assert.strictEqual(g.appel('POST', '/api/suivi-trains', JSON.stringify({ date: '2026-10-25' })).status, 400);
@@ -154,11 +154,20 @@ test('lecture des onglets Navettes et Journal du jour, adresse vérifiée', func
   var jr = ss.insertSheet('Journal');
   jr.appendRow(['Date', 'Train', 'Étape', 'Heure théorique', 'Heure réelle']);
   jr.appendRow(['2026-10-25', '50238', 'Mise en tête', '16:56', '16:58:12']);
+  var cp = ss.insertSheet('Coupons');
+  cp.appendRow(['Date', 'Navette', 'Ligne', 'N° coupon', 'Code site', 'Date coupon', 'Wagons', 'Note', 'Mis à jour le']);
+  cp.appendRow(['2026-10-25', 'LF1', 1, '02', 'LHTTDF', '2410', 18, '', '']);
+  cp.appendRow(['2026-10-25', 'LF1', 2, '07', 'LHTTDF', '2410', 4, '', '']);
+  cp.appendRow(['2026-10-26', 'LN1', 1, '11', 'LHTTMS', '2510', 20, '', '']);
+  cp.appendRow(['2026-10-24', 'LA1', 1, '01', 'LHTATL', '2310', 9, '', '']);
   g.appel('PUT', '/api/parametres', JSON.stringify({ voies: ['vf1'], suiviTrains: { classeur: 'https://docs.google.com/spreadsheets/d/' + id + '/edit#gid=0' } }));
   var r = g.appel('POST', '/api/suivi-trains', JSON.stringify({ date: '2026-10-25' }));
   assert.strictEqual(r.status, 200);
   assert.deepStrictEqual(r.data.navettes.map(function (x) { return x.code + ' ' + x.reel; }), ['FL1 14:05', 'LF2 15:34']);
   assert.deepStrictEqual(r.data.journal, [{ train: '50238', etape: 'Mise en tête', theo: '16:56', reel: '16:58:12' }]);
+  // coupons navettes du Suivi trains : la journée et le lendemain
+  assert.deepStrictEqual(r.data.coupons.map(function (x) { return x.navette + ' ' + x.numero + ' ' + x.site + ' ' + x.dateCoupon + ' ' + x.wagons; }), ['LF1 02 LHTTDF 2410 18', 'LF1 07 LHTTDF 2410 4']);
+  assert.deepStrictEqual(r.data.couponsDemain.map(function (x) { return x.navette + ' ' + x.numero; }), ['LN1 11']);
   g.appel('PUT', '/api/parametres', JSON.stringify({ voies: ['vf1'], suiviTrains: { classeur: 'https://docs.google.com/spreadsheets/d/inconnu0123456789abcdef/edit' } }));
   assert.strictEqual(g.appel('POST', '/api/suivi-trains', JSON.stringify({ date: '2026-10-25' })).status, 502);
   assert.strictEqual(g.appel('POST', '/api/suivi-trains', JSON.stringify({ date: 'hier' })).status, 400);

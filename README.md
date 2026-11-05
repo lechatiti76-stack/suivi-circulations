@@ -74,6 +74,19 @@ Copier chaque fichier sur le bureau du poste concerné. `Ecrans.bat` ouvre la pa
 - **Statistiques** : LHTE (locom, loco), locosup et manœuvres NRS, chacun en HLP ou chargé, le matin, l'après-midi et sur la journée (coupure réglable dans Paramètres).
 - **Clôturer** : archives CSV dans Drive › archives › année, ligne ajoutée à l'onglet Statistiques du registre (les colonnes NRS sont ajoutées en fin de ligne, serveur 2.3.0).
 
+## Écrans dynamiques (vedettes) et démonstration
+
+- **Navettes en vedette** : une navette qui part ou arrive dans les **5 prochaines minutes** (ou qui vient de le faire, pendant **1 minute**) prend toute la partie haute de l'écran, dans la couleur de son groupe (TDF orange, TN bleu, ATL jaune) : code géant, « Départ dans 2 min 30 s » / « Arrive dans… » / « ✓ Partie 10:02 », wagons et voie, train animé qui part ou arrive. Plusieurs en même temps : le haut se partage (4 au plus côte à côte). Ensuite, retour aux fenêtres habituelles.
+- **Trains de ligne en vedette** : même principe en bas de l'écran, une bande animée par départ ou arrivée (N°, EF, ville, état, voie), empilées s'il y en a plusieurs.
+- **2 ou 3 fenêtres** : un groupe sans navette dans les 3 prochaines heures passe en colonne étroite (prochaine navette du jour + Prochaines navettes de demain et après-demain). Le matin, TDF et TN en grand ; ATL revient en grand quand sa navette approche.
+- Réglages dans l'adresse de la page Écrans : `avant=5` (minutes avant), `apres=1` (minutes après), `horizon=180` (minutes), `groupes=tous` (toujours 3 fenêtres), `vedette=0` (désactiver). Exemple : `visuel.html?source=…&avant=4&apres=2`.
+- **Démonstration** (sans serveur) : `https://lechatiti76-stack.github.io/suivi-circulations/visuel.html?demo=1` : une journée simulée qui tourne en boucle toutes les 7 minutes (départs simultanés LF1 + LN1, arrivées, train qui arrive pendant qu'un autre part, ATL qui passe de la petite colonne à la grande fenêtre).
+
+## Coupons navettes (repris du Suivi trains)
+
+- Les coupons saisis dans le Suivi trains (bouton 🎫 Coupons) partent dans l'onglet **Coupons** de son classeur (adresse du Web App dans les Réglages du Suivi trains, `apps-script/Code.gs` du Suivi trains à redéployer).
+- La saisie les relit avec le reste toutes les 10 secondes (serveur 2.4.0) : bouton **🎫 Coupons** (aujourd'hui et demain, par site et par navette, totaux de wagons) et pastille « 🎫 2 · 22 wg » sous chaque départ de navette concerné. Lecture seule : les coupons se saisissent dans le Suivi trains.
+
 ## Modifier l'application
 
 - **Pages** (`*.html`, `*.js`, `*.css`) : modifier sur GitHub et valider ; le site est à jour une minute plus tard. Recharger les pages avec Ctrl+F5.
