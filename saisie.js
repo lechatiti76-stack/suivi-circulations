@@ -619,6 +619,12 @@
     var t = maintenant(), nom = famille(c) === 'navette' ? ' partie' : ' en approche';
     modifier(retirer ? c.code + nom + ' : retiré' : c.code + nom + ' à ' + hm(t), 'circulation.partie', function (j) { var cc = circDe(j, id); cc.partie = retirer ? null : t; cc.eta = null; });
   }
+  /** Navette au départ annoncée sur les écrans TV (bouton ▲) ; un second clic retire l'annonce. */
+  function annoncerDepart(id) {
+    var c = circDe(app.journee, id); if (!c) return;
+    var t = maintenant();
+    modifier(c.annonceTV ? c.code + ' : annonce de départ retirée' : c.code + ' : départ annoncé à ' + hm(t), 'circulation.annonce', function (j) { var cc = circDe(j, id); cc.annonceTV = cc.annonceTV ? null : t; });
+  }
   /** Train arrivé au faisceau FA, pas encore chez nous (un second clic retire l'heure). */
   function marquerFA(id) {
     var c = circDe(app.journee, id); if (!c) return;
@@ -790,6 +796,8 @@
         : bouton('partie', 'En approche', 'Parti de FA vers chez nous (délai du Suivi trains)'));
       b.push(bouton('reel', 'Arrivée', 'Arrivé chez nous'));
     } else {
+      // navette au départ : ▲ annonce le départ sur les écrans TV (« Départ imminent » en grand), un second clic le retire
+      if (famille(c) === 'navette') b.push(bouton('annoncer', c.annonceTV ? '▲ ' + hm(c.annonceTV) : '▲', c.annonceTV ? 'Retirer l\'annonce de départ des écrans' : 'Annoncer le départ sur les écrans TV (Départ imminent)', 'triangle' + (c.annonceTV ? ' actif' : '')));
       b.push(bouton('reel', 'Parti'));
       // étape ou « calé » venus du Suivi trains : effaçables ici (ils restent effacés jusqu'à une nouvelle heure)
       if (c.etape || c.cale) b.push(bouton('effacer-etape', '↺', 'Effacer « ' + (c.cale ? 'Calé' : c.etape.lib) + ' » des écrans'));
@@ -1495,6 +1503,7 @@
       else if (a === 'partie') marquerPartie(id);
       else if (a === 'annuler-partie') marquerPartie(id, true);
       else if (a === 'fa') marquerFA(id);
+      else if (a === 'annoncer') annoncerDepart(id);
       else if (a === 'effacer-etape') modifier(circDe(app.journee, id).code + ' : étape du Suivi trains effacée', 'circulation.etape', function (j) { var cc = circDe(j, id); cc.etape = null; cc.cale = null; });
       else if (a === 'nonprevu') basculer(id, 'etat', 'nonprevu', 'Non prévue / rétablie');
       else if (a === 'suppr') { basculer(id, 'etat', 'supprime', 'Suppression / rétablissement'); }

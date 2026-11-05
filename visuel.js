@@ -247,33 +247,42 @@
     actif: !/[?&]vedette=0\b/.test(location.search),
     avant: paramNum('avant', DEMO ? 1.5 : 5),
     apres: paramNum('apres', DEMO ? 0.5 : 1),
+    apresDepart: paramNum('apresDepart', 10),
     horizon: paramNum('horizon', DEMO ? 2.5 : 180),
     tousGroupes: /[?&]groupes=tous\b/.test(location.search)
   };
   function dateIso(s) { var p = /^(\d{4})-(\d\d)-(\d\d)T(\d\d):(\d\d)(?::(\d\d))?/.exec(s || ''); return p ? new Date(+p[1], +p[2] - 1, +p[3], +p[4], +p[5], +(p[6] || 0)) : null; }
   function secAvant(cible) { var d = dateIso(cible); return d ? (d.getTime() - Date.now()) / 1000 : null; }
-  /** Phase « vedette » d'une ligne (navette ou train), ou null. */
+  /**
+   * Phase « vedette » d'une ligne (navette ou train), ou null. Seulement sur des événements réels, jamais sur l'heure
+   * théorique :
+   * - arrivée : en route (partie de son terminal / de FA, 1 min) puis en approche (5 dernières minutes avant l'arrivée
+   *   estimée), jusqu'à l'arrivée ;
+   * - départ d'un train : dès « Annoncé Bon au départ » reçu du Suivi trains (ou étapes suivantes) ;
+   * - départ d'une navette : dès le ▲ « annoncer le départ » de la saisie ;
+   * - une fois parti, « ✓ Parti » quelques secondes (apresDepart, 10 s) puis retour à l'écran principal.
+   */
+  var BON_DEPART = /bon au d[eé]part|r[eé]gulateur|ouverture du signal/i;
   function phaseVedette(l, parcours) {
     if (!l || l.etat === 'supprime' || l.etat === 'deja') return null;
-    var arr = l.sens !== 'D', avant = VED.avant * 60, apres = VED.apres * 60;
-    if (l.reel) { var depuis = -secAvant(l.reel); return depuis >= 0 && depuis <= apres ? { cle: 'fait', heure: l.reel, sec: depuis } : null; }
+    var arr = l.sens !== 'D', avant = VED.avant * 60;
+    if (l.reel) {
+      var depuis = -secAvant(l.reel), duree = arr ? VED.apres * 60 : VED.apresDepart;
+      return depuis >= 0 && depuis <= duree ? { cle: 'fait', heure: l.reel, sec: depuis } : null;
+    }
     if (arr) {
-      if (l.partie) {
-        var trajet = ((parcours && parcours.trajet) || 35) * 60;
-        var eta = l.eta || SC.iso(new Date(dateIso(l.partie).getTime() + trajet * 1000));
-        var reste = secAvant(eta), depuisPartie = -secAvant(l.partie);
-        if (reste <= avant && reste >= -120) return { cle: 'approche', heure: eta, sec: reste };
-        if (depuisPartie >= 0 && depuisPartie <= apres) return { cle: 'partie', heure: l.partie, sec: reste, eta: eta };
-        return null;
-      }
-      if (l.annonce) return { cle: 'approche', heure: l.theo, sec: l.theo ? secAvant(l.theo) : null };
+      if (!l.partie) return null;
+      var trajet = ((parcours && parcours.trajet) || 35) * 60;
+      var eta = l.eta || SC.iso(new Date(dateIso(l.partie).getTime() + trajet * 1000));
+      var reste = secAvant(eta), depuisPartie = -secAvant(l.partie);
+      if (reste <= avant && reste >= -15 * 60) return { cle: 'approche', heure: eta, sec: reste };
+      if (depuisPartie >= 0 && depuisPartie <= VED.apres * 60) return { cle: 'partie', heure: l.partie, sec: reste, eta: eta };
       return null;
     }
     if (l.cale) return null;
-    if (l.annonce) return { cle: 'bientot', heure: l.theo, sec: l.theo ? secAvant(l.theo) : 0 };
-    if (!l.theo) return null;
-    var s = secAvant(l.theo);
-    return s <= avant && s >= -120 ? { cle: 'bientot', heure: l.theo, sec: s } : null;
+    if (l.annonceTV) return { cle: 'bientot', heure: l.annonceTV, sec: null, motif: 'Départ annoncé à ' + hm(l.annonceTV) };
+    if (l.etape && BON_DEPART.test(String(l.etape.lib || ''))) return { cle: 'bientot', heure: null, sec: null, motif: l.etape.lib + (l.etape.h ? ' à ' + l.etape.h : '') };
+    return null;
   }
   function compte(sec) {
     if (sec == null) return '';
@@ -286,8 +295,8 @@
   function textesVedette(ph, arr) {
     if (ph.cle === 'fait') return { gros: arr ? 'Arrivée' : (ph.train ? 'Parti' : 'Partie'), sous: hm(ph.heure), fait: true };
     if (ph.cle === 'partie') return { gros: 'En route', sous: 'arrivée prévue ' + hm(ph.eta) + ' · dans ' + compte(ph.sec) };
-    if (arr) return ph.sec != null && ph.sec > 0 ? { gros: 'Arrive dans', sous: compte(ph.sec) } : { gros: 'Arrivée imminente', sous: ph.heure ? 'prévue ' + hm(ph.heure) : '' };
-    return ph.sec != null && ph.sec > 0 ? { gros: 'Départ dans', sous: compte(ph.sec) } : { gros: 'Départ imminent', sous: ph.heure ? 'prévu ' + hm(ph.heure) : '' };
+    if (arr) return ph.sec != null && ph.sec > 0 ? { gros: 'Arrive dans', sous: compte(ph.sec) } : { gros: 'Arrivée imminente', sous: ph.heure ? 'estimée ' + hm(ph.heure) : '' };
+    return { gros: 'Départ imminent', sous: ph.motif || '' };
   }
   var SVG_TRAIN = '<svg class="ved-loco" viewBox="0 0 160 46" aria-hidden="true"><rect x="2" y="8" width="96" height="28" rx="5"/><rect x="100" y="12" width="56" height="24" rx="4"/>' +
     '<path d="M98 36h4M2 36h156" stroke="currentColor" stroke-width="2"/><rect x="10" y="14" width="18" height="10" rx="2" class="vit"/><rect x="34" y="14" width="18" height="10" rx="2" class="vit"/>' +
@@ -295,21 +304,22 @@
   /** Carré géant d'une navette en vedette. */
   function tuileNavette(v) {
     var l = v.l, arr = l.sens !== 'D', t = textesVedette(v.ph, arr);
-    var detail = [l.wagons != null ? l.wagons + ' wagons' : '', l.voie ? 'voie ' + l.voie : '', l.numero ? 'n° ' + l.numero : ''].filter(Boolean).join(' · ');
-    var urgent = !t.fait && v.ph.sec != null && v.ph.sec <= 60;
+    var detail = [l.wagons != null ? l.wagons + ' wagons' : '', l.numero ? 'n° ' + l.numero : ''].filter(Boolean).join(' · ');
+    var urgent = !t.fait && (v.ph.sec == null ? !arr : v.ph.sec <= 60);
     return '<div class="ved-tuile ' + (arr ? 'arr' : 'dep') + ' ' + v.ph.cle + (urgent ? ' urgent' : '') + '" style="--c:' + v.g.couleur + ';--ce:' + encreSur(rvb(v.g.couleur)) + '">' +
       '<div class="ved-groupe">' + esc(v.g.libelle) + '</div>' +
       '<div class="ved-code">' + esc(l.code) + '</div>' +
       '<div class="ved-sens">' + (arr ? '▼ Arrivée' : '▲ Départ') + (l.theo ? ' · prévu ' + hm(l.theo) : '') + '</div>' +
       '<div class="ved-gros">' + (t.fait ? '✓ ' : '') + esc(t.gros) + '</div>' +
       '<div class="ved-sous">' + esc(t.sous) + '</div>' +
+      (l.voie ? '<div class="ved-voie"><small>Voie</small>' + esc(l.voie) + '</div>' : '') +
       (detail ? '<div class="ved-detail">' + esc(detail) + '</div>' : '') +
       '<div class="ved-rail ' + (arr ? 'entre' : 'sort') + (t.fait ? ' fini' : '') + '">' + SVG_TRAIN + '</div></div>';
   }
   /** Bande animée d'un train de ligne en vedette. */
   function bandeTrain(v) {
     var l = v.l, arr = l.sens !== 'D', t = textesVedette(v.ph, arr), c = couleurEF(v.t.groupe);
-    var urgent = !t.fait && v.ph.sec != null && v.ph.sec <= 60;
+    var urgent = !t.fait && (v.ph.sec == null ? !arr : v.ph.sec <= 60);
     return '<div class="ved-bande ' + (arr ? 'arr' : 'dep') + ' ' + v.ph.cle + (urgent ? ' urgent' : '') + '" style="--c:' + c + '">' +
       '<div class="ved-b-sens">' + (arr ? '▼<b>Arrivée</b>' : '▲<b>Départ</b>') + '</div>' +
       '<div class="ved-b-id"><span class="ved-b-num">' + esc(l.numero || v.t.code) + '</span><span class="ved-b-ef">' + esc(v.t.groupe) + '</span></div>' +
@@ -413,35 +423,36 @@
     var at = function (s) { return SC.iso(new Date(t0 + s * 1000)); };
     var passe = function (s) { return Date.now() >= t0 + s * 1000; };
     var reel = function (s) { return passe(s) ? at(s) : null; };
+    var bon = function (s) { return passe(s) ? { lib: 'Annoncé Bon au départ', h: SC.hm(at(s)) } : null; };
     var demain = SC.iso(new Date(Date.now() + 864e5)).slice(0, 10), apres = SC.iso(new Date(Date.now() + 2 * 864e5)).slice(0, 10);
     var carte = function (code, h, w, v, jour) { return { id: code + jour, code: code, sens: 'D', theo: jour + 'T' + h + ':00', wagons: w, voie: v }; };
-    var ln = function (id, code, sens, theoS, o) { o = o || {}; return Object.assign({ id: id, code: code, sens: sens, theo: at(theoS), hlr: '', annonce: false, reel: null, wagons: 18, voie: 'VF3', partie: null, eta: null, fa: null, etape: null, cale: null, etat: null }, o); };
+    var ln = function (id, code, sens, theoS, o) { o = o || {}; return Object.assign({ id: id, code: code, sens: sens, theo: at(theoS), hlr: '', annonce: false, annonceTV: null, reel: null, wagons: 18, voie: 'VF3', partie: null, eta: null, fa: null, etape: null, cale: null, etat: null }, o); };
     var pass = [{ lib: 'Départ FS', min: 0.3 }, { lib: 'Entrée GB', min: 1 }, { lib: 'Sortie GB', min: 1.6 }];
     var nav = [
       { id: 'TDF', libelle: 'TDF', couleur: '#F28C28', parcours: { trajet: 2, passages: pass }, lignes: [
         ln('fl1', 'FL1', 'A', -200, { reel: at(-190), wagons: 20, voie: 'VR2' }),
-        ln('lf1', 'LF1', 'D', 160, { reel: reel(165), wagons: 22, voie: 'VF3' }),
+        ln('lf1', 'LF1', 'D', 160, { annonceTV: passe(165) ? null : reel(110), reel: reel(165), wagons: 22, voie: 'VF3' }),
         ln('fl2', 'FL2', 'A', 290, { partie: reel(150), eta: at(280), reel: reel(285), wagons: 16, voie: 'VR4' }),
         ln('lf2', 'LF2', 'D', 990, { wagons: 18, voie: 'VF1' })],
         demain: [carte('LF1', '06:10', 22, 'VF3', demain), carte('LF2', '09:40', 18, 'VF1', demain), carte('LF3', '13:20', 20, 'VF2', demain)],
         demainLibelle: 'Demain', ensuite: { libelle: 'Après-demain', lignes: [carte('LF1', '06:10', 21, 'VF3', apres), carte('LF2', '09:40', 19, 'VF1', apres)] } },
       { id: 'TN', libelle: 'TN', couleur: '#2D8CFF', parcours: { trajet: 2, passages: pass }, lignes: [
         ln('nl0', 'NL0', 'A', -320, { reel: at(-300), wagons: 21, voie: 'VR1' }),
-        ln('ln1', 'LN1', 'D', 160, { reel: reel(170), wagons: 24, voie: 'VF5' }),
+        ln('ln1', 'LN1', 'D', 160, { annonceTV: passe(170) ? null : reel(115), reel: reel(170), wagons: 24, voie: 'VF5' }),
         ln('nl1', 'NL1', 'A', 230, { partie: reel(110), eta: at(230), reel: reel(235), wagons: 19, voie: 'VR1' }),
         ln('ln2', 'LN2', 'D', 1200, { wagons: 20, voie: 'VF5' })],
         demain: [carte('LN1', '07:00', 24, 'VF5', demain), carte('LN2', '14:30', 20, 'VF5', demain)], demainLibelle: 'Demain',
         ensuite: { libelle: 'Après-demain', lignes: [carte('LN1', '07:00', 23, 'VF5', apres)] } },
       { id: 'ATL', libelle: 'ATL', couleur: '#F2C230', parcours: { trajet: 2, passages: pass }, lignes: [
-        ln('la2', 'LA2', 'D', 340, { reel: reel(345), wagons: 14, voie: 'VF7' })],
+        ln('la2', 'LA2', 'D', 340, { annonceTV: passe(345) ? null : reel(300), reel: reel(345), wagons: 14, voie: 'VF7' })],
         demain: [carte('LA1', '08:15', 15, 'VF7', demain)], demainLibelle: 'Demain', ensuite: null }
     ];
     var tr = [
       { groupe: 'NAVILAND', code: 'VNX', nom: 'Vénissieux', parcours: { trajet: 2.5, passages: [] },
         arrivee: ln('vnx-a', 'VNX', 'A', 250, { numero: '50237', partie: reel(100), eta: at(250), reel: reel(255), voie: 'VR5' }),
-        depart: ln('vnx-d', 'VNX', 'D', 370, { numero: '50238', reel: reel(375), voie: 'VR5', hlr: '' }) },
+        depart: ln('vnx-d', 'VNX', 'D', 370, { numero: '50238', etape: passe(375) ? null : bon(330), reel: reel(375), voie: 'VR5', hlr: '' }) },
       { groupe: 'FEROVERGNE', code: 'CLERMT', nom: 'Clermont-Ferrand', parcours: { trajet: 3, passages: [] },
-        arrivee: null, depart: ln('cf-d', 'CLERMT', 'D', 250, { numero: '52232', reel: reel(260), voie: 'VF2' }) },
+        arrivee: null, depart: ln('cf-d', 'CLERMT', 'D', 250, { numero: '52232', etape: passe(260) ? null : bon(200), reel: reel(260), voie: 'VF2' }) },
       { groupe: 'NAVILAND', code: 'BDX', nom: 'Bordeaux', parcours: { trajet: 3, passages: [] },
         arrivee: ln('bdx-a', 'BDX', 'A', 3000, { numero: '50275', voie: 'VR3' }), depart: ln('bdx-d', 'BDX', 'D', 5000, { numero: '50276', voie: 'VR3' }) }
     ];

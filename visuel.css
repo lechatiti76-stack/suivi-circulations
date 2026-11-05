@@ -223,6 +223,10 @@ html, body { margin: 0; height: 100%; background: var(--fond); color: var(--encr
   background: rgba(0, 0, 0, .78); color: #fff; padding: .35rem 1.2rem; border-radius: .6rem; }
 .ved-sous { font-size: clamp(1.8rem, 5vh, 3.6rem); font-weight: 800; font-variant-numeric: tabular-nums; }
 .ved-detail { font-size: 1.5rem; font-weight: 700; opacity: .9; }
+/* voie de départ (saisie) en grand sur le carré */
+.ved-voie { display: inline-flex; align-items: baseline; gap: .6rem; margin-top: .3rem; padding: .15rem 1rem; border-radius: .5rem; background: rgba(0, 0, 0, .78); color: #fff;
+  font-size: clamp(2rem, 5.5vh, 4rem); font-weight: 800; letter-spacing: .04em; line-height: 1.1; }
+.ved-voie small { font-size: .45em; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; opacity: .8; }
 .ved-tuile.fait .ved-gros { background: #0E7A3E; }
 .ved-tuile.urgent .ved-gros { animation: clignRouge 1.1s steps(1, end) infinite; }
 /* plus de 2 carrés : textes un peu plus petits */
@@ -282,3 +286,18 @@ html, body { margin: 0; height: 100%; background: var(--fond); color: var(--encr
   .ved-tuile, .ved-bande, .ved-calque { animation: none; }
   .ved-rail .ved-loco { animation: none !important; left: calc(50% - 4.7rem); }
 }
+
+/* Carrés en vedette : tout se dimensionne sur la taille du carré (unités de conteneur), rien n'est coupé
+   même à 3 ou 4 carrés, ou quand les trains prennent aussi de la place en bas. */
+.ved-tuile { container-type: size; padding: 3cqh 3cqw 2cqh; gap: .6cqh; }
+.ved-tuile .ved-groupe { font-size: min(1.4rem, 5cqh); top: 2cqh; left: 3cqw; }
+.ved-tuile .ved-code { font-size: min(13vh, 21cqh, 24cqw); }
+.ved-tuile .ved-sens { font-size: min(1.7rem, 5.5cqh, 5cqw); }
+.ved-tuile .ved-gros { font-size: min(4.6rem, 10cqh, 9cqw); margin-top: .5cqh; }
+.ved-tuile .ved-sous { font-size: min(3.6rem, 8cqh, 7cqw); line-height: 1.05; }
+.ved-tuile .ved-voie { font-size: min(4rem, 9cqh, 9cqw); margin-top: .5cqh; }
+.ved-tuile .ved-detail { font-size: min(1.5rem, 4.5cqh, 4.5cqw); }
+.ved-tuile .ved-rail { height: min(3.2rem, 9cqh); margin-top: .5cqh; flex: none; }
+.ved-tuile .ved-loco { height: 80%; }
+.ved-tuiles[style*="--n:3"] .ved-code, .ved-tuiles[style*="--n:4"] .ved-code { font-size: min(10vh, 18cqh, 24cqw); }
+.ved-tuiles[style*="--n:4"] .ved-gros { font-size: min(3rem, 9cqh, 9cqw); }

@@ -307,6 +307,8 @@
       eta: c.sens !== 'D' && c.etat !== 'supprime' && c.partie ? (c.eta || null) : null,
       fa: c.sens !== 'D' && !d.reel && c.etat !== 'supprime' ? (c.fa || null) : null,
       etape: c.sens === 'D' && !d.reel && c.etat !== 'supprime' ? (c.etape || null) : null,
+      // départ annoncé à la main dans la saisie (bouton ▲) : « Départ imminent » en grand sur les écrans
+      annonceTV: c.sens === 'D' && !d.reel && c.etat !== 'supprime' ? (c.annonceTV || null) : null,
       cale: c.sens === 'D' && !d.reel && c.etat !== 'supprime' ? (c.cale || null) : null,
       etat: c.etat === 'supprime' || c.etat === 'deja' ? c.etat : null
     };
@@ -476,7 +478,7 @@
     // train déclaré calé dans le Suivi trains : prioritaire, dernière étape en dessous
     if (!arr && l.cale) return { cle: 'cale', libelle: 'Calé à ' + hm(l.cale), sous: l.etape && l.etape.lib ? l.etape.lib + ' ' + (l.etape.h || '') : '' };
     if (l.etat === 'deja') return { cle: 'deja', libelle: 'Déjà là' };
-    if (l.annonce) return { cle: 'imminent', libelle: arr ? 'Arrivée imminente' : 'Départ imminent' };
+    if (l.annonce || (!arr && l.annonceTV)) return { cle: 'imminent', libelle: arr ? 'Arrivée imminente' : 'Départ imminent' };
     if (arr && l.partie) {
       // heure d'arrivée estimée : celle du Suivi trains si elle est connue, sinon départ + durée du parcours
       var eta = l.eta || iso(new Date(lireDate(l.partie).getTime() + ((parcours && parcours.trajet) || 35) * 60000));

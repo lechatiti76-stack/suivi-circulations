@@ -76,10 +76,14 @@ Copier chaque fichier sur le bureau du poste concerné. `Ecrans.bat` ouvre la pa
 
 ## Écrans dynamiques (vedettes) et démonstration
 
-- **Navettes en vedette** : une navette qui part ou arrive dans les **5 prochaines minutes** (ou qui vient de le faire, pendant **1 minute**) prend toute la partie haute de l'écran, dans la couleur de son groupe (TDF orange, TN bleu, ATL jaune) : code géant, « Départ dans 2 min 30 s » / « Arrive dans… » / « ✓ Partie 10:02 », wagons et voie, train animé qui part ou arrive. Plusieurs en même temps : le haut se partage (4 au plus côte à côte). Ensuite, retour aux fenêtres habituelles.
-- **Trains de ligne en vedette** : même principe en bas de l'écran, une bande animée par départ ou arrivée (N°, EF, ville, état, voie), empilées s'il y en a plusieurs.
+- **Navettes et trains en vedette**, seulement sur des événements réels (jamais sur l'heure théorique) :
+  - **arrivées** (navettes et trains) : quand elles sont **en route** (Partie / En approche) puis dans les 5 dernières minutes avant l'arrivée estimée, jusqu'à l'arrivée ;
+  - **départ d'un train** : « Départ imminent » dès que **Annoncé Bon au départ** est validé dans le Suivi trains ;
+  - **départ d'une navette** : « Départ imminent » dès le bouton **▲** de la saisie (sur la ligne de départ de la navette ; un second clic retire l'annonce) ;
+  - une fois **Parti**, « ✓ Partie » 10 secondes puis retour à l'écran principal.
+  Le carré de la navette (couleur du groupe) prend toute la partie haute, avec la **voie de départ saisie** en grand ; les trains ont une bande animée en bas. Plusieurs en même temps se partagent la place.
 - **2 ou 3 fenêtres** : un groupe sans navette dans les 3 prochaines heures passe en colonne étroite (prochaine navette du jour + Prochaines navettes de demain et après-demain). Le matin, TDF et TN en grand ; ATL revient en grand quand sa navette approche.
-- Réglages dans l'adresse de la page Écrans : `avant=5` (minutes avant), `apres=1` (minutes après), `horizon=180` (minutes), `groupes=tous` (toujours 3 fenêtres), `vedette=0` (désactiver). Exemple : `visuel.html?source=…&avant=4&apres=2`.
+- Réglages dans l'adresse de la page Écrans : `avant=5` (minutes avant l'arrivée estimée), `apres=1` (minutes après une arrivée), `apresDepart=10` (secondes après un départ), `horizon=180` (minutes), `groupes=tous` (toujours 3 fenêtres), `vedette=0` (désactiver). Exemple : `visuel.html?source=…&avant=4&apres=2`.
 - **Démonstration** (sans serveur) : `https://lechatiti76-stack.github.io/suivi-circulations/visuel.html?demo=1` : une journée simulée qui tourne en boucle toutes les 7 minutes (départs simultanés LF1 + LN1, arrivées, train qui arrive pendant qu'un autre part, ATL qui passe de la petite colonne à la grande fenêtre).
 
 ## Coupons navettes (repris du Suivi trains)
