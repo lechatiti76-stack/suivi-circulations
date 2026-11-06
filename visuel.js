@@ -20,8 +20,9 @@
   var etat = { d: null, cle: '', battement: null, battementVuA: 0, echecs: 0, flash: '', version: null };
 
   // ------------------------------------------------------------ réception
-  window.__diffusion = function (d, meta) {
+  window.__diffusion = function (d, meta, travaux) {
     if (!d || d.schema !== 1) return;
+    if (travaux) majTravaux(travaux);
     etat.echecs = 0;
     var b = meta && meta.battement;
     if (b !== etat.battement) { etat.battement = b; etat.battementVuA = Date.now(); }
@@ -30,12 +31,19 @@
     majLiaison();
   };
   function charger() {
-    if (DEMO) { window.__diffusion(diffusionDemo(), { battement: Math.floor(Date.now() / 1000) }); return; }
+    if (DEMO) {
+      window.__diffusion(diffusionDemo(), { battement: Math.floor(Date.now() / 1000) }, [
+        { code: 'PF2', couleur: 'rouge', texte: 'Le portique fluvial 2 est hors service pour le moment.', message: '' },
+        { code: 'RMG4', couleur: 'orange', texte: 'Le portique RMG4 est actuellement en cours de maintenance.', message: 'retour prévu 14:00' }]);
+      return;
+    }
     if (source) {
+      if (etat.lecture && Date.now() - etat.lecture < 15000) return;
+      etat.lecture = Date.now();
       fetch(source + (source.indexOf('?') < 0 ? '?' : '&') + 'action=diffusion&t=' + Date.now(), { cache: 'no-store', redirect: 'follow' })
         .then(function (r) { return r.json(); })
-        .then(function (o) { if (o && o.diffusion) window.__diffusion(o.diffusion, o.meta); else { etat.echecs++; majLiaison(); } })
-        .catch(function () { etat.echecs++; majLiaison(); });
+        .then(function (o) { etat.lecture = 0; if (o && o.diffusion) window.__diffusion(o.diffusion, o.meta, o.travaux); else { etat.echecs++; majLiaison(); } })
+        .catch(function () { etat.lecture = 0; etat.echecs++; majLiaison(); });
       return;
     }
     var s = document.createElement('script');
@@ -248,6 +256,9 @@
     avant: paramNum('avant', DEMO ? 1.5 : 5),
     apres: paramNum('apres', DEMO ? 0.5 : 1),
     apresDepart: paramNum('apresDepart', 10),
+    // « ✓ Partie / Arrivée » gardé en grand au moins `garde` secondes à partir du moment où l'écran voit la validation
+    // (l'heure réelle venant du Suivi trains est à la minute près et arrive avec quelques secondes de décalage)
+    garde: paramNum('garde', 5),
     horizon: paramNum('horizon', DEMO ? 2.5 : 180),
     tousGroupes: /[?&]groupes=tous\b/.test(location.search)
   };
@@ -263,12 +274,18 @@
    * - une fois parti, « ✓ Parti » quelques secondes (apresDepart, 10 s) puis retour à l'écran principal.
    */
   var BON_DEPART = /bon au d[eé]part|r[eé]gulateur|ouverture du signal/i;
+  var reelPrecedent = {}, faitVuA = {};
   function phaseVedette(l, parcours) {
     if (!l || l.etat === 'supprime' || l.etat === 'deja') return null;
-    var arr = l.sens !== 'D', avant = VED.avant * 60;
+    var arr = l.sens !== 'D', avant = VED.avant * 60, cleL = l.id || (l.code + '|' + l.sens);
+    // passage « pas encore fait » → « fait » vu par cet écran : on retient l'instant (pas au démarrage de l'écran)
+    var avantReel = reelPrecedent[cleL];
+    reelPrecedent[cleL] = l.reel || '';
+    if (l.reel && avantReel === '' && !faitVuA[cleL + '|' + l.reel]) faitVuA[cleL + '|' + l.reel] = Date.now();
     if (l.reel) {
       var depuis = -secAvant(l.reel), duree = arr ? VED.apres * 60 : VED.apresDepart;
-      return depuis >= 0 && depuis <= duree ? { cle: 'fait', heure: l.reel, sec: depuis } : null;
+      var vu = faitVuA[cleL + '|' + l.reel], vuDepuis = vu ? (Date.now() - vu) / 1000 : Infinity;
+      return (depuis >= 0 && depuis <= duree) || vuDepuis <= VED.garde ? { cle: 'fait', heure: l.reel, sec: depuis } : null;
     }
     if (arr) {
       if (!l.partie) return null;
@@ -526,6 +543,34 @@
     majVedettes();
   }
 
+  // ------------------------------------------------------------- travaux
+  /** Avis de travaux (envoyés par un autre service, voir Code.gs) : bandeau sous les tableaux, rouge puis orange. */
+  var travauxCle = '';
+  function majTravaux(liste) {
+    liste = Array.isArray(liste) ? liste : [];
+    var cle = JSON.stringify(liste);
+    if (cle === travauxCle) return;
+    travauxCle = cle;
+    var bloc = $('#v-travaux'), t = $('#v-travaux-txt');
+    bloc.hidden = !liste.length;
+    bloc.className = 'travaux' + (liste.some(function (x) { return x.couleur === 'rouge'; }) ? ' rouge' : '');
+    t.innerHTML = liste.map(function (x) {
+      return '<span class="tx ' + esc(x.couleur) + '"><i></i>' + esc(x.texte) + (x.message ? ' <em>(' + esc(x.message) + ')</em>' : '') + '</span>';
+    }).join('');
+    t.style.animation = 'none';
+    requestAnimationFrame(function () {
+      var fen = $('#v-travaux-fen').clientWidth, large = t.scrollWidth;
+      if (large > fen) {
+        // trop long pour tenir : défile comme le flash info
+        t.style.setProperty('--depart', fen + 'px'); t.style.setProperty('--fin', (-large) + 'px');
+        t.style.setProperty('--duree', ((fen + large) / 80).toFixed(1) + 's');
+        t.style.animation = '';
+        t.classList.add('defile');
+      } else t.classList.remove('defile');
+      ajuster();
+    });
+  }
+
   // ----------------------------------------------------------- flash info
   function majFlash(f) {
     var texte = f && f.texte ? f.texte : '';
@@ -658,7 +703,8 @@
   document.addEventListener('visibilitychange', function () { if (!document.hidden) reveil(); });
 
   tic(); setInterval(tic, 1000);
-  charger(); setInterval(charger, DEMO ? 2000 : (source ? 5000 : 3000));
+  // toutes les 2 s (une lecture à la fois) : un changement de la saisie arrive en 1 à 3 s sur les écrans
+  charger(); setInterval(charger, DEMO ? 2000 : 2000);
   setInterval(majVedettes, 1000);
   setInterval(majLiaison, 2000);
   setInterval(function () { if (etat.d) rendre(); }, 10000);

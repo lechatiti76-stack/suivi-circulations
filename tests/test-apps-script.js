@@ -173,5 +173,30 @@ test('lecture des onglets Navettes, Journal et Coupons du jour, adresse vérifi�
   assert.strictEqual(g.appel('POST', '/api/suivi-trains', JSON.stringify({ date: 'hier' })).status, 400);
 });
 
+console.log('Travaux (envoi externe)');
+test('avis par clé d\'envoi : format simple et webhook Notion, fin, clé refusée', function () {
+  var g = simulateur.charger('secret-essai');
+  var post = function (cle, corps) { return JSON.parse(g.doPostParams({ travaux: cle }, JSON.stringify(corps)).getContent()); };
+  assert.strictEqual(post('x', { appareil: 'RMG4', couleur: 'orange' }).ok, false); // pas encore de clé
+  g.appel('PUT', '/api/parametres', JSON.stringify({ voies: ['vf1'], travaux: { jeton: 'jeton-essai-123', phrases: { rouge: '{appareil} est hors service pour le moment.' } } }));
+  assert.strictEqual(post('mauvais', { appareil: 'RMG4', couleur: 'orange' }).erreur, 'clé d\'envoi refusée');
+  var r = post('jeton-essai-123', { appareil: 'rmg 4', couleur: 'orange' });
+  assert.ok(r.ok && r.appareil === 'RMG4' && r.connu);
+  // webhook Notion : titre = appareil, statut dont la couleur Notion est rouge
+  r = post('jeton-essai-123', { source: { type: 'automation' }, data: { object: 'page', properties: {
+    'Appareil': { type: 'title', title: [{ plain_text: 'Portique fluvial 2' }] }, 'Statut': { type: 'status', status: { name: 'Hors service', color: 'red' } },
+    'Commentaire': { type: 'rich_text', rich_text: [{ plain_text: 'câble' }] } } } });
+  assert.ok(r.ok && r.appareil === 'PF2' && r.etat === 'rouge');
+  var d = JSON.parse(g.doGet({ action: 'diffusion' }).getContent());
+  assert.deepStrictEqual(d.travaux.map(function (t) { return t.code + ' ' + t.couleur + ' ' + t.texte; }),
+    ['PF2 rouge Le portique fluvial 2 est hors service pour le moment.', 'RMG4 orange Le portique RMG4 est actuellement en cours de maintenance.']);
+  assert.strictEqual(d.travaux[0].message, 'câble');
+  assert.strictEqual(post('jeton-essai-123', { appareil: 'RMG4', couleur: 'vert' }).etat, 'fin');
+  assert.strictEqual(post('jeton-essai-123', { appareil: 'RMG4', couleur: 'violet' }).ok, false);
+  var l = g.appel('GET', '/api/travaux');
+  assert.deepStrictEqual(l.data.liste.map(function (t) { return t.code; }), ['PF2']);
+  assert.strictEqual(g.appel('POST', '/api/travaux', JSON.stringify({ appareil: 'PF2', couleur: 'fin' })).data.liste.length, 0);
+});
+
 console.log('\n' + reussis + ' tests réussis, ' + echecs + ' en échec.');
 process.exit(echecs ? 1 : 0);

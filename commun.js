@@ -779,8 +779,27 @@
       c.eta = nv;
       if (nv) changes.push(nom + ' arrivée estimée ' + e);
     };
+    // voie et wagons saisis dans le Suivi trains → tableau de droite (voie, wagons affichés) ; reportés seulement quand
+    // ils changent là-bas (une correction faite dans la saisie reste tant que le Suivi trains n'envoie rien de nouveau)
+    var reporterInfo = function (cle, r, c, nom) {
+      if (!c) return;
+      var voie = String(r.voie || '').trim().toUpperCase(), w = String(r.wagons == null ? '' : r.wagons).trim();
+      var wn = w === '' || isNaN(+w) ? null : +w;
+      if (vu[cle + '|voie'] !== voie) { vu[cle + '|voie'] = voie; if ((c.voiePrevue || '') !== voie) { c.voiePrevue = voie; changes.push(nom + ' voie ' + (voie || '—')); } }
+      if (vu[cle + '|wg'] !== w) { vu[cle + '|wg'] = w; if ((c.wagonsDemandes == null ? null : c.wagonsDemandes) !== wn) { c.wagonsDemandes = wn; changes.push(nom + ' ' + (wn == null ? 'wagons —' : wn + ' wagons')); } }
+    };
+    var departTrain = function (num) {
+      var k = norm(num);
+      return k ? (j.circulations || []).filter(function (x) { return x.sens === 'D' && x.etat !== 'supprime' && numerosDe(x).indexOf(k) >= 0; })[0] || null : null;
+    };
     dedoublonner(donnees.navettes, function (r) { return sansAccents(r.type) + '|' + norm(r.code); }).forEach(function (r) {
       var type = sansAccents(r.type), code = String(r.code || '').trim(), h = heureSuivi(r.reel);
+      if (type === 'infonavette') { reporterInfo('I|N|' + code, r, circ(code, 'A'), code); return; }
+      if (type === 'infoquickboard') { reporterInfo('I|Q|' + code, r, circ(code, 'D'), code); return; }
+      if (type === 'infoarrivee') { var ci = corr[code.toLowerCase()] || corr[code]; if (ci) reporterInfo('I|A|' + code, r, circ(ci, 'A'), ci); return; }
+      if (type === 'infotrain') { var ct = departTrain(code) || departTrain(r.libelle); if (ct) reporterInfo('I|T|' + code, r, ct, ct.code); return; }
+      // départ d'une navette annoncé dans le Suivi trains (▲ du tableau des départs) : « Départ imminent » sur les écrans
+      if (type === 'annonce') { var ca2 = circ(code, 'D'); if (ca2 && !ca2.reel) reporter('AN|' + code, h, ca2, 'annonceTV', code + ' départ annoncé'); return; }
       var arrivee = /-arr$/i.test(code), fa = /-fa$/i.test(code), base = code.replace(/-(arr|fa)$/i, '');
       if (type === 'navette') {
         var n = circ(base, 'A');

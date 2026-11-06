@@ -15,19 +15,23 @@
  */
 
 const CLE = 'CHANGER-CE-MOT-DE-PASSE';
-const VERSION = '2.4.0';
+const VERSION = '2.5.0';
 const FUSEAU = 'Europe/Paris';
 const NOM_DOSSIER = 'Suivi des circulations - données';
 
 // ------------------------------------------------------------------- entrées HTTP
 function doGet(e) {
   const action = (e && e.parameter && e.parameter.action) || '';
-  if (action === 'diffusion') return json_(lireDiffusion_());
+  if (action === 'diffusion') { const d = lireDiffusion_(); try { d.travaux = listeTravaux_(); } catch (err) { d.travaux = []; } return json_(d); }
   if (action === 'sante') return json_({ service: 'ok', version: VERSION, maintenant: maintenant_() });
   return ContentService.createTextOutput('Suivi des circulations : serveur en service (version ' + VERSION + ').');
 }
 
 function doPost(e) {
+  // avis de travaux envoyé par un autre service : ?travaux=<clé d'envoi> (voir plus bas)
+  if (e && e.parameter && e.parameter.travaux != null) {
+    try { return json_(recevoirTravaux_(e)); } catch (err) { return json_({ ok: false, erreur: String(err && err.message || err) }); }
+  }
   let req;
   try { req = JSON.parse((e && e.postData && e.postData.contents) || '{}'); }
   catch (err) { return json_({ status: 400, data: { erreur: 'requête illisible' } }); }
@@ -55,6 +59,8 @@ function router_(m, c, corps) {
   if (m === 'POST' && c === '/api/mail') return avecVerrou_(() => mail_(JSON.parse(corps)));
   if (m === 'POST' && c === '/api/archives') return avecVerrou_(() => archives_(JSON.parse(corps)));
   if (m === 'POST' && c === '/api/suivi-trains') return suiviTrains_(JSON.parse(corps || '{}').date);
+  if (m === 'GET' && c === '/api/travaux') return ok_({ liste: listeTravaux_() });
+  if (m === 'POST' && c === '/api/travaux') { const res = appliquerAvisTravaux_(JSON.parse(corps || '{}'), 'saisie'); return res.ok ? ok_(Object.assign(res, { liste: listeTravaux_() })) : { status: 400, data: { erreur: res.erreur } }; }
   return { status: 404, data: { erreur: 'route inconnue : ' + m + ' ' + c } };
 }
 
@@ -62,7 +68,7 @@ function router_(m, c, corps) {
 /**
  * Lignes du jour du classeur de l'application « Suivi trains » (Paramètres › suiviTrains.classeur) :
  * onglet Navettes (Date | Type | Code | Libellé | Heure théorique | Heure réelle…) et onglet Journal
- * (Date | Train | Étape | Heure théorique | Heure réelle…). Lecture seule, gardée 8 s en cache
+ * (Date | Train | Étape | Heure théorique | Heure réelle…). Lecture seule, gardée 3 s en cache
  * (moins que les 10 s entre deux lectures de la saisie : un seul poste lit toujours des données fraîches).
  * Le classeur doit appartenir au compte qui a déployé ce serveur (ou lui être partagé).
  */
@@ -76,14 +82,15 @@ function suiviTrains_(date) {
   try { ss = SpreadsheetApp.openById(id); }
   catch (e) { return { status: 502, data: { erreur: 'classeur Suivi trains inaccessible : vérifiez l\'adresse et que ce compte Google peut l\'ouvrir' } }; }
   const out = { date: date, lu: maintenant_(), navettes: [], journal: [], coupons: [], couponsDemain: [] };
-  lignesDuJour_(ss.getSheetByName('Navettes'), date).forEach(r => out.navettes.push({ type: r[1], code: r[2], theo: r[4], reel: r[5] }));
+  // colonnes Voie (I) et Wagons (J) : lignes « Info… » (voie et wagons saisis dans le Suivi trains)
+  lignesDuJour_(ss.getSheetByName('Navettes'), date).forEach(r => out.navettes.push({ type: r[1], code: r[2], libelle: r[3], theo: r[4], reel: r[5], voie: r[8] || '', wagons: r[9] || '' }));
   lignesDuJour_(ss.getSheetByName('Journal'), date).forEach(r => out.journal.push({ train: r[1], etape: r[2], theo: r[3], reel: r[4] }));
   // coupons navettes saisis dans le Suivi trains (onglet Coupons) : la journée et le lendemain
   const coupon = r => ({ navette: r[1], ligne: r[2], numero: r[3], site: r[4], dateCoupon: r[5], wagons: r[6], note: r[7] });
   const demain = Utilities.formatDate(new Date(new Date(date + 'T12:00:00').getTime() + 864e5), FUSEAU, 'yyyy-MM-dd');
   lignesDuJour_(ss.getSheetByName('Coupons'), date).forEach(r => out.coupons.push(coupon(r)));
   lignesDuJour_(ss.getSheetByName('Coupons'), demain).forEach(r => out.couponsDemain.push(coupon(r)));
-  cache.put(cle, JSON.stringify(out), 8);
+  cache.put(cle, JSON.stringify(out), 3);
   return ok_(out);
 }
 /** Identifiant d'un classeur à partir de son adresse (…/spreadsheets/d/<id>/edit) ou de l'identifiant seul. */
@@ -98,6 +105,114 @@ function lignesDuJour_(feuille, date) {
     const d = String(r[0] || '').trim(), fr = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(d);
     return (fr ? fr[3] + '-' + ('0' + fr[2]).slice(-2) + '-' + ('0' + fr[1]).slice(-2) : d.slice(0, 10)) === date;
   }).map(r => r.map(v => String(v == null ? '' : v).trim()));
+}
+
+// ------------------------------------------------------------------- travaux (envoi externe)
+/**
+ * Avis de travaux envoyés par un autre service (ex. automatisation Notion « Envoyer un webhook ») :
+ *   POST <adresse /exec>?travaux=<clé d'envoi>   corps JSON :
+ *     { "appareil": "RMG4", "couleur": "orange", "message": "…facultatif…" }
+ *   ou le corps envoyé tel quel par Notion (propriétés de la page : un titre ou texte « Appareil », un select ou
+ *   statut dont la couleur Notion dit l'état : orange / jaune = maintenance, rouge = hors service, vert / gris = fini).
+ * Couleurs : orange → « en cours de maintenance », rouge → « hors service », vert (ou « fin », « ok ») → l'avis disparaît.
+ * La clé d'envoi (Paramètres › Travaux de la saisie) est différente de la CLE de la saisie : elle ne permet que ça.
+ * Les avis en cours sont joints aux données des écrans (bandeau « Travaux ») et visibles dans la saisie.
+ */
+const COULEURS_TRAVAUX = { orange: 'orange', jaune: 'orange', yellow: 'orange', ambre: 'orange', maintenance: 'orange',
+  rouge: 'rouge', red: 'rouge', hs: 'rouge', 'hors service': 'rouge', panne: 'rouge',
+  vert: 'fin', green: 'fin', fin: 'fin', ok: 'fin', gris: 'fin', gray: 'fin', default: 'fin', termine: 'fin', 'en service': 'fin' };
+const PHRASES_TRAVAUX = { orange: '{appareil} est actuellement en cours de maintenance.', rouge: '{appareil} est hors service pour le moment.' };
+const APPAREILS_TRAVAUX = [
+  { code: 'RMG3', libelle: 'Le portique RMG3' }, { code: 'RMG4', libelle: 'Le portique RMG4' },
+  { code: 'PF1', libelle: 'Le portique fluvial 1', alias: 'portique fluvial 1' }, { code: 'PF2', libelle: 'Le portique fluvial 2', alias: 'portique fluvial 2' },
+  { code: 'PPMA', libelle: 'La PPM A', alias: 'PPM A' }, { code: 'PPMB', libelle: 'La PPM B', alias: 'PPM B' }, { code: 'PPMC', libelle: 'La PPM C', alias: 'PPM C' }
+];
+function cleTravaux_(s) { return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]/g, ''); }
+function configTravaux_() {
+  const t = (lireJson_('parametres.json', {}).travaux) || {};
+  return { jeton: t.jeton || '', appareils: t.appareils && t.appareils.length ? t.appareils : APPAREILS_TRAVAUX, phrases: Object.assign({}, PHRASES_TRAVAUX, t.phrases || {}) };
+}
+function trouverAppareil_(cfg, nom) {
+  const k = cleTravaux_(nom);
+  if (!k) return null;
+  return cfg.appareils.filter(a => [a.code, a.libelle].concat(String(a.alias || '').split(/[,;]+/)).some(x => cleTravaux_(x) && (cleTravaux_(x) === k || cleTravaux_(x).replace(/^(le|la|les)/, '') === k)))[0] || null;
+}
+/** Texte d'une propriété Notion (titre, texte, select, statut, multi-select, formule). */
+function texteNotion_(p) {
+  if (!p) return '';
+  const r = p.title || p.rich_text;
+  if (r) return r.map(x => x.plain_text || (x.text && x.text.content) || '').join('').trim();
+  if (p.select) return p.select.name || '';
+  if (p.status) return p.status.name || '';
+  if (p.multi_select) return p.multi_select.map(x => x.name).join(', ');
+  if (p.formula) return String(p.formula.string || p.formula.number || '');
+  return '';
+}
+/** { appareil, couleur, message } depuis un corps simple ou un webhook Notion. */
+function lireAvisTravaux_(corps) {
+  const props = (corps && corps.data && corps.data.properties) || (corps && corps.properties) || null;
+  if (!props) {
+    return { appareil: corps.appareil || corps.equipement || corps.engin || corps.nom || corps.name || '', couleur: corps.couleur || corps.color || corps.etat || corps.statut || '', message: corps.message || corps.texte || corps.text || '' };
+  }
+  let appareil = '', couleur = '', message = '';
+  Object.keys(props).forEach(nom => {
+    const p = props[nom], n = cleTravaux_(nom);
+    if (/appareil|engin|equipement|portique|machine/.test(n) && !appareil) appareil = texteNotion_(p);
+    else if (/couleur|color/.test(n)) couleur = texteNotion_(p) || couleur;
+    else if (/message|commentaire|detail|description|texte/.test(n)) message = texteNotion_(p);
+    const choix = p && (p.select || p.status);
+    if (choix && choix.color && !couleur && /etat|statut|status|state|niveau|couleur/.test(n)) couleur = choix.color;
+  });
+  if (!appareil) Object.keys(props).forEach(nom => { if (!appareil && props[nom] && props[nom].type === 'title') appareil = texteNotion_(props[nom]); });
+  return { appareil: appareil, couleur: couleur, message: message };
+}
+function lireTravaux_() {
+  const cache = CacheService.getScriptCache(), t = cache.get('travaux');
+  if (t) return JSON.parse(t);
+  const etat = lireJson_('travaux.json', {});
+  cache.put('travaux', JSON.stringify(etat), 21600);
+  return etat;
+}
+function ecrireTravaux_(etat) {
+  ecrireTexte_('travaux.json', JSON.stringify(etat));
+  CacheService.getScriptCache().put('travaux', JSON.stringify(etat), 21600);
+}
+/** Liste affichable des avis en cours (rouge d'abord), phrase construite avec les réglages. */
+function listeTravaux_() {
+  const etat = lireTravaux_(), cfg = configTravaux_();
+  return Object.keys(etat).map(k => {
+    const a = etat[k], phrase = String(cfg.phrases[a.couleur] || PHRASES_TRAVAUX[a.couleur] || '{appareil}').replace(/\{appareil\}/g, a.libelle || a.code);
+    return { code: a.code, libelle: a.libelle, couleur: a.couleur, texte: phrase.charAt(0).toUpperCase() + phrase.slice(1), message: a.message || '', depuis: a.depuis, a: a.a };
+  }).sort((x, y) => (x.couleur === y.couleur ? String(x.code).localeCompare(String(y.code)) : (x.couleur === 'rouge' ? -1 : 1)));
+}
+/** Applique un avis : { appareil, couleur, message }. Renvoie { ok, … }. */
+function appliquerAvisTravaux_(avis, source) {
+  const cfg = configTravaux_();
+  const app = trouverAppareil_(cfg, avis.appareil);
+  const nom = String(avis.appareil || '').trim();
+  if (!nom) return { ok: false, erreur: 'appareil manquant' };
+  const couleur = COULEURS_TRAVAUX[cleTravaux_(avis.couleur)] || COULEURS_TRAVAUX[String(avis.couleur || '').toLowerCase().trim()] || '';
+  if (!couleur) return { ok: false, erreur: 'couleur inconnue : ' + avis.couleur + ' (orange, rouge ou vert)' };
+  const code = app ? app.code : nom.toUpperCase();
+  return avecVerrou_(() => {
+    const etat = lireTravaux_();
+    if (couleur === 'fin') delete etat[code];
+    else etat[code] = { code: code, libelle: app ? app.libelle : nom, couleur: couleur, message: String(avis.message || '').slice(0, 200),
+      depuis: (etat[code] && etat[code].couleur === couleur && etat[code].depuis) || maintenant_(), a: maintenant_(), source: source || '' };
+    ecrireTravaux_(etat);
+    try { feuille_('Travaux', ['Horodatage', 'Appareil', 'État', 'Message', 'Source']).appendRow([maintenant_(), code, couleur, String(avis.message || ''), source || '']); } catch (e) { /* registre facultatif */ }
+    return { status: 200, data: { ok: true, appareil: code, etat: couleur, connu: !!app } };
+  }).data;
+}
+function recevoirTravaux_(e) {
+  const cfg = configTravaux_();
+  if (!cfg.jeton) return { ok: false, erreur: 'réception des travaux désactivée (aucune clé d\'envoi dans Paramètres › Travaux)' };
+  if (String(e.parameter.travaux || '') !== cfg.jeton) return { ok: false, erreur: 'clé d\'envoi refusée' };
+  let corps = {};
+  try { corps = JSON.parse((e.postData && e.postData.contents) || '{}'); } catch (err) { corps = {}; }
+  if (!corps || typeof corps !== 'object') corps = {};
+  ['appareil', 'couleur', 'message'].forEach(k => { if (e.parameter[k] && !corps[k]) corps[k] = e.parameter[k]; });
+  return appliquerAvisTravaux_(lireAvisTravaux_(corps), corps.data ? 'notion' : 'externe');
 }
 
 // --------------------------------------------------------------------- outils

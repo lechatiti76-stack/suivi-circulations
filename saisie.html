@@ -35,6 +35,7 @@
 </header>
 
 <div id="bandeau" class="bandeau" hidden></div>
+<div id="travaux-saisie" class="travaux-saisie" hidden></div>
 
 <form id="saisie" class="saisie" autocomplete="off" novalidate>
   <div class="saisie-tete">
@@ -256,6 +257,29 @@
         <p class="note">Parcours : une ligne par groupe ou code de train, durée du trajet puis points de passage en minutes depuis le départ. <span class="mono">TDF 35 : Départ FS 2, CV 1474 5</span></p>
         <textarea id="pa-st-parcours" class="mono" style="min-height:70px"></textarea>
         <p class="note" id="pa-st-etat"></p>
+      </div>
+      <div class="section"><h4>Travaux (avis envoyés par un autre service)</h4>
+        <p class="note">Un autre service (par exemple une automatisation Notion « Envoyer un webhook ») peut afficher un bandeau « Travaux » sur les écrans
+          et ici : il envoie le nom de l'appareil et une couleur (orange = en maintenance, rouge = hors service, vert = remis en service, l'avis disparaît).
+          Donnez-lui <b>l'adresse d'envoi ci-dessous</b> : elle contient une clé d'envoi propre à cet usage (ce n'est pas la clé de la saisie).
+          Générer une nouvelle clé coupe l'ancienne adresse.</p>
+        <div class="formgrid">
+          <div class="champ"><label for="pa-tx-jeton">Clé d'envoi</label><input id="pa-tx-jeton" class="mono" readonly placeholder="aucune : réception désactivée"></div>
+          <div class="champ"><label>&nbsp;</label><button type="button" class="bouton" id="pa-tx-generer">Générer une nouvelle clé</button></div>
+          <div class="champ large"><label for="pa-tx-url">Adresse d'envoi à transmettre (après Enregistrer)</label><input id="pa-tx-url" class="mono" readonly></div>
+        </div>
+        <p class="note">Appareils : une ligne par appareil, <span class="mono">CODE | Phrase de l'appareil | autres noms acceptés</span>. Le service peut envoyer le code ou un des noms.</p>
+        <textarea id="pa-tx-appareils" class="mono" style="min-height:120px"></textarea>
+        <div class="formgrid">
+          <div class="champ large"><label for="pa-tx-orange">Phrase orange ({appareil} = phrase de l'appareil)</label><input id="pa-tx-orange"></div>
+          <div class="champ large"><label for="pa-tx-rouge">Phrase rouge</label><input id="pa-tx-rouge"></div>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px">
+          <span class="note">Essai (après Enregistrer) :</span><select id="pa-tx-essai-app"></select>
+          <button type="button" class="bouton petit" data-tx-essai="orange">Orange</button>
+          <button type="button" class="bouton petit" data-tx-essai="rouge">Rouge</button>
+          <button type="button" class="bouton petit" data-tx-essai="vert">Fin (vert)</button>
+        </div>
       </div>
       <div class="section"><h4>Temps d'arrivée des trains de ligne</h4>
         <p class="note">Minutes entre « En approche » (validé ici ou dans le Suivi trains) et l'arrivée chez nous : les écrans comptent à rebours avec ce temps.

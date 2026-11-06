@@ -104,6 +104,7 @@ function charger(cle) {
   return {
     doGet: function (params) { return contexte.doGet({ parameter: params || {} }); },
     doPost: function (contenu) { return contexte.doPost({ postData: { contents: contenu } }); },
+    doPostParams: function (params, contenu) { return contexte.doPost({ parameter: params || {}, postData: { contents: contenu } }); },
     appel: appel,
     etat: s.etat,
     creerClasseur: s.creerClasseur,

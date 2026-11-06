@@ -83,13 +83,27 @@ Copier chaque fichier sur le bureau du poste concerné. `Ecrans.bat` ouvre la pa
   - une fois **Parti**, « ✓ Partie » 10 secondes puis retour à l'écran principal.
   Le carré de la navette (couleur du groupe) prend toute la partie haute, avec la **voie de départ saisie** en grand ; les trains ont une bande animée en bas. Plusieurs en même temps se partagent la place.
 - **2 ou 3 fenêtres** : un groupe sans navette dans les 3 prochaines heures passe en colonne étroite (prochaine navette du jour + Prochaines navettes de demain et après-demain). Le matin, TDF et TN en grand ; ATL revient en grand quand sa navette approche.
-- Réglages dans l'adresse de la page Écrans : `avant=5` (minutes avant l'arrivée estimée), `apres=1` (minutes après une arrivée), `apresDepart=10` (secondes après un départ), `horizon=180` (minutes), `groupes=tous` (toujours 3 fenêtres), `vedette=0` (désactiver). Exemple : `visuel.html?source=…&avant=4&apres=2`.
+- Réglages dans l'adresse de la page Écrans : `avant=5` (minutes avant l'arrivée estimée), `apres=1` (minutes après une arrivée), `apresDepart=10` (secondes après un départ), `garde=5` (secondes minimum d'affichage en grand d'une arrivée/départ validé avant le retour au tableau), `horizon=180` (minutes), `groupes=tous` (toujours 3 fenêtres), `vedette=0` (désactiver). Exemple : `visuel.html?source=…&avant=4&apres=2`.
 - **Démonstration** (sans serveur) : `https://lechatiti76-stack.github.io/suivi-circulations/visuel.html?demo=1` : une journée simulée qui tourne en boucle toutes les 7 minutes (départs simultanés LF1 + LN1, arrivées, train qui arrive pendant qu'un autre part, ATL qui passe de la petite colonne à la grande fenêtre).
 
 ## Coupons navettes (repris du Suivi trains)
 
 - Les coupons saisis dans le Suivi trains (bouton 🎫 Coupons) partent dans l'onglet **Coupons** de son classeur (adresse du Web App dans les Réglages du Suivi trains, `apps-script/Code.gs` du Suivi trains à redéployer).
 - La saisie les relit avec le reste toutes les 10 secondes (serveur 2.4.0) : bouton **🎫 Coupons** (aujourd'hui et demain, par site et par navette, totaux de wagons) et pastille « 🎫 2 · 22 wg » sous chaque départ de navette concerné. Lecture seule : les coupons se saisissent dans le Suivi trains.
+
+## Voie, wagons et annonce depuis le Suivi trains
+
+- Dans le Suivi trains, chaque arrivée/départ de navette et chaque train (fenêtre Composition) a les champs **Voie** et **Wagons**. Ils remplissent la voie et le nombre de wagons du tableau de droite de la saisie (lecture toutes les 4 s). Une correction faite dans la saisie reste prioritaire tant que le Suivi trains ne change pas la valeur.
+- Le **▲** d'une case « Départs navettes » du Suivi trains annonce le départ : ▲ allumé dans la saisie et « Départ imminent » sur les écrans, avant la validation du départ.
+- Rafraîchissement : écrans toutes les 2 s ; délai saisie → écran d'environ 1 à 3 s (aller-retour Google).
+
+## Travaux (avis envoyés par un autre service)
+
+1. Saisie › **Paramètres › Travaux** : cliquez **Générer** (clé d'envoi), vérifiez la liste des appareils (`CODE | Libellé | alias`) et les phrases orange / rouge (`{appareil}` est remplacé par le libellé), puis **Enregistrer**.
+2. Donnez à l'autre service l'**Adresse d'envoi** affichée (`…/exec?travaux=CLÉ`). C'est vous qui donnez la clé ; il n'a rien à vous transmettre. Ce n'est pas le mot de passe de la saisie : vous pouvez la changer à tout moment (Générer + Enregistrer) pour couper l'accès.
+3. Il envoie une requête **POST** à cette adresse avec `{"appareil":"RMG4","couleur":"orange","message":"graissage"}` (message facultatif). Couleurs : `orange` = maintenance, `rouge` = hors service, `vert` (ou `fin`) = fin de l'avis.
+   - Depuis **Notion** : base « Appareils » avec une propriété titre (nom de l'appareil) et une propriété Sélection/Statut « Couleur » (orange / rouge / vert) ; automatisation « Quand Couleur change → Envoyer un webhook » vers l'adresse d'envoi, en cochant ces propriétés.
+4. L'avis s'affiche en bandeau **Travaux** dans la saisie (bouton Retirer) et en bas des écrans TV (rouge en premier). Boutons d'essai dans Paramètres. Historique dans l'onglet **Travaux** du classeur.
 
 ## Modifier l'application
 

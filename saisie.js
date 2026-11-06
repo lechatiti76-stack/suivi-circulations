@@ -636,6 +636,9 @@
     var cfg = app.params && app.params.suiviTrains;
     if (!GOOGLE || !cfg || !cfg.classeur || !app.prete || app.lectureSeule || !estJourActif()) return;
     var date = app.journee.date;
+    // une lecture à la fois (toutes les 4 s) : pas d'empilement si le serveur répond lentement
+    if (app.suiviEnCours && Date.now() - app.suiviEnCours < 20000) return;
+    app.suiviEnCours = Date.now();
     api('POST', '/api/suivi-trains', JSON.stringify({ date: date })).then(function (r) {
       if (r.status !== 200) { app.suiviTrains = { erreur: (r.data && r.data.erreur) || ('erreur ' + r.status), a: new Date() }; return; }
       app.suiviTrains = { a: new Date(), lignes: (r.data.navettes || []).length + (r.data.journal || []).length };
@@ -651,7 +654,8 @@
         j.circulations.forEach(function (c) { if (c.reel && !avant[c.id]) SC.journaliserCirculation(j, c, c.reel, app.planning, app.params, uid('m')); });
       }, { sansAnnulation: true });
       toast('Suivi trains : ' + changes.join(' · '));
-    }, function () { app.suiviTrains = { erreur: 'serveur injoignable', a: new Date() }; });
+    }, function () { app.suiviTrains = { erreur: 'serveur injoignable', a: new Date() }; })
+      .then(function () { app.suiviEnCours = 0; }, function () { app.suiviEnCours = 0; });
   }
   // ------------------------------------------------ coupons navettes (Suivi trains)
   /**
@@ -710,6 +714,67 @@
   }
   $('#b-coupons').addEventListener('click', function () { rendreCoupons(); ouvrir('#d-coupons'); });
   $$('#d-coupons [data-cp]').forEach(function (b) { b.addEventListener('click', function () { app.ongletCoupons = b.getAttribute('data-cp'); rendreCoupons(); }); });
+
+  // ------------------------------------------------ travaux (avis envoyés par un autre service)
+  var APPAREILS_TRAVAUX = [
+    { code: 'RMG3', libelle: 'Le portique RMG3' }, { code: 'RMG4', libelle: 'Le portique RMG4' },
+    { code: 'PF1', libelle: 'Le portique fluvial 1', alias: 'portique fluvial 1' }, { code: 'PF2', libelle: 'Le portique fluvial 2', alias: 'portique fluvial 2' },
+    { code: 'PPMA', libelle: 'La PPM A', alias: 'PPM A' }, { code: 'PPMB', libelle: 'La PPM B', alias: 'PPM B' }, { code: 'PPMC', libelle: 'La PPM C', alias: 'PPM C' }
+  ];
+  var PHRASES_TRAVAUX = { orange: '{appareil} est actuellement en cours de maintenance.', rouge: '{appareil} est hors service pour le moment.' };
+  function adresseTravaux(jeton) { return jeton && CONNEXION.url ? CONNEXION.url + (CONNEXION.url.indexOf('?') < 0 ? '?' : '&') + 'travaux=' + jeton : ''; }
+  function remplirTravauxParametres(p) {
+    var t = p.travaux || {}, apps = t.appareils && t.appareils.length ? t.appareils : APPAREILS_TRAVAUX, ph = Object.assign({}, PHRASES_TRAVAUX, t.phrases || {});
+    $('#pa-tx-jeton').value = t.jeton || '';
+    $('#pa-tx-url').value = adresseTravaux(t.jeton);
+    $('#pa-tx-appareils').value = apps.map(function (a) { return [a.code, a.libelle, a.alias || ''].join(' | ').replace(/ \| $/, ''); }).join('\n');
+    $('#pa-tx-orange').value = ph.orange; $('#pa-tx-rouge').value = ph.rouge;
+    $('#pa-tx-essai-app').innerHTML = apps.map(function (a) { return '<option value="' + esc(a.code) + '">' + esc(a.code + ' · ' + a.libelle) + '</option>'; }).join('');
+  }
+  function lireTravauxParametres(p, err) {
+    var apps = [];
+    $('#pa-tx-appareils').value.split(/\r?\n/).forEach(function (l) {
+      if (!l.trim()) return;
+      var k = l.split('|').map(function (x) { return x.trim(); });
+      if (!k[0]) { err.push('Travaux : ligne « ' + l + ' » sans code.'); return; }
+      apps.push({ code: k[0].toUpperCase(), libelle: k[1] || k[0], alias: k[2] || '' });
+    });
+    p.travaux = { jeton: $('#pa-tx-jeton').value.trim(), appareils: apps, phrases: { orange: $('#pa-tx-orange').value.trim() || PHRASES_TRAVAUX.orange, rouge: $('#pa-tx-rouge').value.trim() || PHRASES_TRAVAUX.rouge } };
+  }
+  $('#pa-tx-generer').addEventListener('click', function () {
+    if ($('#pa-tx-jeton').value && !confirm('Une nouvelle clé remplace l\'ancienne : l\'adresse déjà donnée au service ne marchera plus. Continuer ?')) return;
+    var o = new Uint8Array(18); (window.crypto || window.msCrypto).getRandomValues(o);
+    var j = Array.prototype.map.call(o, function (b) { return 'abcdefghijkmnpqrstuvwxyz23456789'.charAt(b % 32); }).join('');
+    $('#pa-tx-jeton').value = j; $('#pa-tx-url').value = adresseTravaux(j);
+    toast('Nouvelle clé d\'envoi : cliquez sur Enregistrer pour l\'activer.');
+  });
+  $('#pa-tx-url').addEventListener('focus', function () { this.select(); });
+  $$('[data-tx-essai]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      api('POST', '/api/travaux', JSON.stringify({ appareil: $('#pa-tx-essai-app').value, couleur: b.getAttribute('data-tx-essai'), message: 'essai depuis la saisie' })).then(function (r) {
+        if (r.status !== 200) { toast('Essai refusé : ' + ((r.data && r.data.erreur) || r.status) + ' (serveur 2.5.0 ?)', 'crit'); return; }
+        majTravauxSaisie(r.data.liste || []);
+        toast('Essai envoyé : ' + r.data.appareil + ' ' + r.data.etat + '.');
+      }, function () { toast('Serveur injoignable.', 'crit'); });
+    });
+  });
+  /** Bandeau des avis en cours, sous l'en-tête de la saisie (relu toutes les 15 s). */
+  function majTravauxSaisie(liste) {
+    var el = $('#travaux-saisie');
+    el.hidden = !liste.length;
+    el.innerHTML = liste.length ? '<b>⚠ Travaux</b>' + liste.map(function (x) {
+      return '<span class="tx-s ' + esc(x.couleur) + '"><i></i>' + esc(x.texte) + (x.message ? ' <em>(' + esc(x.message) + ')</em>' : '') +
+        ' <small>depuis ' + esc(hm(x.depuis)) + '</small> <button type="button" class="bouton petit" data-tx-fin="' + esc(x.code) + '" title="Retirer cet avis des écrans">Retirer</button></span>';
+    }).join('') : '';
+  }
+  $('#travaux-saisie').addEventListener('click', function (e) {
+    var b = e.target.closest('[data-tx-fin]'); if (!b) return;
+    api('POST', '/api/travaux', JSON.stringify({ appareil: b.getAttribute('data-tx-fin'), couleur: 'fin' })).then(function (r) { if (r.status === 200) majTravauxSaisie(r.data.liste || []); });
+  });
+  function lireTravaux() {
+    if (!GOOGLE || !app.prete) return;
+    api('GET', '/api/travaux').then(function (r) { if (r.status === 200) majTravauxSaisie(r.data.liste || []); }, function () { /* sans effet */ });
+  }
 
   function reelSurSaisie() {
     var c = SC.trouverCirculation(app.journee, F.num.value);
@@ -1193,6 +1258,7 @@
     var base = p.correspondancesEF || {};
     $('#pa-base').innerHTML = Object.keys(base).sort().map(function (k) { return ligneBase(k, base[k]); }).join('');
     $('#pa-vers').value = (p.saisie || {}).versObligatoire || 'internes';
+    remplirTravauxParametres(p);
     var st = p.suiviTrains || {}, corr = st.correspondances || SC.CORRESPONDANCES_SUIVI;
     $('#pa-st-classeur').value = st.classeur || '';
     $('#pa-st-corr').value = Object.keys(corr).map(function (k) { return k + '=' + corr[k]; }).join(', ');
@@ -1308,6 +1374,7 @@
       corrST[k[0].trim().toLowerCase()] = k[1].trim().toUpperCase();
     });
     p.suiviTrains = { classeur: $('#pa-st-classeur').value.trim(), correspondances: corrST };
+    lireTravauxParametres(p, err);
     try { p.parcours = SC.texteEnParcours($('#pa-st-parcours').value); } catch (ex) { err.push('Parcours : ' + ex.message); }
     // temps d'arrivée des trains : les points de passage déjà réglés pour ce train sont gardés
     $$('#pa-arrivees [data-arrivee]').forEach(function (inp) {
@@ -1732,7 +1799,7 @@
       setInterval(traiterMails, 60000);
       setInterval(verifierChangementJour, 30000);
       if (GOOGLE) setInterval(function () { if (estJourActif()) api('POST', '/api/battement', '').then(null, function () { /* signalé par verifierService */ }); }, 30000);
-      if (GOOGLE) { suivreTrains(); setInterval(suivreTrains, 10000); }
+      if (GOOGLE) { suivreTrains(); setInterval(suivreTrains, 4000); lireTravaux(); setInterval(lireTravaux, 15000); }
       verifierVersion(); setInterval(verifierVersion, 120000);
     }).catch(function (e) {
       if (e.message === 'clé refusée' || e.message === 'serveur vide') return;

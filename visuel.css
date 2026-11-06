@@ -301,3 +301,20 @@ html, body { margin: 0; height: 100%; background: var(--fond); color: var(--encr
 .ved-tuile .ved-loco { height: 80%; }
 .ved-tuiles[style*="--n:3"] .ved-code, .ved-tuiles[style*="--n:4"] .ved-code { font-size: min(10vh, 18cqh, 24cqw); }
 .ved-tuiles[style*="--n:4"] .ved-gros { font-size: min(3rem, 9cqh, 9cqw); }
+
+/* ------------------------------------------------------------- travaux (avis externes) */
+.travaux { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: stretch; background: #2A1A05; color: #FFE7C2; border-top: .12rem solid #F59E0B; }
+.travaux.rouge { border-top-color: #E5251B; }
+.travaux-lib { display: flex; align-items: center; gap: .5rem; font-weight: 700; font-size: 1.15rem; letter-spacing: .12em; text-transform: uppercase; padding: 0 1.1rem; background: #F59E0B; color: #1a1200; }
+.travaux.rouge .travaux-lib { background: #E5251B; color: #fff; }
+.travaux-lib::before { content: "⚠"; font-size: 1.2em; letter-spacing: 0; }
+.travaux-fen { overflow: hidden; white-space: nowrap; display: flex; align-items: center; min-height: 2.5rem; }
+.travaux-txt { display: inline-flex; gap: 2.4rem; padding: .35rem 1rem; white-space: nowrap; }
+.travaux-txt.defile { will-change: transform; animation: defile var(--duree, 20s) linear infinite; padding-left: 0; }
+.tx { display: inline-flex; align-items: center; gap: .6rem; font-weight: 700; font-size: 1.45rem; }
+.tx i { width: 1rem; height: 1rem; border-radius: 50%; background: #F59E0B; box-shadow: 0 0 .6rem #F59E0B; flex: none; }
+.tx.rouge i { background: #FF3B30; box-shadow: 0 0 .7rem #FF3B30; animation: clignTx 1.2s steps(1, end) infinite; }
+.tx.rouge { color: #FFD0CC; }
+.tx em { font-style: normal; font-weight: 400; opacity: .85; }
+@keyframes clignTx { 50% { opacity: .25; } }
+@media (prefers-reduced-motion: reduce) { .travaux-txt.defile { animation: none; white-space: normal; } .tx.rouge i { animation: none; } }
