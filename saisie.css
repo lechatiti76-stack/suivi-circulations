@@ -94,7 +94,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 
 /* ---------- corps ---------- */
 /* tableau de droite assez large pour ses boutons sur une ligne ; le journal garde le reste */
-.corps { display: grid; grid-template-columns: minmax(0, 1fr) clamp(600px, 52%, 920px); min-height: 0; }
+.corps { display: grid; grid-template-columns: minmax(0, 1fr) clamp(630px, 55%, 980px); min-height: 0; }
 .volet { display: grid; grid-template-rows: auto minmax(0, 1fr); min-height: 0; background: var(--surface); }
 .volet + .volet { border-left: 1px solid var(--trait); }
 .volet-tete { display: flex; gap: 10px; align-items: center; justify-content: space-between; padding: 7px 12px; border-bottom: 1px solid var(--trait); background: var(--surface-2); flex-wrap: wrap; }
@@ -103,8 +103,8 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .defile { overflow: auto; min-height: 0; }
 
 table { border-collapse: collapse; width: 100%; }
-.journal th { position: sticky; top: 0; z-index: 1; background: var(--surface-2); font-family: var(--f-titre); font-weight: 600; font-size: 13px; letter-spacing: .03em; text-transform: uppercase; color: var(--encre-3); text-align: left; padding: 6px 6px; border-bottom: 1px solid var(--trait); white-space: nowrap; }
-.journal td { padding: 9px 6px; border-bottom: 1px solid var(--trait); white-space: nowrap; font-size: 16px; font-variant-numeric: tabular-nums; vertical-align: middle; }
+.journal th { position: sticky; top: 0; z-index: 1; background: var(--surface-2); font-family: var(--f-titre); font-weight: 600; font-size: 12px; letter-spacing: .02em; text-transform: uppercase; color: var(--encre-3); text-align: left; padding: 6px 5px; border-bottom: 1px solid var(--trait); white-space: nowrap; }
+.journal td { padding: 7px 5px; border-bottom: 1px solid var(--trait); white-space: nowrap; font-size: 15px; font-variant-numeric: tabular-nums; vertical-align: middle; }
 /* Modifier / Suppr. toujours à portée : collés au bord droit du journal, même quand il est plus large que sa place */
 .journal th:last-child, .journal td:last-child { position: sticky; right: 0; z-index: 1; }
 .journal th:last-child { z-index: 2; }
@@ -139,7 +139,7 @@ table { border-collapse: collapse; width: 100%; }
 .onglet { border: 1px solid transparent; background: none; padding: 4px 10px; border-radius: 6px; cursor: pointer; font-weight: 600; color: var(--encre-2); }
 .onglet[aria-selected="true"] { background: var(--surface); border-color: var(--trait); color: var(--encre); }
 .groupe { padding: 5px 12px; font-family: var(--f-titre); font-size: 12px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; color: var(--encre-3); background: var(--surface-2); border-bottom: 1px solid var(--trait); }
-.circ { display: grid; grid-template-columns: 56px 34px 58px 58px 58px 50px 66px 128px minmax(0, 1fr); gap: 6px; align-items: center; padding: 4px 12px; border-bottom: 1px solid var(--trait); cursor: pointer; }
+.circ { display: grid; grid-template-columns: 56px 34px 58px 58px 58px 50px 66px 136px minmax(0, 1fr); gap: 6px; align-items: center; padding: 4px 12px; border-bottom: 1px solid var(--trait); cursor: pointer; }
 .circ > input { width: 100%; min-width: 0; padding: 3px 5px; border: 1px solid var(--trait); border-radius: 5px; background: var(--surface); font-size: 13px; }
 .circ > input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-doux); }
 .circ > input::placeholder { color: var(--encre-3); font-style: italic; }
@@ -331,3 +331,18 @@ iframe.apercu { width: 100%; height: 300px; border: 1px solid var(--trait); bord
 .tx-s.rouge { color: #991B1B; font-weight: 600; }
 .tx-s.rouge i { background: #DC2626; }
 .tx-s small { color: #9A6B4F; }
+
+/* flash info : phrases toutes prêtes, créneaux, aperçu */
+.fl-phrases { display: flex; flex-wrap: wrap; gap: 6px; }
+.fl-ph { font: inherit; font-size: 12.5px; text-align: left; padding: 5px 9px; border: 1px solid var(--trait); border-radius: 8px; background: var(--surface-2); color: var(--encre); cursor: pointer; max-width: 100%; }
+.fl-ph:hover { border-color: var(--accent); background: var(--accent-doux); }
+.fl-creneaux { display: flex; flex-wrap: wrap; gap: 5px; }
+.fl-apercu { margin-top: 10px; padding: 8px 12px; border-radius: 8px; background: #1b1405; color: #FFD27A; font-weight: 600; }
+.fl-apercu small { color: #b9a172; font-weight: 400; margin-right: 4px; }
+.tx-cr { padding: 1px 7px; border-radius: 6px; background: #7C2D1218; font-size: 12.5px; }
+
+/* boutons collés à l'état (plus de grand vide entre « Retard » / « À FA » et les boutons FA, Arrivée…) */
+.circ .boutons { justify-content: flex-start; }
+.fl-coches { display: flex; flex-wrap: wrap; gap: 8px 26px; margin-top: 10px; }
+.fl-coches label { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 600; color: var(--encre); cursor: pointer; }
+.fl-coches input { width: 18px; height: 18px; margin: 0; }

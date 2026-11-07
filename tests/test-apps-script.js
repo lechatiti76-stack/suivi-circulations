@@ -196,6 +196,38 @@ test('avis par clé d\'envoi : format simple et webhook Notion, fin, clé refus�
   var l = g.appel('GET', '/api/travaux');
   assert.deepStrictEqual(l.data.liste.map(function (t) { return t.code; }), ['PF2']);
   assert.strictEqual(g.appel('POST', '/api/travaux', JSON.stringify({ appareil: 'PF2', couleur: 'fin' })).data.liste.length, 0);
+  // créneau : texte lisible ; « journée » et heure de fin → fin automatique ; Notion « Créneau »
+  r = post('jeton-essai-123', { appareil: 'PPM A', couleur: 'orange', creneau: 'journée' });
+  assert.ok(r.ok && r.appareil === 'PPMA');
+  r = post('jeton-essai-123', { data: { properties: { 'Appareil': { type: 'title', title: [{ plain_text: 'RMG3' }] },
+    'Couleur': { type: 'select', select: { name: 'Rouge', color: 'red' } }, 'Créneau': { type: 'select', select: { name: 'Demi-journée matin' } } } } });
+  assert.ok(r.ok && r.appareil === 'RMG3' && r.etat === 'rouge');
+  var lc = g.appel('GET', '/api/travaux').data.liste;
+  assert.deepStrictEqual(lc.map(function (t) { return t.code + ' ' + t.creneau; }), ['RMG3 demi-journée (matin)', 'PPMA toute la journée']);
+  assert.ok(/T23:59:00$/.test(lc[1].fin) && !lc[0].fin);
+});
+
+console.log('Jours préparés (samedi / dimanche)');
+test('le vendredi, Demain = lundi et Après-demain = mardi ; préparations reprises', function () {
+  var SC = require('../commun.js');
+  var plan = { groupes: [{ id: 'TDF', famille: 'navette' }], circulations: [{ id: 'p1', groupe: 'TDF', code: 'LF1', sens: 'D', heure: '06:00', jours: [1, 2, 3, 4, 5] }] };
+  SC.regler({ sauterWeekend: true });
+  var ven = SC.nouvelleJournee(plan, '2026-11-06', null, new Date(2026, 10, 6, 6, 0));
+  assert.strictEqual(ven.demain.date, '2026-11-09'); assert.strictEqual(ven.surlendemain.date, '2026-11-10');
+  assert.strictEqual(SC.libellePrep('2026-11-09', '2026-11-06'), 'Lundi 9');
+  assert.strictEqual(SC.libellePrep('2026-11-06', '2026-11-05'), 'Demain · vendredi');
+  ven.demain.circulations[0].wagonsDemandes = 21;
+  // samedi (si ouvert) puis lundi : la préparation du vendredi suit
+  var sam = SC.nouvelleJournee(plan, '2026-11-07', ven.demain, new Date(), ven.surlendemain);
+  assert.strictEqual(sam.demain.date, '2026-11-09'); assert.strictEqual(sam.demain.circulations[0].wagonsDemandes, 21);
+  var lun = SC.nouvelleJournee(plan, '2026-11-09', ven.demain, new Date(), ven.surlendemain);
+  assert.strictEqual(lun.circulations[0].wagonsDemandes, 21); assert.strictEqual(lun.demain.date, '2026-11-10');
+  // ancienne journée (demain = samedi) recalée, réglage désactivé = jours civils
+  var j = { date: '2026-11-06', demain: { date: '2026-11-07', circulations: [] }, surlendemain: { date: '2026-11-08', circulations: [] } };
+  assert.ok(SC.recalerPreps(j, plan)); assert.strictEqual(j.demain.date, '2026-11-09'); assert.ok(!SC.recalerPreps(j, plan));
+  SC.regler({ sauterWeekend: false });
+  assert.strictEqual(SC.jourPrep('2026-11-06', 1), '2026-11-07');
+  SC.regler({ sauterWeekend: true });
 });
 
 console.log('\n' + reussis + ' tests réussis, ' + echecs + ' en échec.');

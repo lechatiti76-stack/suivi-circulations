@@ -31,6 +31,22 @@
   function ajouterJours(cle, n) { var d = lireDate(cle); d.setDate(d.getDate() + n); return cleDate(d); }
   /** Lundi = 1 ... dimanche = 7 (comme JOURSEM(...;2) dans Excel). */
   function jourSemaine(cle) { var d = lireDate(cle); return ((d.getDay() + 6) % 7) + 1; }
+  /**
+   * Jours préparés (« Demain », « Après-demain ») : par défaut sans samedi ni dimanche (le vendredi : lundi et mardi).
+   * Réglage Paramètres › Exploitation (sauterWeekend) appliqué par regler().
+   */
+  var REGLAGES = { sauterWeekend: true };
+  function regler(o) { Object.keys(o || {}).forEach(function (k) { REGLAGES[k] = o[k]; }); }
+  function jourPrep(cle, n) {
+    var d = cle, k = 0;
+    while (k < n) { d = ajouterJours(d, 1); if (!REGLAGES.sauterWeekend || jourSemaine(d) <= 5) k++; }
+    return d;
+  }
+  /** « Demain · samedi » si c'est le lendemain, sinon « Lundi 9 ». */
+  function libellePrep(date, ref) {
+    var nom = JOURS[jourSemaine(date) - 1];
+    return date === ajouterJours(ref, 1) ? 'Demain · ' + nom : nom.charAt(0).toUpperCase() + nom.slice(1) + ' ' + lireDate(date).getDate();
+  }
   function libelleJour(cle) {
     var d = lireDate(cle);
     return JOURS[jourSemaine(cle) - 1] + ' ' + d.getDate() + ' ' + MOIS[d.getMonth()];
@@ -168,20 +184,36 @@
   }
   /** Préparations de la veille (demain, après-demain) reprises telles quelles quand leur date correspond. */
   function nouvelleJournee(planning, cle, prepVeille, maintenant, prepSurveille) {
-    var reprise = function (prep, date) { return prep && prep.date === date && prep.circulations ? copie(prep.circulations) : genererCirculations(planning, date); };
-    var d1 = ajouterJours(cle, 1), d2 = ajouterJours(cle, 2);
+    var preps = [prepVeille, prepSurveille];
+    var reprise = function (date) {
+      var p = preps.filter(function (x) { return x && x.date === date && x.circulations; })[0];
+      return p ? copie(p.circulations) : genererCirculations(planning, date);
+    };
+    var d1 = jourPrep(cle, 1), d2 = jourPrep(cle, 2);
     return {
       schema: 1, date: cle, version: 0, creeA: iso(maintenant || new Date()),
-      mouvements: [], circulations: reprise(prepVeille, cle),
+      mouvements: [], circulations: reprise(cle),
       flash: { actif: false, texte: '', jusqua: '' },
-      demain: { date: d1, circulations: reprise(prepSurveille, d1) },
-      surlendemain: { date: d2, circulations: genererCirculations(planning, d2) },
+      demain: { date: d1, circulations: reprise(d1) },
+      surlendemain: { date: d2, circulations: reprise(d2) },
       cloture: null
     };
   }
+  /**
+   * Remet « Demain » et « Après-demain » sur les bons jours (réglage samedi/dimanche changé, ancienne journée) :
+   * une préparation déjà faite pour ce jour est gardée. Renvoie true si quelque chose a changé.
+   */
+  function recalerPreps(j, planning) {
+    var d1 = jourPrep(j.date, 1), d2 = jourPrep(j.date, 2), avant = [j.demain && j.demain.date, j.surlendemain && j.surlendemain.date].join();
+    if (avant === d1 + ',' + d2) return false;
+    var preps = [j.demain, j.surlendemain];
+    var pour = function (date) { return preps.filter(function (x) { return x && x.date === date; })[0] || { date: date, circulations: genererCirculations(planning, date) }; };
+    j.demain = pour(d1); j.surlendemain = pour(d2);
+    return true;
+  }
   /** Préparation d'après-demain, créée depuis le planning pour une journée qui n'en a pas encore. */
   function assurerSurlendemain(j, planning) {
-    var d2 = ajouterJours(j.date, 2);
+    var d2 = jourPrep(j.date, 2);
     if (!j.surlendemain || j.surlendemain.date !== d2) j.surlendemain = { date: d2, circulations: genererCirculations(planning, d2) };
     return j.surlendemain;
   }
@@ -323,13 +355,14 @@
     var base = ajouterJours(j.date, 1);
     for (var k = 0; k < 8 && out.length < (nb || 1); k++) {
       var date = ajouterJours(base, k);
+      if (REGLAGES.sauterWeekend && jourSemaine(date) > 5) continue;
       var prep = [j.demain, j.surlendemain].filter(function (p) { return p && p.date === date; })[0];
       var circs = (prep ? (prep.circulations || []) : genererCirculations(planning, date))
         .filter(function (c) { return c.groupe === gid && c.etat !== 'nonprevu'; });
       if (!circs.length) continue;
       out.push({
         date: date, demain: k === 0,
-        libelle: (k === 0 ? 'Demain · ' : '') + JOURS[jourSemaine(date) - 1] + ' ' + lireDate(date).getDate(),
+        libelle: (k === 0 ? 'Demain · ' + JOURS[jourSemaine(date) - 1] : libellePrep(date, j.date)),
         lignes: circs.sort(trierParHeure).map(function (c) { return ligneDiffusee(c, vide, 'navette'); })
       });
     }
@@ -394,7 +427,9 @@
       return a < b ? -1 : (a > b ? 1 : 0);
     });
     var f = j.flash || {};
-    var flashActif = f.actif && norm(f.texte) && (!f.jusqua || hm(maint) < f.jusqua || maint.slice(0, 10) < j.date);
+    // créneau : à partir de « de », jusqu'à « jusqua » (heures du jour)
+    var flashActif = f.actif && norm(f.texte) && (!f.jusqua || hm(maint) < f.jusqua || maint.slice(0, 10) < j.date) &&
+      (!f.de || hm(maint) >= f.de || maint.slice(0, 10) > j.date);
     return {
       schema: SCHEMA_DIFFUSION,
       date: j.date, jour: libelleJour(j.date),
@@ -841,7 +876,7 @@
     JOURS: JOURS, JOURS_COURTS: JOURS_COURTS, TYPES_MAIL: TYPES_MAIL, DEROULE: DEROULE, ENTETE_STATS: ENTETE_STATS,
     PARCOURS_DEFAUT: PARCOURS_DEFAUT, CORRESPONDANCES_SUIVI: CORRESPONDANCES_SUIVI, NOMS_TRAINS: NOMS_TRAINS, nomTrain: nomTrain,
     parcoursDe: parcoursDe, parcoursEnTexte: parcoursEnTexte, texteEnParcours: texteEnParcours, prochainesNavettes: prochainesNavettes,
-    assurerSurlendemain: assurerSurlendemain, journaliserCirculation: journaliserCirculation,
+    assurerSurlendemain: assurerSurlendemain, recalerPreps: recalerPreps, jourPrep: jourPrep, libellePrep: libellePrep, regler: regler, REGLAGES: REGLAGES, journaliserCirculation: journaliserCirculation,
     appliquerSuiviTrains: appliquerSuiviTrains, heureSuivi: heureSuivi,
     p2: p2, lireDate: lireDate, iso: iso, cleDate: cleDate, ajouterJours: ajouterJours, jourSemaine: jourSemaine,
     libelleJour: libelleJour, libelleDateCourte: libelleDateCourte, hm: hm, hhmm: hhmm, normHeure: normHeure, combiner: combiner,

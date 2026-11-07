@@ -32,9 +32,12 @@
   };
   function charger() {
     if (DEMO) {
-      window.__diffusion(diffusionDemo(), { battement: Math.floor(Date.now() / 1000) }, [
-        { code: 'PF2', couleur: 'rouge', texte: 'Le portique fluvial 2 est hors service pour le moment.', message: '' },
-        { code: 'RMG4', couleur: 'orange', texte: 'Le portique RMG4 est actuellement en cours de maintenance.', message: 'retour prévu 14:00' }]);
+      var cyc = Math.floor(Date.now() / 420000) * 420000, avis = [
+        { code: 'PF2', couleur: 'rouge', texte: 'Le portique fluvial 2 est hors service pour le moment.', message: '', creneau: 'toute la journée', depuis: '2000-01-01T00:00:00' },
+        { code: 'RMG4', couleur: 'orange', texte: 'Le portique RMG4 est actuellement en cours de maintenance.', message: 'retour prévu 14:00', creneau: '8h-12h', depuis: '2000-01-01T00:00:00' }];
+      // un nouvel avis 40 s après le début de chaque boucle : alerte en grand puis bandeau
+      if (Date.now() - cyc > 40000) avis.unshift({ code: 'RMG3', couleur: 'rouge', texte: 'Le portique RMG3 est hors service pour le moment.', message: 'panne spreader', creneau: 'demi-journée', depuis: SC.iso(new Date(cyc + 40000)), a: SC.iso(new Date(cyc + 40000)) });
+      window.__diffusion(diffusionDemo(), { battement: Math.floor(Date.now() / 1000) }, avis);
       return;
     }
     if (source) {
@@ -260,6 +263,7 @@
     // (l'heure réelle venant du Suivi trains est à la minute près et arrive avec quelques secondes de décalage)
     garde: paramNum('garde', 5),
     horizon: paramNum('horizon', DEMO ? 2.5 : 180),
+    fini: paramNum('fini', DEMO ? 20 : 60),
     tousGroupes: /[?&]groupes=tous\b/.test(location.search)
   };
   function dateIso(s) { var p = /^(\d{4})-(\d\d)-(\d\d)T(\d\d):(\d\d)(?::(\d\d))?/.exec(s || ''); return p ? new Date(+p[1], +p[2] - 1, +p[3], +p[4], +p[5], +(p[6] || 0)) : null; }
@@ -406,7 +410,16 @@
    * après-demain (Prochaines navettes) ; sans rien à montrer, il disparaît. Le matin (TDF + TN seulement), 2 fenêtres ;
    * l'après-midi, ATL revient dès que sa navette approche.
    */
+  /** Toutes les navettes du jour réalisées (ou supprimées / déjà là) : heure de la dernière, sinon null. */
+  function finDuJour(g) {
+    var faites = g.lignes.filter(function (l) { return l.etat !== 'supprime' && l.etat !== 'nonprevu'; });
+    if (!faites.length || faites.some(function (l) { return !l.reel && l.etat !== 'deja'; })) return null;
+    return faites.reduce(function (m, l) { var r = dateIso(l.reel); return r && (!m || r > m) ? r : m; }, null) || new Date(0);
+  }
   function etatGroupe(g) {
+    // terminé pour la journée : petite colonne dès la fin de la dernière vedette (?fini=60 secondes après la dernière)
+    var fin = finDuJour(g);
+    if (fin && Date.now() - fin.getTime() >= VED.fini * 1000) return 'fini';
     if (VED.tousGroupes) return 'actif';
     var maintenantMs = Date.now(), hor = VED.horizon * 60000, prochaine = null, actif = false;
     g.lignes.forEach(function (l) {
@@ -422,6 +435,20 @@
     var aDemain = (g.demain && g.demain.length) || (g.ensuite && g.ensuite.lignes && g.ensuite.lignes.length) || g.demainNote;
     if (prochaine || aDemain) return 'repos';
     return g.lignes.length ? 'repos' : 'cache';
+  }
+  /** Groupe terminé : « ✓ Terminé pour la journée », les navettes réalisées, puis les prochaines (demain…). */
+  function blocFini(g) {
+    var vues = {}, codes = g.lignes.slice().sort(function (a, b) { return (a.theo || '') < (b.theo || '') ? -1 : 1; }).filter(function (l) {
+      if (l.etat === 'nonprevu' || vues[l.code]) return false; vues[l.code] = true; return true;
+    });
+    var html = '<div class="nav-tete"><h2>' + esc(g.libelle) + '</h2><span class="fini-badge">✓ terminé</span></div>' +
+      '<div class="fini"><div class="fini-tete"><span class="fini-ok">✓</span><span>Terminé pour la journée</span></div>' +
+      '<div class="fini-codes">' + codes.map(function (l) {
+        var sup = l.etat === 'supprime';
+        return '<span class="fc' + (sup ? ' sup' : '') + '"><i>' + (sup ? '✕' : '✓') + '</i>' + esc(l.code) + '</span>';
+      }).join('') + '</div></div>';
+    if ((g.demain && g.demain.length) || g.demainNote || (g.ensuite && g.ensuite.lignes && g.ensuite.lignes.length)) html += blocProchaines(g);
+    return html;
   }
   function blocRepos(g) {
     var restantes = g.lignes.filter(function (l) { return !l.reel && l.etat !== 'supprime'; });
@@ -522,18 +549,20 @@
     var change = false, zone = $('#v-navettes');
     // 2 ou 3 grandes fenêtres selon l'heure : un groupe sans navette proche passe en colonne étroite « au repos »
     var tous = (d.navettes || []).map(function (g) { return { g: g, e: etatGroupe(g) }; }).filter(function (x) { return x.e !== 'cache'; });
-    if (!tous.some(function (x) { return x.e === 'actif'; })) tous.forEach(function (x) { if (x.g.lignes.length) x.e = 'actif'; });
+    if (!tous.some(function (x) { return x.e === 'actif'; })) tous.forEach(function (x) { if (x.g.lignes.length && x.e !== 'fini') x.e = 'actif'; });
     var nav = tous.map(function (x) { return x.g; });
     zone.style.setProperty('--n', Math.max(1, nav.length));
-    zone.style.gridTemplateColumns = tous.map(function (x) { return x.e === 'repos' ? 'minmax(0, .55fr)' : 'minmax(0, 1fr)'; }).join(' ') || '';
+    // tout terminé partout : les colonnes « terminé » se partagent la largeur
+    var tousFinis = tous.every(function (x) { return x.e === 'fini'; });
+    zone.style.gridTemplateColumns = tous.map(function (x) { return x.e === 'actif' || tousFinis ? 'minmax(0, 1fr)' : (x.e === 'fini' ? 'minmax(0, .45fr)' : 'minmax(0, .55fr)'); }).join(' ') || '';
     while (zone.children.length > nav.length) zone.removeChild(zone.lastChild);
     tous.forEach(function (x, i) {
       var g = x.g, el = zone.children[i];
       if (!el) { el = document.createElement('div'); zone.appendChild(el); }
-      var cls = 'nav' + (x.e === 'repos' ? ' repos' : '');
+      var cls = 'nav' + (x.e === 'repos' ? ' repos' : (x.e === 'fini' ? ' repos fini-jour' : ''));
       if (el.className !== cls) { el.className = cls; el.__html = null; }
       couleursGroupe(el, g.couleur);
-      change = majBloc(el, x.e === 'repos' ? blocRepos(g) : blocNavettes(g)) || change;
+      change = majBloc(el, x.e === 'fini' ? blocFini(g) : (x.e === 'repos' ? blocRepos(g) : blocNavettes(g))) || change;
     });
     var trains = $('#v-trains');
     trains.className = 'trains panneau';
@@ -555,8 +584,9 @@
     bloc.hidden = !liste.length;
     bloc.className = 'travaux' + (liste.some(function (x) { return x.couleur === 'rouge'; }) ? ' rouge' : '');
     t.innerHTML = liste.map(function (x) {
-      return '<span class="tx ' + esc(x.couleur) + '"><i></i>' + esc(x.texte) + (x.message ? ' <em>(' + esc(x.message) + ')</em>' : '') + '</span>';
+      return '<span class="tx ' + esc(x.couleur) + '"><i></i>' + esc(x.texte) + (x.creneau ? ' <b class="tx-cr">' + esc(x.creneau) + '</b>' : '') + (x.message ? ' <em>(' + esc(x.message) + ')</em>' : '') + '</span>';
     }).join('');
+    alerterTravaux(liste);
     t.style.animation = 'none';
     requestAnimationFrame(function () {
       var fen = $('#v-travaux-fen').clientWidth, large = t.scrollWidth;
@@ -569,6 +599,42 @@
       } else t.classList.remove('defile');
       ajuster();
     });
+  }
+
+  /**
+   * Nouvel avis (ou passage orange → rouge) : affiché en grand sur tout l'écran 5 secondes (?alerteTravaux=5), un après
+   * l'autre, puis il reste dans le bandeau. Au démarrage de l'écran, seuls les avis reçus depuis moins de 2 minutes
+   * s'affichent en grand.
+   */
+  var txVus = null, txFile = [], txEnCours = false, TX_DUREE = paramNum('alerteTravaux', 5);
+  function alerterTravaux(liste) {
+    var cle = function (x) { return x.code + '|' + x.couleur + '|' + (x.depuis || ''); };
+    var premier = txVus === null;
+    if (premier) txVus = {};
+    liste.forEach(function (x) {
+      var k = cle(x); if (txVus[k]) return;
+      txVus[k] = true;
+      var recu = dateIso(x.a || x.depuis), recent = recu && Date.now() - recu.getTime() < 120000;
+      if (TX_DUREE > 0 && (!premier || recent)) txFile.push(x);
+    });
+    suivanteAlerteTravaux();
+  }
+  function suivanteAlerteTravaux() {
+    if (txEnCours || !txFile.length) return;
+    var x = txFile.shift(), el = $('#v-tx-alerte'), rouge = x.couleur === 'rouge';
+    txEnCours = true;
+    el.className = 'tx-alerte ' + (rouge ? 'rouge' : 'orange');
+    el.innerHTML = '<div class="txa-cadre"><div class="txa-tete"><span>⚠</span> Alerte travaux <span>⚠</span></div>' +
+      '<div class="txa-app">' + esc(x.libelle || x.code) + '</div>' +
+      '<div class="txa-etat">' + (rouge ? 'Hors service' : 'En maintenance') + '</div>' +
+      '<div class="txa-texte">' + esc(x.texte) + '</div>' +
+      (x.creneau || x.message ? '<div class="txa-plus">' + [x.creneau ? '<b>' + esc(x.creneau) + '</b>' : '', x.message ? esc(x.message) : ''].filter(Boolean).join(' · ') + '</div>' : '') +
+      '</div>';
+    el.hidden = false;
+    setTimeout(function () {
+      el.classList.add('sortie');
+      setTimeout(function () { el.hidden = true; el.classList.remove('sortie'); txEnCours = false; suivanteAlerteTravaux(); }, 600);
+    }, TX_DUREE * 1000);
   }
 
   // ----------------------------------------------------------- flash info

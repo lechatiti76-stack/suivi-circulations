@@ -103,7 +103,19 @@ Copier chaque fichier sur le bureau du poste concerné. `Ecrans.bat` ouvre la pa
 2. Donnez à l'autre service l'**Adresse d'envoi** affichée (`…/exec?travaux=CLÉ`). C'est vous qui donnez la clé ; il n'a rien à vous transmettre. Ce n'est pas le mot de passe de la saisie : vous pouvez la changer à tout moment (Générer + Enregistrer) pour couper l'accès.
 3. Il envoie une requête **POST** à cette adresse avec `{"appareil":"RMG4","couleur":"orange","message":"graissage"}` (message facultatif). Couleurs : `orange` = maintenance, `rouge` = hors service, `vert` (ou `fin`) = fin de l'avis.
    - Depuis **Notion** : base « Appareils » avec une propriété titre (nom de l'appareil) et une propriété Sélection/Statut « Couleur » (orange / rouge / vert) ; automatisation « Quand Couleur change → Envoyer un webhook » vers l'adresse d'envoi, en cochant ces propriétés.
-4. L'avis s'affiche en bandeau **Travaux** dans la saisie (bouton Retirer) et en bas des écrans TV (rouge en premier). Boutons d'essai dans Paramètres. Historique dans l'onglet **Travaux** du classeur.
+4. Un **nouvel avis** s'affiche d'abord **en grand sur les écrans pendant 5 secondes** (« Alerte travaux », réglable avec `&alerteTravaux=8` dans l'adresse des écrans, `0` pour désactiver), puis reste en bandeau **Travaux** en bas des écrans (rouge en premier) et dans la saisie (bouton Retirer). Boutons d'essai dans Paramètres. Historique dans l'onglet **Travaux** du classeur.
+5. **Créneau** (facultatif) : champ `"creneau"` du message, ou propriété Notion **Créneau** / **Durée** / **Période** (texte, sélection ou date avec heure de début et de fin). Exemples : `Journée`, `Demi-journée matin`, `8h-12h`, `de 13h30 à 17h`, `jusqu'à 16h`. Il s'affiche à côté de la phrase ; avec une heure de fin (ou « Journée » = jusqu'à minuit), l'avis disparaît tout seul à cette heure. Exemple : `{"appareil":"RMG4","couleur":"orange","creneau":"8h-12h"}`.
+
+## Flash info
+
+- Bouton **Flash info** : phrases toutes prêtes (un clic), **complément** ajouté à la suite (ex. « Défaillance des installations de sécurité » + « ADV 5011 »), créneau **De / Jusqu'à** (boutons rapides 6h–13h30, 13h30–21h, 8h–12h, 1 h, 2 h…). Le flash ne passe sur les écrans que pendant le créneau ; « Indiquer le créneau dans le texte » ajoute « — de 8h à 12h ». « Afficher sur les écrans » est coché d'office. Aperçu en bas de la fenêtre.
+- La liste des phrases se modifie dans **Paramètres › Écrans et fichiers** (une par ligne).
+
+## Saisie rapide et jours préparés
+
+- Champ **Wagons** : taper `h` écrit aussitôt **HLP**.
+- Onglets **Demain / Après-demain** : sans samedi ni dimanche (le vendredi : **Lundi** et **Mardi** ; une préparation faite le vendredi est reprise le lundi). Réglage dans **Paramètres › Exploitation**. Les écrans (Prochaines navettes) et les coupons « demain » suivent.
+- Écrans : un groupe dont **toutes les navettes du jour sont faites** passe 1 minute après en petite colonne « ✓ Terminé pour la journée » avec ses navettes cochées en vert (`&fini=30` pour régler le délai en secondes).
 
 ## Modifier l'application
 

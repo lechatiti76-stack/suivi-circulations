@@ -236,7 +236,8 @@
   function charger(j, version, lecture) {
     app.journee = j; app.version = version; app.lectureSeule = !!lecture;
     app.pile = []; app.selection = null; app.edition = null; app.ouverte = null;
-    if (!j.demain) j.demain = { date: SC.ajouterJours(j.date, 1), circulations: SC.genererCirculations(app.planning, SC.ajouterJours(j.date, 1)) };
+    // « Demain » / « Après-demain » sur les prochains jours ouvrés (réglage Paramètres › Exploitation)
+    app.recale = SC.recalerPreps(j, app.planning);
     if (!j.flash) j.flash = { actif: false, texte: '', jusqua: '' };
     viderFormulaire();
     rendre();
@@ -253,7 +254,11 @@
   function ouvrirJourActif() {
     var cle = SC.cleDate(new Date());
     return api('GET', '/api/journee/' + cle).then(function (r) {
-      if (r.status === 200) { charger(r.data.journee, r.data.version, false); restaurerSecours(); return; }
+      if (r.status === 200) {
+        charger(r.data.journee, r.data.version, false); restaurerSecours();
+        if (app.recale) sauvegarderBientot({ type: 'demain.recalage', resume: 'Jours préparés : ' + app.journee.demain.date + ' et ' + app.journee.surlendemain.date, a: maintenant() });
+        return;
+      }
       if (r.status !== 404) throw new Error('lecture de la journée impossible');
       return creerJournee(cle);
     });
@@ -580,10 +585,15 @@
   function enregistrerParametres(p, message) {
     return api('PUT', '/api/parametres', JSON.stringify(p, null, 2)).then(function (r) {
       if (r.status !== 200) throw new Error((r.data && r.data.erreur) || 'enregistrement refusé');
-      app.params = p; remplirListes(); rendre(); publier();
+      app.params = p; reglerJours(); remplirListes();
+      if (app.journee && !app.lectureSeule && SC.recalerPreps(SC.copie(app.journee), app.planning)) {
+        modifier('Jours préparés recalés (samedi / dimanche)', 'demain.recalage', function (j) { SC.recalerPreps(j, app.planning); });
+      }
+      rendre(); publier();
       if (message) toast(message);
     });
   }
+  function reglerJours() { SC.regler({ sauterWeekend: ((app.params || {}).exploitation || {}).sauterWeekend !== false }); }
   function memoriserEF(num, ef) {
     var p = SC.copie(app.params); p.correspondancesEF = p.correspondancesEF || {}; p.correspondancesEF[SC.norm(num)] = ef;
     enregistrerParametres(p, num + ' = ' + ef + ' ajouté à la base.').catch(function (e) { toast('Base non modifiée : ' + e.message, 'crit'); });
@@ -639,7 +649,7 @@
     // une lecture à la fois (toutes les 4 s) : pas d'empilement si le serveur répond lentement
     if (app.suiviEnCours && Date.now() - app.suiviEnCours < 20000) return;
     app.suiviEnCours = Date.now();
-    api('POST', '/api/suivi-trains', JSON.stringify({ date: date })).then(function (r) {
+    api('POST', '/api/suivi-trains', JSON.stringify({ date: date, demain: app.journee.demain && app.journee.demain.date })).then(function (r) {
       if (r.status !== 200) { app.suiviTrains = { erreur: (r.data && r.data.erreur) || ('erreur ' + r.status), a: new Date() }; return; }
       app.suiviTrains = { a: new Date(), lignes: (r.data.navettes || []).length + (r.data.journal || []).length };
       majCoupons(r.data, date);
@@ -751,8 +761,8 @@
   $('#pa-tx-url').addEventListener('focus', function () { this.select(); });
   $$('[data-tx-essai]').forEach(function (b) {
     b.addEventListener('click', function () {
-      api('POST', '/api/travaux', JSON.stringify({ appareil: $('#pa-tx-essai-app').value, couleur: b.getAttribute('data-tx-essai'), message: 'essai depuis la saisie' })).then(function (r) {
-        if (r.status !== 200) { toast('Essai refusé : ' + ((r.data && r.data.erreur) || r.status) + ' (serveur 2.5.0 ?)', 'crit'); return; }
+      api('POST', '/api/travaux', JSON.stringify({ appareil: $('#pa-tx-essai-app').value, couleur: b.getAttribute('data-tx-essai'), message: 'essai depuis la saisie', creneau: $('#pa-tx-essai-cr').value.trim() })).then(function (r) {
+        if (r.status !== 200) { toast('Essai refusé : ' + ((r.data && r.data.erreur) || r.status) + ' (serveur 2.6.0 ?)', 'crit'); return; }
         majTravauxSaisie(r.data.liste || []);
         toast('Essai envoyé : ' + r.data.appareil + ' ' + r.data.etat + '.');
       }, function () { toast('Serveur injoignable.', 'crit'); });
@@ -763,7 +773,7 @@
     var el = $('#travaux-saisie');
     el.hidden = !liste.length;
     el.innerHTML = liste.length ? '<b>⚠ Travaux</b>' + liste.map(function (x) {
-      return '<span class="tx-s ' + esc(x.couleur) + '"><i></i>' + esc(x.texte) + (x.message ? ' <em>(' + esc(x.message) + ')</em>' : '') +
+      return '<span class="tx-s ' + esc(x.couleur) + '"><i></i>' + esc(x.texte) + (x.creneau ? ' <b class="tx-cr">' + esc(x.creneau) + '</b>' : '') + (x.message ? ' <em>(' + esc(x.message) + ')</em>' : '') +
         ' <small>depuis ' + esc(hm(x.depuis)) + '</small> <button type="button" class="bouton petit" data-tx-fin="' + esc(x.code) + '" title="Retirer cet avis des écrans">Retirer</button></span>';
     }).join('') : '';
   }
@@ -805,9 +815,8 @@
     var j = app.journee;
     $('#h-jour').textContent = SC.libelleJour(j.date) + ' ' + j.date.slice(0, 4) + (j.cloture ? ' · clôturée à ' + hm(j.cloture.a) : '');
     $('#h-lecture').hidden = !app.lectureSeule;
-    $('#o-demain').textContent = j.demain ? 'Demain · ' + SC.JOURS[SC.jourSemaine(j.demain.date) - 1] : 'Demain';
-    var d2 = SC.ajouterJours(j.date, 2), nom2 = SC.JOURS[SC.jourSemaine(d2) - 1];
-    $('#o-surlendemain').textContent = nom2.charAt(0).toUpperCase() + nom2.slice(1) + ' ' + SC.lireDate(d2).getDate();
+    $('#o-demain').textContent = SC.libellePrep(j.demain ? j.demain.date : SC.jourPrep(j.date, 1), j.date);
+    $('#o-surlendemain').textContent = SC.libellePrep(j.surlendemain ? j.surlendemain.date : SC.jourPrep(j.date, 2), j.date);
     document.title = 'Saisie · ' + SC.libelleJour(j.date);
   }
   function rendreJournal() {
@@ -1054,21 +1063,71 @@
   $$('[data-fermer]').forEach(function (b) { b.addEventListener('click', function () { fermer(b); }); });
 
   // Flash info
+  var PHRASES_FLASH = [
+    'Travaux RFP en cours : entrée et sortie du terminal impossibles',
+    'Travaux sur le site : entrée et sortie impossibles',
+    'Dérangement des installations de sécurité',
+    'Défaillance des installations de sécurité',
+    'Défaillance de la caténaire : entrée et sortie en machine électrique impossibles, les machines thermiques ne sont pas impactées',
+    'Coupure de la caténaire programmée : circulations en traction thermique uniquement',
+    'Circulations ralenties sur le faisceau : marche à vue',
+    'Manœuvres en cours : attendre l\'autorisation avant toute entrée sur le faisceau',
+    'Voie neutralisée',
+    'Aiguillage hors service',
+    'Intempéries : circulations perturbées, retards possibles',
+    'Mouvement social : circulations perturbées'
+  ];
+  function phrasesFlash() { var l = ((app.params || {}).visuel || {}).phrasesFlash; return l && l.length ? l : PHRASES_FLASH; }
+  /** 08:00 → 8h, 13:30 → 13h30 */
+  function hFr(h) { var m = /^(\d\d):(\d\d)$/.exec(h || ''); return m ? (+m[1]) + 'h' + (m[2] === '00' ? '' : m[2]) : ''; }
+  /** Texte publié : phrase + complément + créneau (si coché). */
+  function texteFlash() {
+    var base = $('#fl-texte').value.trim().replace(/[\s.;,:]+$/, ''), comp = $('#fl-complement').value.trim();
+    var de = SC.normHeure($('#fl-de').value.trim()), jq = SC.normHeure($('#fl-jusqua').value.trim()), cr = '';
+    if ($('#fl-creneau-texte').checked) cr = de && jq ? 'de ' + hFr(de) + ' à ' + hFr(jq) : (jq ? 'jusqu\'à ' + hFr(jq) : (de ? 'à partir de ' + hFr(de) : ''));
+    return [base, comp].filter(Boolean).join(' ') + (base || comp ? (cr ? ' — ' + cr : '') : '');
+  }
+  function majApercuFlash() { var t = texteFlash(); $('#fl-apercu').textContent = t || '—'; }
   $('#b-flash').addEventListener('click', function () {
     var f = app.journee.flash || {};
-    $('#fl-texte').value = f.texte || ''; $('#fl-jusqua').value = f.jusqua || ''; $('#fl-actif').checked = f.actif !== false;
-    $('#fl-etat').textContent = f.actif && f.texte ? 'Affiché actuellement' + (f.jusqua ? ' jusqu\'à ' + f.jusqua : '') : 'Aucun flash affiché';
+    $('#fl-texte').value = f.base != null ? f.base : (f.texte || ''); $('#fl-complement').value = f.complement || '';
+    $('#fl-de').value = f.de || ''; $('#fl-jusqua').value = f.jusqua || '';
+    $('#fl-creneau-texte').checked = f.creneauTexte !== false;
+    $('#fl-actif').checked = true;
+    $('#fl-phrases').innerHTML = phrasesFlash().map(function (ph, i) { return '<button type="button" class="fl-ph" data-fl-ph="' + i + '">' + esc(ph) + '</button>'; }).join('');
+    $('#fl-etat').textContent = f.actif && f.texte ? 'Affiché actuellement' + (f.de ? ' de ' + f.de : '') + (f.jusqua ? ' jusqu\'à ' + f.jusqua : '') : 'Aucun flash affiché';
+    majApercuFlash();
     ouvrir('#d-flash'); $('#fl-texte').focus();
   });
+  $('#fl-phrases').addEventListener('click', function (e) {
+    var b = e.target.closest('[data-fl-ph]'); if (!b) return;
+    $('#fl-texte').value = phrasesFlash()[+b.getAttribute('data-fl-ph')] || '';
+    majApercuFlash(); $('#fl-complement').focus();
+  });
+  $$('[data-fl-cr]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var v = b.getAttribute('data-fl-cr'), m = /^maintenant-(\d)$/.exec(v);
+      if (m) { var d = new Date(); $('#fl-de').value = SC.hm(SC.iso(d)); d.setHours(d.getHours() + +m[1]); $('#fl-jusqua').value = SC.hm(SC.iso(d)); }
+      else { $('#fl-de').value = v.split('-')[0] || ''; $('#fl-jusqua').value = v.split('-')[1] || ''; }
+      majApercuFlash();
+    });
+  });
+  ['#fl-texte', '#fl-complement', '#fl-de', '#fl-jusqua'].forEach(function (s) { $(s).addEventListener('input', majApercuFlash); });
+  $('#fl-creneau-texte').addEventListener('change', majApercuFlash);
   $('#fm-flash').addEventListener('submit', function (e) {
     e.preventDefault();
-    var texte = $('#fl-texte').value.trim(), jusqua = $('#fl-jusqua').value.trim();
+    var jusqua = $('#fl-jusqua').value.trim(), de = $('#fl-de').value.trim();
     if (jusqua && !SC.normHeure(jusqua)) { $('#fl-etat').textContent = 'Heure de fin invalide.'; return; }
-    modifier(texte ? 'Flash info publié' : 'Flash info vidé', 'flash', function (j) { j.flash = { actif: $('#fl-actif').checked && !!texte, texte: texte, jusqua: SC.normHeure(jusqua) || '', depuis: maintenant() }; });
+    if (de && !SC.normHeure(de)) { $('#fl-etat').textContent = 'Heure de début invalide.'; return; }
+    var texte = texteFlash(), base = $('#fl-texte').value.trim(), comp = $('#fl-complement').value.trim(), cr = $('#fl-creneau-texte').checked;
+    modifier(texte ? 'Flash info publié' : 'Flash info vidé', 'flash', function (j) {
+      j.flash = { actif: $('#fl-actif').checked && !!texte, texte: texte, base: base, complement: comp, creneauTexte: cr,
+        de: SC.normHeure(de) || '', jusqua: SC.normHeure(jusqua) || '', depuis: maintenant() };
+    });
     fermer($('#fm-flash'));
   });
   $('#fl-retirer').addEventListener('click', function () {
-    modifier('Flash info retiré', 'flash', function (j) { j.flash = { actif: false, texte: j.flash ? j.flash.texte : '', jusqua: '' }; });
+    modifier('Flash info retiré', 'flash', function (j) { var f = j.flash || {}; j.flash = { actif: false, texte: f.texte || '', base: f.base, complement: f.complement || '', creneauTexte: f.creneauTexte, de: '', jusqua: '' }; });
     fermer($('#fl-retirer'));
   });
 
@@ -1226,7 +1285,7 @@
   function regenererDemain() {
     var sur = app.onglet === 'surlendemain', nom = sur ? 'd\'après-demain' : 'de demain';
     modifier('Préparation ' + nom + ' régénérée', 'demain.regeneration', function (j) {
-      var date = SC.ajouterJours(j.date, sur ? 2 : 1), p = { date: date, circulations: SC.genererCirculations(app.planning, date) };
+      var date = SC.jourPrep(j.date, sur ? 2 : 1), p = { date: date, circulations: SC.genererCirculations(app.planning, date) };
       if (sur) j.surlendemain = p; else j.demain = p;
     });
     toast('Préparation ' + nom + ' régénérée depuis le planning.', null, { libelle: 'Annuler', fn: annuler });
@@ -1248,11 +1307,13 @@
       ligneMail('Copie de tous les mails navettes', 'data-copie="navettes"', m.copieNavettes, 'copie');
     $('#pa-listes').value = Object.keys(listes).filter(function (k) { return !utilisees[k]; }).map(function (k) { return k + ': ' + listes[k].join('; '); }).join('\n');
     $('#pa-seuil').value = (p.exploitation || {}).seuilRetardMinutes || 15; $('#pa-coupure').value = (p.exploitation || {}).coupurePoste || '13:30';
+    $('#pa-weekend').checked = (p.exploitation || {}).sauterWeekend !== false;
     $('#pa-site').value = p.site || ''; $('#pa-voies').value = (p.voies || []).join(' ');
     $('#pa-alias').value = Object.keys(p.aliasVoies || {}).map(function (k) { return k + '=' + p.aliasVoies[k]; }).join(', ');
     $('#pa-diffusion').value = ((p.diffusion || {}).dossiers || []).join('\n');
     $('#pa-sauvegarde').value = (p.sauvegarde || {}).dossier || ''; $('#pa-archives').value = (p.archives || {}).dossier || '';
     $('#pa-titre').value = (p.visuel || {}).titre || ''; $('#pa-demain').value = (p.visuel || {}).demainAPartirDe || '00:00'; $('#pa-vitesse').value = (p.visuel || {}).vitesseFlash || 90;
+    $('#pa-phrases').value = phrasesFlash().join('\n');
     var noms = Object.assign({}, SC.NOMS_TRAINS, (p.visuel || {}).nomsTrains || {});
     $('#pa-noms').value = Object.keys(noms).map(function (k) { return k + '=' + noms[k]; }).join(', ');
     var base = p.correspondancesEF || {};
@@ -1349,6 +1410,7 @@
     p.exploitation = p.exploitation || {};
     var s = +$('#pa-seuil').value; if (!(s >= 1 && s <= 240)) err.push('Seuil de retard entre 1 et 240 minutes.'); p.exploitation.seuilRetardMinutes = s;
     var cp = SC.normHeure($('#pa-coupure').value); if (!cp) err.push('Heure de coupure invalide.'); p.exploitation.coupurePoste = cp;
+    p.exploitation.sauterWeekend = $('#pa-weekend').checked;
     p.site = $('#pa-site').value.trim();
     p.voies = $('#pa-voies').value.toLowerCase().split(/[\s,;]+/).filter(Boolean);
     if (!p.voies.length) err.push('Au moins une voie est nécessaire.');
@@ -1360,6 +1422,7 @@
     p.visuel = p.visuel || {}; p.visuel.titre = $('#pa-titre').value.trim() || 'Circulations du jour';
     var dm = SC.normHeure($('#pa-demain').value || '00:00'); if (!dm) err.push('Heure d\'affichage de demain invalide.'); p.visuel.demainAPartirDe = dm;
     p.visuel.vitesseFlash = Math.max(20, Math.min(400, +$('#pa-vitesse').value || 90));
+    p.visuel.phrasesFlash = $('#pa-phrases').value.split(/\r?\n/).map(function (x) { return x.trim(); }).filter(Boolean);
     var nomsTrains = {};
     $('#pa-noms').value.split(/[,;]+/).forEach(function (x) {
       x = x.trim(); if (!x) return; var k = x.split('=');
@@ -1500,7 +1563,13 @@
     prendreSuggestion(+x.getAttribute('data-i'));
     avancer(F.num);
   });
-  F.compo.addEventListener('input', function () { app.auto.compo = false; F.compo.classList.remove('auto'); surCompo(); });
+  F.compo.addEventListener('input', function (e) {
+    // saisie rapide : « h » (ou « hl ») → HLP aussitôt ; un retour arrière ne le remet pas
+    if (/^insert/.test(e.inputType || 'insert') && /^h(l(p)?)?$/i.test(F.compo.value.trim()) && F.compo.value.trim().toUpperCase() !== 'HLP') {
+      F.compo.value = 'HLP'; F.compo.setSelectionRange(3, 3);
+    }
+    app.auto.compo = false; F.compo.classList.remove('auto'); surCompo();
+  });
   ['voie', 'vers', 'reel', 'annonce', 'comm'].forEach(function (k) { F[k].addEventListener('input', function () { app.auto[k] = false; F[k].classList.remove('auto'); aide(); }); });
   F.ef.addEventListener('input', function () { app.touche.ef = !!F.ef.value; F.ef.classList.remove('auto'); });
   F.sit.addEventListener('change', function () { app.touche.sit = true; });
@@ -1782,7 +1851,7 @@
     api('GET', '/api/config').then(function (r) {
       if (r.status === 403) { ouvrirConnexion('Clé refusée par le serveur : ' + ((r.data && r.data.erreur) || '')); throw new Error('clé refusée'); }
       if (r.status !== 200) throw new Error('configuration illisible');
-      app.params = r.data.parametres; app.planning = r.data.planning; app.serviceOk = true;
+      app.params = r.data.parametres; app.planning = r.data.planning; app.serviceOk = true; reglerJours();
       if (!(app.planning.circulations || []).length || !(app.params.voies || []).length) {
         ouvrirConnexion('Le serveur ne contient encore ni planning ni paramètres : importez le fichier donnees-initiales.json.');
         throw new Error('serveur vide');

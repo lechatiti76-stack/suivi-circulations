@@ -151,11 +151,27 @@
     <div class="dlg-tete"><h2>Flash info des écrans</h2><button type="button" class="bouton" data-fermer>Fermer</button></div>
     <div class="dlg-corps">
       <p class="note">Le texte défile en bas des écrans tant qu'il est actif. Il ne contient aucune information interne : rédigez-le pour le public des écrans.</p>
+      <div class="champ"><label>Phrases toutes prêtes (un clic la met dans le texte ; liste modifiable dans Paramètres › Écrans)</label><div class="fl-phrases" id="fl-phrases"></div></div>
       <div class="champ"><label for="fl-texte">Texte</label><textarea id="fl-texte" maxlength="400" style="font-family:var(--f-texte);font-size:15px"></textarea></div>
+      <div class="champ"><label for="fl-complement">Complément ajouté à la suite (facultatif, ex. « ADV 5011 »)</label><input id="fl-complement" maxlength="120" autocomplete="off"></div>
       <div class="formgrid">
+        <div class="champ"><label for="fl-de">De (facultatif)</label><input class="mono" id="fl-de" placeholder="hh:mm"></div>
         <div class="champ"><label for="fl-jusqua">Jusqu'à (facultatif)</label><input class="mono" id="fl-jusqua" placeholder="hh:mm"></div>
-        <div class="champ"><label><input type="checkbox" id="fl-actif"> Afficher sur les écrans</label></div>
+        <div class="champ large"><label>Créneaux rapides</label><div class="fl-creneaux">
+          <button type="button" class="bouton petit" data-fl-cr="06:00-13:30">6h – 13h30</button>
+          <button type="button" class="bouton petit" data-fl-cr="13:30-21:00">13h30 – 21h</button>
+          <button type="button" class="bouton petit" data-fl-cr="08:00-12:00">8h – 12h</button>
+          <button type="button" class="bouton petit" data-fl-cr="13:30-17:00">13h30 – 17h</button>
+          <button type="button" class="bouton petit" data-fl-cr="maintenant-1">1 heure</button>
+          <button type="button" class="bouton petit" data-fl-cr="maintenant-2">2 heures</button>
+          <button type="button" class="bouton petit" data-fl-cr="">Toute la journée</button>
+        </div></div>
       </div>
+      <div class="fl-coches">
+        <label><input type="checkbox" id="fl-creneau-texte" checked> Indiquer le créneau dans le texte</label>
+        <label><input type="checkbox" id="fl-actif" checked> Afficher sur les écrans</label>
+      </div>
+      <div class="fl-apercu"><small>Sur les écrans :</small> <span id="fl-apercu">—</span></div>
     </div>
     <div class="dlg-pied"><span class="gauche" id="fl-etat"></span><button type="button" class="bouton danger" id="fl-retirer">Retirer</button><button type="submit" class="bouton primaire" id="fl-publier">Publier</button></div>
   </form>
@@ -241,6 +257,7 @@
           <div class="champ"><label for="pa-coupure">Coupure matin / après-midi</label><input id="pa-coupure" class="mono"></div>
           <div class="champ"><label for="pa-site">Nom du site (mails)</label><input id="pa-site"></div>
         </div>
+        <div class="fl-coches"><label><input type="checkbox" id="pa-weekend"> « Demain » et « Après-demain » sans samedi ni dimanche (le vendredi : lundi et mardi)</label></div>
         <div class="formgrid">
           <div class="champ large"><label for="pa-voies">Voies (séparées par des espaces)</label><textarea id="pa-voies" style="min-height:44px"></textarea></div>
           <div class="champ large"><label for="pa-alias">Graphies corrigées automatiquement (ex. vext1=ext1)</label><input id="pa-alias" class="mono"></div>
@@ -276,6 +293,7 @@
         </div>
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px">
           <span class="note">Essai (après Enregistrer) :</span><select id="pa-tx-essai-app"></select>
+          <input id="pa-tx-essai-cr" placeholder="créneau : 8h-12h, journée…" style="width:190px">
           <button type="button" class="bouton petit" data-tx-essai="orange">Orange</button>
           <button type="button" class="bouton petit" data-tx-essai="rouge">Rouge</button>
           <button type="button" class="bouton petit" data-tx-essai="vert">Fin (vert)</button>
@@ -298,6 +316,7 @@
           <div class="champ"><label for="pa-titre">Titre des écrans</label><input id="pa-titre"></div>
           <div class="champ"><label for="pa-demain">Afficher demain à partir de</label><input id="pa-demain" class="mono" placeholder="00:00"></div>
           <div class="champ"><label for="pa-vitesse">Vitesse du flash info (px/s)</label><input id="pa-vitesse" class="mono" inputmode="numeric"></div>
+          <div class="champ large"><label for="pa-phrases">Phrases toutes prêtes du flash info (une par ligne)</label><textarea id="pa-phrases" style="min-height:110px"></textarea></div>
           <div class="champ large"><label for="pa-noms">Villes des trains de ligne sur les écrans (CODE=Nom, séparés par des virgules)</label><input id="pa-noms"></div>
         </div>
       </div>

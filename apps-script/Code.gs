@@ -15,7 +15,7 @@
  */
 
 const CLE = 'CHANGER-CE-MOT-DE-PASSE';
-const VERSION = '2.5.0';
+const VERSION = '2.6.0';
 const FUSEAU = 'Europe/Paris';
 const NOM_DOSSIER = 'Suivi des circulations - données';
 
@@ -58,7 +58,7 @@ function router_(m, c, corps) {
   if (m === 'POST' && c === '/api/battement') return ok_({ battement: battre_() });
   if (m === 'POST' && c === '/api/mail') return avecVerrou_(() => mail_(JSON.parse(corps)));
   if (m === 'POST' && c === '/api/archives') return avecVerrou_(() => archives_(JSON.parse(corps)));
-  if (m === 'POST' && c === '/api/suivi-trains') return suiviTrains_(JSON.parse(corps || '{}').date);
+  if (m === 'POST' && c === '/api/suivi-trains') { const b = JSON.parse(corps || '{}'); return suiviTrains_(b.date, b.demain); }
   if (m === 'GET' && c === '/api/travaux') return ok_({ liste: listeTravaux_() });
   if (m === 'POST' && c === '/api/travaux') { const res = appliquerAvisTravaux_(JSON.parse(corps || '{}'), 'saisie'); return res.ok ? ok_(Object.assign(res, { liste: listeTravaux_() })) : { status: 400, data: { erreur: res.erreur } }; }
   return { status: 404, data: { erreur: 'route inconnue : ' + m + ' ' + c } };
@@ -72,11 +72,13 @@ function router_(m, c, corps) {
  * (moins que les 10 s entre deux lectures de la saisie : un seul poste lit toujours des données fraîches).
  * Le classeur doit appartenir au compte qui a déployé ce serveur (ou lui être partagé).
  */
-function suiviTrains_(date) {
+function suiviTrains_(date, jourDemain) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(String(date || ''))) return { status: 400, data: { erreur: 'date invalide' } };
   const id = idClasseur_((lireJson_('parametres.json', {}).suiviTrains || {}).classeur);
   if (!id) return { status: 400, data: { erreur: 'adresse du classeur Suivi trains absente ou invalide (Paramètres)' } };
-  const cache = CacheService.getScriptCache(), cle = 'suivi:' + id + ':' + date, vu = cache.get(cle);
+  // « demain » = prochain jour préparé dans la saisie (le vendredi : lundi), sinon le lendemain
+  const demain = /^\d{4}-\d{2}-\d{2}$/.test(String(jourDemain || '')) ? String(jourDemain) : Utilities.formatDate(new Date(new Date(date + 'T12:00:00').getTime() + 864e5), FUSEAU, 'yyyy-MM-dd');
+  const cache = CacheService.getScriptCache(), cle = 'suivi:' + id + ':' + date + ':' + demain, vu = cache.get(cle);
   if (vu) return ok_(JSON.parse(vu));
   let ss;
   try { ss = SpreadsheetApp.openById(id); }
@@ -87,7 +89,7 @@ function suiviTrains_(date) {
   lignesDuJour_(ss.getSheetByName('Journal'), date).forEach(r => out.journal.push({ train: r[1], etape: r[2], theo: r[3], reel: r[4] }));
   // coupons navettes saisis dans le Suivi trains (onglet Coupons) : la journée et le lendemain
   const coupon = r => ({ navette: r[1], ligne: r[2], numero: r[3], site: r[4], dateCoupon: r[5], wagons: r[6], note: r[7] });
-  const demain = Utilities.formatDate(new Date(new Date(date + 'T12:00:00').getTime() + 864e5), FUSEAU, 'yyyy-MM-dd');
+  out.dateDemain = demain;
   lignesDuJour_(ss.getSheetByName('Coupons'), date).forEach(r => out.coupons.push(coupon(r)));
   lignesDuJour_(ss.getSheetByName('Coupons'), demain).forEach(r => out.couponsDemain.push(coupon(r)));
   cache.put(cle, JSON.stringify(out), 3);
@@ -115,6 +117,8 @@ function lignesDuJour_(feuille, date) {
  *   ou le corps envoyé tel quel par Notion (propriétés de la page : un titre ou texte « Appareil », un select ou
  *   statut dont la couleur Notion dit l'état : orange / jaune = maintenance, rouge = hors service, vert / gris = fini).
  * Couleurs : orange → « en cours de maintenance », rouge → « hors service », vert (ou « fin », « ok ») → l'avis disparaît.
+ * Créneau facultatif ("creneau" ou propriété Notion « Créneau » / « Durée » / « Période ») : « Journée », « Demi-journée »,
+ * « 8h-12h », « 13h30 à 17h »… affiché après la phrase ; avec une heure de fin (ou « Journée »), l'avis disparaît seul.
  * La clé d'envoi (Paramètres › Travaux de la saisie) est différente de la CLE de la saisie : elle ne permet que ça.
  * Les avis en cours sont joints aux données des écrans (bandeau « Travaux ») et visibles dans la saisie.
  */
@@ -152,19 +156,46 @@ function texteNotion_(p) {
 function lireAvisTravaux_(corps) {
   const props = (corps && corps.data && corps.data.properties) || (corps && corps.properties) || null;
   if (!props) {
-    return { appareil: corps.appareil || corps.equipement || corps.engin || corps.nom || corps.name || '', couleur: corps.couleur || corps.color || corps.etat || corps.statut || '', message: corps.message || corps.texte || corps.text || '' };
+    return { appareil: corps.appareil || corps.equipement || corps.engin || corps.nom || corps.name || '', couleur: corps.couleur || corps.color || corps.etat || corps.statut || '', message: corps.message || corps.texte || corps.text || '',
+      creneau: corps.creneau || corps['créneau'] || corps.duree || corps['durée'] || corps.periode || corps['période'] || corps.horaire || corps.horaires || '' };
   }
-  let appareil = '', couleur = '', message = '';
+  let appareil = '', couleur = '', message = '', creneau = '';
   Object.keys(props).forEach(nom => {
     const p = props[nom], n = cleTravaux_(nom);
     if (/appareil|engin|equipement|portique|machine/.test(n) && !appareil) appareil = texteNotion_(p);
     else if (/couleur|color/.test(n)) couleur = texteNotion_(p) || couleur;
     else if (/message|commentaire|detail|description|texte/.test(n)) message = texteNotion_(p);
+    else if (/creneau|duree|periode|horaire|plage|quand/.test(n)) creneau = texteNotion_(p) || (p && p.date && p.date.start ? creneauDate_(p.date) : '');
     const choix = p && (p.select || p.status);
     if (choix && choix.color && !couleur && /etat|statut|status|state|niveau|couleur/.test(n)) couleur = choix.color;
   });
   if (!appareil) Object.keys(props).forEach(nom => { if (!appareil && props[nom] && props[nom].type === 'title') appareil = texteNotion_(props[nom]); });
-  return { appareil: appareil, couleur: couleur, message: message };
+  return { appareil: appareil, couleur: couleur, message: message, creneau: creneau };
+}
+/** Propriété Notion « Date » avec début et fin → « 8h00-12h00 ». */
+function creneauDate_(d) {
+  const h = s => { const m = /T(\d\d):(\d\d)/.exec(s || ''); return m ? (+m[1]) + 'h' + m[2] : ''; };
+  return [h(d.start), h(d.end)].filter(String).join('-') || 'Journée';
+}
+/**
+ * Créneau lisible et fin automatique : « journée » → minuit ; « 8h-12h », « de 8h30 à 12h », « 08:00-12:00 » → 8h-12h,
+ * fin à 12:00 (le jour de l'envoi) ; « demi-journée » (sans heure) → pas de fin automatique. Renvoie { texte, fin }.
+ */
+function lireCreneau_(brut, maintenant) {
+  const s = String(brut || '').trim().slice(0, 60);
+  if (!s) return { texte: '', fin: '' };
+  const jour = String(maintenant || maintenant_()).slice(0, 10), n = cleTravaux_(s);
+  const heures = [];
+  s.replace(/(\d{1,2})\s*(?:h|:)\s*(\d{2})?|(\d{1,2})\s*(?=-|à|a\b)/gi, (m, a, b, c) => { const h = +(a || c); if (h <= 24) heures.push([h, +(b || 0)]); return m; });
+  const fmt = x => x[0] + 'h' + (x[1] ? ('0' + x[1]).slice(-2) : '');
+  const lendemain = new Date(new Date(jour + 'T12:00:00Z').getTime() + 864e5).toISOString().slice(0, 10);
+  // fin déjà passée (créneau de nuit 22h-6h, ou envoyé pour le lendemain) : le lendemain
+  const iso = x => { const f = jour + 'T' + ('0' + Math.min(23, x[0])).slice(-2) + ':' + (x[0] >= 24 ? '59' : ('0' + x[1]).slice(-2)) + ':00'; return f <= String(maintenant || '') ? lendemain + f.slice(10) : f; };
+  if (heures.length >= 2) return { texte: fmt(heures[0]) + '-' + fmt(heures[1]), fin: iso(heures[1]) };
+  if (heures.length === 1 && /jusqu|fin|avant/.test(n)) return { texte: 'jusqu\'à ' + fmt(heures[0]), fin: iso(heures[0]) };
+  if (/demi/.test(n)) return { texte: /apres|aprem|pm/.test(n) ? 'demi-journée (après-midi)' : (/matin|am\b/.test(n) ? 'demi-journée (matin)' : 'demi-journée'), fin: '' };
+  if (/journee|jour|day/.test(n)) return { texte: 'toute la journée', fin: jour + 'T23:59:00' };
+  return { texte: s, fin: '' };
 }
 function lireTravaux_() {
   const cache = CacheService.getScriptCache(), t = cache.get('travaux');
@@ -180,9 +211,10 @@ function ecrireTravaux_(etat) {
 /** Liste affichable des avis en cours (rouge d'abord), phrase construite avec les réglages. */
 function listeTravaux_() {
   const etat = lireTravaux_(), cfg = configTravaux_();
-  return Object.keys(etat).map(k => {
+  const maint = maintenant_();
+  return Object.keys(etat).filter(k => !etat[k].fin || etat[k].fin > maint).map(k => {
     const a = etat[k], phrase = String(cfg.phrases[a.couleur] || PHRASES_TRAVAUX[a.couleur] || '{appareil}').replace(/\{appareil\}/g, a.libelle || a.code);
-    return { code: a.code, libelle: a.libelle, couleur: a.couleur, texte: phrase.charAt(0).toUpperCase() + phrase.slice(1), message: a.message || '', depuis: a.depuis, a: a.a };
+    return { code: a.code, libelle: a.libelle, couleur: a.couleur, texte: phrase.charAt(0).toUpperCase() + phrase.slice(1), message: a.message || '', creneau: a.creneau || '', fin: a.fin || '', depuis: a.depuis, a: a.a };
   }).sort((x, y) => (x.couleur === y.couleur ? String(x.code).localeCompare(String(y.code)) : (x.couleur === 'rouge' ? -1 : 1)));
 }
 /** Applique un avis : { appareil, couleur, message }. Renvoie { ok, … }. */
@@ -196,11 +228,17 @@ function appliquerAvisTravaux_(avis, source) {
   const code = app ? app.code : nom.toUpperCase();
   return avecVerrou_(() => {
     const etat = lireTravaux_();
+    const cr = lireCreneau_(avis.creneau, maintenant_());
+    // un avis échu (fin dépassée) repart de zéro
+    const prec = etat[code] && (!etat[code].fin || etat[code].fin > maintenant_()) ? etat[code] : null;
     if (couleur === 'fin') delete etat[code];
     else etat[code] = { code: code, libelle: app ? app.libelle : nom, couleur: couleur, message: String(avis.message || '').slice(0, 200),
-      depuis: (etat[code] && etat[code].couleur === couleur && etat[code].depuis) || maintenant_(), a: maintenant_(), source: source || '' };
+      creneau: cr.texte, fin: cr.fin,
+      depuis: (prec && prec.couleur === couleur && prec.depuis) || maintenant_(), a: maintenant_(), source: source || '' };
+    // ménage : avis échus
+    Object.keys(etat).forEach(k => { if (etat[k].fin && etat[k].fin <= maintenant_()) delete etat[k]; });
     ecrireTravaux_(etat);
-    try { feuille_('Travaux', ['Horodatage', 'Appareil', 'État', 'Message', 'Source']).appendRow([maintenant_(), code, couleur, String(avis.message || ''), source || '']); } catch (e) { /* registre facultatif */ }
+    try { feuille_('Travaux', ['Horodatage', 'Appareil', 'État', 'Message', 'Source', 'Créneau']).appendRow([maintenant_(), code, couleur, String(avis.message || ''), source || '', String(avis.creneau || '')]); } catch (e) { /* registre facultatif */ }
     return { status: 200, data: { ok: true, appareil: code, etat: couleur, connu: !!app } };
   }).data;
 }
@@ -211,7 +249,7 @@ function recevoirTravaux_(e) {
   let corps = {};
   try { corps = JSON.parse((e.postData && e.postData.contents) || '{}'); } catch (err) { corps = {}; }
   if (!corps || typeof corps !== 'object') corps = {};
-  ['appareil', 'couleur', 'message'].forEach(k => { if (e.parameter[k] && !corps[k]) corps[k] = e.parameter[k]; });
+  ['appareil', 'couleur', 'message', 'creneau'].forEach(k => { if (e.parameter[k] && !corps[k]) corps[k] = e.parameter[k]; });
   return appliquerAvisTravaux_(lireAvisTravaux_(corps), corps.data ? 'notion' : 'externe');
 }
 
