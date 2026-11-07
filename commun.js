@@ -438,6 +438,9 @@
       seuilRetardMinutes: (params && params.exploitation && params.exploitation.seuilRetardMinutes) || 15,
       vitesseFlash: vis.vitesseFlash || 90,
       alerteSansNouvellesSecondes: vis.alerteSansNouvellesSecondes || 45,
+      // alerte travaux en grand (secondes, 0 = pas d'alerte) ; mélodie et annonce vocale des arrivées imminentes
+      alerteTravaux: vis.alerteTravauxSecondes == null ? 5 : +vis.alerteTravauxSecondes,
+      son: { actif: vis.sonArrivees !== false, volume: vis.volumeSon == null ? 70 : +vis.volumeSon, voix: vis.voixArrivees !== false },
       version: j.version, publieA: maint,
       navettes: navettes, trains: trains,
       flash: flashActif ? { texte: String(f.texte).trim(), jusqua: f.jusqua || '' } : null
@@ -872,7 +875,68 @@
     return changes;
   }
 
+  // ------------------------------------------------- carillon d'annonce (navigateur)
+  /**
+   * Carillon de gare original (4 notes en cloche : sol – ré – si – mi), joué par le navigateur, sans fichier son.
+   * Ce n'est pas l'indicatif de la SNCF : une mélodie propre à l'application, dans le même esprit. Environ 4 secondes.
+   */
+  var audio = { ctx: null };
+  function contexteAudio() {
+    var AC = typeof window !== 'undefined' && (window.AudioContext || window.webkitAudioContext);
+    if (!AC) return null;
+    if (!audio.ctx) {
+      audio.ctx = new AC();
+      // petite réverbération de hall (réponse impulsionnelle générée)
+      var c = audio.ctx, n = Math.floor(c.sampleRate * 1.8), ir = c.createBuffer(2, n, c.sampleRate);
+      for (var k = 0; k < 2; k++) { var d = ir.getChannelData(k); for (var i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / n, 3.2); }
+      audio.rev = c.createConvolver(); audio.rev.buffer = ir;
+      audio.revGain = c.createGain(); audio.revGain.gain.value = 0.32;
+      audio.rev.connect(audio.revGain); audio.revGain.connect(c.destination);
+    }
+    return audio.ctx;
+  }
+  function sonDisponible() { var c = contexteAudio(); return !!c && c.state === 'running'; }
+  function deverrouillerSon() { var c = contexteAudio(); return c && c.state !== 'running' ? c.resume() : Promise.resolve(); }
+  function cloche(c, sortie, f, t, duree, force) {
+    [[1, 1], [2.0, 0.28], [3.01, 0.1], [4.2, 0.04]].forEach(function (h) {
+      var o = c.createOscillator(), g = c.createGain();
+      o.type = 'sine'; o.frequency.value = f * h[0];
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(force * h[1], t + 0.012);
+      g.gain.exponentialRampToValueAtTime(0.002 * h[1], t + duree / (h[0] > 1 ? 1.8 : 1));
+      g.gain.linearRampToValueAtTime(0, t + duree + 0.04);
+      o.connect(g); g.connect(sortie); o.start(t); o.stop(t + duree + 0.05);
+    });
+  }
+  /** Joue le carillon (volume 0-100). Promesse résolue à la fin. */
+  function jouerCarillon(volume) {
+    var c = contexteAudio();
+    if (!c) return Promise.resolve(false);
+    return deverrouillerSon().then(function () {
+      if (c.state !== 'running') return false;
+      var v = Math.max(0, Math.min(100, volume == null ? 70 : +volume)) / 100;
+      var sortie = c.createGain(); sortie.gain.value = 0.9 * v;
+      sortie.connect(c.destination); sortie.connect(audio.rev);
+      var t0 = c.currentTime + 0.05;
+      [[392.0, 0, 1.8], [587.33, 0.42, 1.8], [493.88, 0.84, 1.8], [659.26, 1.26, 3.2]].forEach(function (n) { cloche(c, sortie, n[0], t0 + n[1], n[2], 0.5); });
+      return new Promise(function (ok) { setTimeout(function () { ok(true); }, 3600); });
+    }, function () { return false; });
+  }
+  /** Annonce vocale en français (synthèse du navigateur), si une voix est disponible. */
+  function annoncer(texte, volume) {
+    if (typeof window === 'undefined' || !window.speechSynthesis || !texte) return Promise.resolve(false);
+    return new Promise(function (ok) {
+      var u = new SpeechSynthesisUtterance(texte), voix = window.speechSynthesis.getVoices().filter(function (v) { return /^fr/i.test(v.lang); });
+      u.lang = 'fr-FR'; if (voix.length) u.voice = voix.filter(function (v) { return /google|natural|amelie|thomas|denise|henri/i.test(v.name); })[0] || voix[0];
+      u.rate = 0.92; u.volume = Math.max(0, Math.min(1, (volume == null ? 70 : +volume) / 100));
+      var fini = false, fin = function () { if (!fini) { fini = true; ok(true); } };
+      u.onend = fin; u.onerror = fin; setTimeout(fin, 15000);
+      window.speechSynthesis.speak(u);
+    });
+  }
+
   return {
+    jouerCarillon: jouerCarillon, annoncer: annoncer, sonDisponible: sonDisponible, deverrouillerSon: deverrouillerSon,
     JOURS: JOURS, JOURS_COURTS: JOURS_COURTS, TYPES_MAIL: TYPES_MAIL, DEROULE: DEROULE, ENTETE_STATS: ENTETE_STATS,
     PARCOURS_DEFAUT: PARCOURS_DEFAUT, CORRESPONDANCES_SUIVI: CORRESPONDANCES_SUIVI, NOMS_TRAINS: NOMS_TRAINS, nomTrain: nomTrain,
     parcoursDe: parcoursDe, parcoursEnTexte: parcoursEnTexte, texteEnParcours: texteEnParcours, prochainesNavettes: prochainesNavettes,

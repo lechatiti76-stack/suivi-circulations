@@ -367,11 +367,60 @@
     return out.sort(function (a, b) { return (a.ph.sec == null ? 0 : a.ph.sec) - (b.ph.sec == null ? 0 : b.ph.sec); });
   }
   var dernierVed = { nav: '', trains: '' };
+
+  // ------------------------------------------- carillon + annonce des arrivées imminentes
+  /**
+   * Arrivée imminente (navette ou train en « approche ») : carillon puis annonce vocale avec la voie, une fois par
+   * arrivée. Réglages dans la saisie (Paramètres › Écrans) ; ?son=0 dans l'adresse coupe le son de cet écran.
+   * Les navigateurs bloquent le son tant qu'on n'a pas cliqué une fois sur la page : bouton « Activer le son ».
+   */
+  var SON_ECRAN = !/[?&]son=0\b/.test(location.search), annVus = null, annFile = [], annEnCours = false;
+  function reglagesSon() { var s = (etat.d && etat.d.son) || {}; return { actif: SON_ECRAN && s.actif !== false, volume: s.volume == null ? 70 : s.volume, voix: s.voix !== false }; }
+  /** « FL1 » → « F L 1 », « VR2 » → « V R 2 » : lu lettre par lettre par la voix. */
+  function epeler(s) { return String(s || '').toUpperCase().replace(/([A-Z])(?=[A-Z0-9])/g, '$1 ').replace(/(\d)(?=[A-Z])/g, '$1 '); }
+  function phraseArrivee(v) {
+    var l = v.l, voie = l.voie ? ', voie ' + String(l.voie).split(/\s*[+,\/]\s*/).map(epeler).join(' et ') : '';
+    if (v.g) return 'Attention, arrivée imminente de la navette ' + epeler(l.code) + ', en provenance de ' + v.g.libelle + voie + '.';
+    return 'Attention, arrivée imminente du train ' + (l.numero || v.t.code) + ', en provenance de ' + (v.t.nom || v.t.code) + voie + '.';
+  }
+  function annoncerArrivees(vn, vt) {
+    var premier = annVus === null, liste = vn.concat(vt).filter(function (v) { return v.ph.cle === 'approche'; });
+    if (premier) annVus = {};
+    liste.forEach(function (v) {
+      var k = (v.l.id || v.l.code) + '|' + (v.l.partie || '');
+      if (annVus[k]) return;
+      annVus[k] = true;
+      // écran qui démarre : pas d'annonce pour une arrivée déjà en approche depuis plus d'une minute
+      if (premier && !(v.ph.sec != null && v.ph.sec > VED.avant * 60 - 60)) return;
+      annFile.push(phraseArrivee(v));
+    });
+    suivanteAnnonce();
+  }
+  function suivanteAnnonce() {
+    if (annEnCours || !annFile.length) return;
+    var r = reglagesSon(), texte = annFile.shift();
+    if (!r.actif) { annFile = []; return; }
+    // son bloqué par le navigateur (pas encore de clic sur la page) : annonce perdue, bouton « Activer le son » affiché
+    if (!SC.sonDisponible()) { annFile = []; majBoutonSon(); return; }
+    annEnCours = true;
+    SC.jouerCarillon(r.volume).then(function () { return r.voix ? SC.annoncer(texte, r.volume) : null; })
+      .then(function () { annEnCours = false; suivanteAnnonce(); }, function () { annEnCours = false; suivanteAnnonce(); });
+  }
+  function majBoutonSon() {
+    var b = $('#v-son');
+    if (!b) return;
+    b.hidden = !reglagesSon().actif || SC.sonDisponible();
+  }
+  document.addEventListener('click', function (e) {
+    if (!e.target.closest('#v-son') && SC.sonDisponible()) return;
+    SC.deverrouillerSon().then(function () { majBoutonSon(); if (e.target.closest('#v-son')) SC.jouerCarillon(reglagesSon().volume); });
+  });
   function majVedettes() {
     var d = etat.d, cNav = $('#v-ved-nav'), cTr = $('#v-ved-trains'), grille = $('#v-grille');
     if (!cNav || !cTr) return;
     if (!d || !VED.actif) { cNav.hidden = cTr.hidden = true; grille.classList.remove('ved-nav-on', 'ved-trains-on'); return; }
     var vn = vue === 'trains' ? [] : vedettesNavettes(d), vt = vue === 'navettes' ? [] : vedettesTrains(d);
+    annoncerArrivees(vn, vt);
     // navettes : 4 carrés au plus côte à côte (les plus proches) ; le reste est compté
     var htmlNav = vn.length ? '<div class="ved-tuiles" style="--n:' + Math.min(4, vn.length) + '">' + vn.slice(0, 4).map(tuileNavette).join('') + '</div>' +
       (vn.length > 4 ? '<div class="ved-plus">+ ' + (vn.length - 4) + ' autre(s)</div>' : '') : '';
@@ -570,6 +619,7 @@
     majFlash(d.flash);
     if (change) ajuster();
     majVedettes();
+    majBoutonSon();
   }
 
   // ------------------------------------------------------------- travaux
@@ -606,7 +656,9 @@
    * l'autre, puis il reste dans le bandeau. Au démarrage de l'écran, seuls les avis reçus depuis moins de 2 minutes
    * s'affichent en grand.
    */
-  var txVus = null, txFile = [], txEnCours = false, TX_DUREE = paramNum('alerteTravaux', 5);
+  var txVus = null, txFile = [], txEnCours = false;
+  /** Durée de l'alerte en grand : adresse de l'écran (?alerteTravaux=8), sinon Paramètres de la saisie, sinon 5 s. */
+  function dureeAlerteTravaux() { return paramNum('alerteTravaux', etat.d && etat.d.alerteTravaux != null ? etat.d.alerteTravaux : 5); }
   function alerterTravaux(liste) {
     var cle = function (x) { return x.code + '|' + x.couleur + '|' + (x.depuis || ''); };
     var premier = txVus === null;
@@ -615,7 +667,7 @@
       var k = cle(x); if (txVus[k]) return;
       txVus[k] = true;
       var recu = dateIso(x.a || x.depuis), recent = recu && Date.now() - recu.getTime() < 120000;
-      if (TX_DUREE > 0 && (!premier || recent)) txFile.push(x);
+      if (dureeAlerteTravaux() > 0 && (!premier || recent)) txFile.push(x);
     });
     suivanteAlerteTravaux();
   }
@@ -634,7 +686,7 @@
     setTimeout(function () {
       el.classList.add('sortie');
       setTimeout(function () { el.hidden = true; el.classList.remove('sortie'); txEnCours = false; suivanteAlerteTravaux(); }, 600);
-    }, TX_DUREE * 1000);
+    }, dureeAlerteTravaux() * 1000);
   }
 
   // ----------------------------------------------------------- flash info

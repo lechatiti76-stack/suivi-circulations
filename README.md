@@ -106,6 +106,12 @@ Copier chaque fichier sur le bureau du poste concerné. `Ecrans.bat` ouvre la pa
 4. Un **nouvel avis** s'affiche d'abord **en grand sur les écrans pendant 5 secondes** (« Alerte travaux », réglable avec `&alerteTravaux=8` dans l'adresse des écrans, `0` pour désactiver), puis reste en bandeau **Travaux** en bas des écrans (rouge en premier) et dans la saisie (bouton Retirer). Boutons d'essai dans Paramètres. Historique dans l'onglet **Travaux** du classeur.
 5. **Créneau** (facultatif) : champ `"creneau"` du message, ou propriété Notion **Créneau** / **Durée** / **Période** (texte, sélection ou date avec heure de début et de fin). Exemples : `Journée`, `Demi-journée matin`, `8h-12h`, `de 13h30 à 17h`, `jusqu'à 16h`. Il s'affiche à côté de la phrase ; avec une heure de fin (ou « Journée » = jusqu'à minuit), l'avis disparaît tout seul à cette heure. Exemple : `{"appareil":"RMG4","couleur":"orange","creneau":"8h-12h"}`.
 
+## Son des arrivées et alerte travaux
+
+- **Arrivée imminente** (navette ou train en approche) : les écrans jouent un **carillon** (mélodie de 4 notes propre à l'application, environ 4 s) puis une **annonce vocale** : « Attention, arrivée imminente de la navette F L 1, en provenance de TDF, voie V R 2 ». Réglages dans **Paramètres › Écrans et fichiers** : carillon, annonce vocale, volume, bouton ▶ Écouter. `&son=0` dans l'adresse d'un écran le rend muet.
+- Le navigateur bloque le son tant qu'on n'a pas cliqué sur la page : au démarrage, cliquez une fois sur **🔊 Activer le son des annonces** (en haut à droite de l'écran). Sur un PC dédié, Chrome lancé avec `--autoplay-policy=no-user-gesture-required` n'a plus besoin de ce clic.
+- **Alerte travaux** : moitié basse de l'écran, fond clignotant ; durée dans **Paramètres › Travaux** (0 = pas d'alerte en grand).
+
 ## Flash info
 
 - Bouton **Flash info** : phrases toutes prêtes (un clic), **complément** ajouté à la suite (ex. « Défaillance des installations de sécurité » + « ADV 5011 »), créneau **De / Jusqu'à** (boutons rapides 6h–13h30, 13h30–21h, 8h–12h, 1 h, 2 h…). Le flash ne passe sur les écrans que pendant le créneau ; « Indiquer le créneau dans le texte » ajoute « — de 8h à 12h ». « Afficher sur les écrans » est coché d'office. Aperçu en bas de la fenêtre.

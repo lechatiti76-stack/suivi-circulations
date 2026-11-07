@@ -319,28 +319,36 @@ html, body { margin: 0; height: 100%; background: var(--fond); color: var(--encr
 @keyframes clignTx { 50% { opacity: .25; } }
 @media (prefers-reduced-motion: reduce) { .travaux-txt.defile { animation: none; white-space: normal; } .tx.rouge i { animation: none; } }
 
-/* ---------- alerte travaux en grand (5 s), style « alerte enlèvement » ---------- */
-.tx-alerte { position: fixed; inset: 0; z-index: 50; display: flex; align-items: center; justify-content: center; padding: 3vh 3vw;
-  background: repeating-linear-gradient(-45deg, #1a1200 0 2.2rem, #F59E0B 2.2rem 4.4rem); animation: txaEntree .35s ease-out; }
-.tx-alerte.rouge { background: repeating-linear-gradient(-45deg, #1a0503 0 2.2rem, #E5251B 2.2rem 4.4rem); }
+/* ---------- alerte travaux : moitié basse de l'écran, fond clignotant (durée : Paramètres de la saisie) ---------- */
+.tx-alerte { position: fixed; left: 0; right: 0; bottom: 0; height: 50vh; z-index: 50; display: flex; align-items: center; justify-content: center; padding: 2.2vh 3vw;
+  background: repeating-linear-gradient(-45deg, #1a1200 0 2rem, #F59E0B 2rem 4rem); box-shadow: 0 -1.5rem 4rem #000a;
+  animation: txaEntree .35s ease-out, txaClign 1s steps(1, end) .35s infinite; }
+.tx-alerte.rouge { background: repeating-linear-gradient(-45deg, #1a0503 0 2rem, #E5251B 2rem 4rem); }
 .tx-alerte.sortie { animation: txaSortie .6s ease-in forwards; }
-.txa-cadre { width: min(92vw, 110rem); max-height: 94vh; overflow: hidden; background: #0B0F14; color: #fff; border: .6rem solid #F59E0B; border-radius: 1.4rem;
-  box-shadow: 0 0 0 .5rem #0B0F14, 0 2rem 6rem #000c; padding: 3vh 3vw 4vh; text-align: center; display: flex; flex-direction: column; gap: 1.6vh; }
+.txa-cadre { width: min(94vw, 110rem); max-height: 44vh; overflow: hidden; background: #0B0F14; color: #fff; border: .45rem solid #F59E0B; border-radius: 1.1rem;
+  box-shadow: 0 0 0 .4rem #0B0F14, 0 1.5rem 4rem #000c; padding: 1.8vh 2.5vw 2.4vh; text-align: center; display: flex; flex-direction: column; gap: .9vh; }
 .tx-alerte.rouge .txa-cadre { border-color: #E5251B; animation: txaCadre 1s steps(1, end) infinite; }
-.txa-tete { align-self: center; display: inline-flex; gap: 1.2rem; align-items: center; padding: .6vh 2.6vw; border-radius: .6rem; background: #F59E0B; color: #1a1200;
-  font-weight: 800; letter-spacing: .2em; text-transform: uppercase; font-size: clamp(1.6rem, 3.4vw, 3.6rem); }
+.txa-tete { align-self: center; display: inline-flex; gap: 1rem; align-items: center; padding: .4vh 2vw; border-radius: .5rem; background: #F59E0B; color: #1a1200;
+  font-weight: 800; letter-spacing: .2em; text-transform: uppercase; font-size: clamp(1.1rem, 3.6vh, 2.8rem); }
 .tx-alerte.rouge .txa-tete { background: #E5251B; color: #fff; }
-.txa-app { font-weight: 800; font-size: clamp(3rem, 9vw, 10rem); line-height: 1; letter-spacing: -.01em; }
-.txa-etat { align-self: center; font-weight: 800; text-transform: uppercase; letter-spacing: .12em; font-size: clamp(1.6rem, 3.6vw, 4rem); color: #FDBA4D; }
+.txa-app { font-weight: 800; font-size: clamp(2rem, 10vh, 7.5rem); line-height: 1; letter-spacing: -.01em; }
+.txa-etat { align-self: center; font-weight: 800; text-transform: uppercase; letter-spacing: .12em; font-size: clamp(1.1rem, 4vh, 3rem); color: #FDBA4D; }
 .tx-alerte.rouge .txa-etat { color: #FF6B5E; }
-.txa-texte { font-size: clamp(1.3rem, 2.6vw, 2.8rem); color: #E7EDF3; }
-.txa-plus { font-size: clamp(1.2rem, 2.2vw, 2.4rem); color: #FFE7C2; }
+.txa-texte { font-size: clamp(1rem, 3vh, 2.2rem); color: #E7EDF3; }
+.txa-plus { font-size: clamp(.95rem, 2.6vh, 2rem); color: #FFE7C2; }
 .txa-plus b { padding: .1em .6em; border-radius: .4em; background: #F59E0B33; }
-@keyframes txaEntree { from { opacity: 0; transform: scale(1.06); } to { opacity: 1; transform: none; } }
-@keyframes txaSortie { to { opacity: 0; transform: scale(.96); } }
+@keyframes txaEntree { from { opacity: 0; transform: translateY(30%); } to { opacity: 1; transform: none; } }
+@keyframes txaSortie { to { opacity: 0; transform: translateY(30%); } }
+@keyframes txaClign { 50% { background: #3a2604; } }
+.tx-alerte.rouge:not(.sortie) { animation: txaEntree .35s ease-out, txaClignR 1s steps(1, end) .35s infinite; }
+@keyframes txaClignR { 50% { background: #3d0906; } }
 @keyframes txaCadre { 50% { border-color: #fff; } }
 .tx .tx-cr { font-weight: 700; padding: .05em .55em; border-radius: .4em; background: #F59E0B33; color: #FFE7C2; }
-@media (prefers-reduced-motion: reduce) { .tx-alerte, .tx-alerte.rouge .txa-cadre { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .tx-alerte, .tx-alerte.rouge, .tx-alerte.rouge .txa-cadre { animation: none; } }
+
+/* bouton « Activer le son » (les navigateurs bloquent le son avant un premier clic) */
+.son-bouton { position: fixed; right: 1rem; top: 5.2rem; z-index: 60; font: inherit; font-weight: 700; font-size: 1rem; padding: .55rem .9rem; border-radius: .6rem;
+  border: .1rem solid #66CCFF88; background: #0B1A26ee; color: #CFEFFF; cursor: pointer; }
 
 /* ---------- groupe de navettes terminé pour la journée ---------- */
 .nav.fini-jour { opacity: 1; }

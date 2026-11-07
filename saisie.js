@@ -759,6 +759,11 @@
     toast('Nouvelle clé d\'envoi : cliquez sur Enregistrer pour l\'activer.');
   });
   $('#pa-tx-url').addEventListener('focus', function () { this.select(); });
+  $('#pa-volume').addEventListener('input', function () { $('#pa-volume-val').textContent = this.value + ' %'; });
+  $('#pa-son-essai').addEventListener('click', function () {
+    var v = +$('#pa-volume').value;
+    SC.jouerCarillon(v).then(function () { if ($('#pa-voix').checked) SC.annoncer('Attention, arrivée imminente de la navette F L 1, en provenance de TDF, voie V R 2.', v); });
+  });
   $$('[data-tx-essai]').forEach(function (b) {
     b.addEventListener('click', function () {
       api('POST', '/api/travaux', JSON.stringify({ appareil: $('#pa-tx-essai-app').value, couleur: b.getAttribute('data-tx-essai'), message: 'essai depuis la saisie', creneau: $('#pa-tx-essai-cr').value.trim() })).then(function (r) {
@@ -1314,6 +1319,10 @@
     $('#pa-sauvegarde').value = (p.sauvegarde || {}).dossier || ''; $('#pa-archives').value = (p.archives || {}).dossier || '';
     $('#pa-titre').value = (p.visuel || {}).titre || ''; $('#pa-demain').value = (p.visuel || {}).demainAPartirDe || '00:00'; $('#pa-vitesse').value = (p.visuel || {}).vitesseFlash || 90;
     $('#pa-phrases').value = phrasesFlash().join('\n');
+    var vis = p.visuel || {};
+    $('#pa-tx-duree').value = vis.alerteTravauxSecondes == null ? 5 : vis.alerteTravauxSecondes;
+    $('#pa-son').checked = vis.sonArrivees !== false; $('#pa-voix').checked = vis.voixArrivees !== false;
+    $('#pa-volume').value = vis.volumeSon == null ? 70 : vis.volumeSon; $('#pa-volume-val').textContent = $('#pa-volume').value + ' %';
     var noms = Object.assign({}, SC.NOMS_TRAINS, (p.visuel || {}).nomsTrains || {});
     $('#pa-noms').value = Object.keys(noms).map(function (k) { return k + '=' + noms[k]; }).join(', ');
     var base = p.correspondancesEF || {};
@@ -1422,6 +1431,10 @@
     p.visuel = p.visuel || {}; p.visuel.titre = $('#pa-titre').value.trim() || 'Circulations du jour';
     var dm = SC.normHeure($('#pa-demain').value || '00:00'); if (!dm) err.push('Heure d\'affichage de demain invalide.'); p.visuel.demainAPartirDe = dm;
     p.visuel.vitesseFlash = Math.max(20, Math.min(400, +$('#pa-vitesse').value || 90));
+    var dtx = $('#pa-tx-duree').value.trim();
+    if (dtx !== '' && !(/^\d{1,3}$/.test(dtx) && +dtx <= 120)) err.push('Alerte travaux : de 0 à 120 secondes.');
+    p.visuel.alerteTravauxSecondes = dtx === '' ? 5 : +dtx;
+    p.visuel.sonArrivees = $('#pa-son').checked; p.visuel.voixArrivees = $('#pa-voix').checked; p.visuel.volumeSon = +$('#pa-volume').value;
     p.visuel.phrasesFlash = $('#pa-phrases').value.split(/\r?\n/).map(function (x) { return x.trim(); }).filter(Boolean);
     var nomsTrains = {};
     $('#pa-noms').value.split(/[,;]+/).forEach(function (x) {

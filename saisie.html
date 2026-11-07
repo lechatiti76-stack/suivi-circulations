@@ -290,6 +290,7 @@
         <div class="formgrid">
           <div class="champ large"><label for="pa-tx-orange">Phrase orange ({appareil} = phrase de l'appareil)</label><input id="pa-tx-orange"></div>
           <div class="champ large"><label for="pa-tx-rouge">Phrase rouge</label><input id="pa-tx-rouge"></div>
+          <div class="champ"><label for="pa-tx-duree">Alerte en grand sur les écrans (s, 0 = non)</label><input id="pa-tx-duree" class="mono" inputmode="numeric"></div>
         </div>
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px">
           <span class="note">Essai (après Enregistrer) :</span><select id="pa-tx-essai-app"></select>
@@ -318,6 +319,14 @@
           <div class="champ"><label for="pa-vitesse">Vitesse du flash info (px/s)</label><input id="pa-vitesse" class="mono" inputmode="numeric"></div>
           <div class="champ large"><label for="pa-phrases">Phrases toutes prêtes du flash info (une par ligne)</label><textarea id="pa-phrases" style="min-height:110px"></textarea></div>
           <div class="champ large"><label for="pa-noms">Villes des trains de ligne sur les écrans (CODE=Nom, séparés par des virgules)</label><input id="pa-noms"></div>
+        </div>
+        <p class="note" style="margin-top:10px">Arrivée imminente d'une navette ou d'un train : les écrans jouent un carillon (mélodie propre à l'application) puis annoncent l'arrivée et la voie.
+          Sur chaque écran, le navigateur demande un clic sur « Activer le son » au démarrage.</p>
+        <div class="fl-coches">
+          <label><input type="checkbox" id="pa-son"> Carillon des arrivées imminentes</label>
+          <label><input type="checkbox" id="pa-voix"> Annonce vocale (navette / train, provenance, voie)</label>
+          <label>Volume <input type="range" id="pa-volume" min="0" max="100" step="5" style="width:160px"> <span id="pa-volume-val" class="mono"></span></label>
+          <button type="button" class="bouton petit" id="pa-son-essai">▶ Écouter</button>
         </div>
       </div>
     </div>
