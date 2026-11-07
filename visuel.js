@@ -406,15 +406,24 @@
     SC.jouerCarillon(r.volume).then(function () { return r.voix ? SC.annoncer(texte, r.volume) : null; })
       .then(function () { annEnCours = false; suivanteAnnonce(); }, function () { annEnCours = false; suivanteAnnonce(); });
   }
+  /** Symbole du son, toujours visible dans l'en-tête. */
   function majBoutonSon() {
     var b = $('#v-son');
     if (!b) return;
-    b.hidden = !reglagesSon().actif || SC.sonDisponible();
+    var r = reglagesSon(), pret = SC.sonDisponible();
+    var cls = 'son-etat' + (!r.actif ? ' coupe' : (pret ? '' : ' bloque'));
+    var html = !r.actif ? '🔇 <span>Son coupé</span>' : (pret ? '🔊 <span>Son ' + r.volume + ' %</span>' : '🔇 <span>Cliquer pour le son</span>');
+    if (b.className !== cls) b.className = cls;
+    if (b.innerHTML !== html) b.innerHTML = html;
+    b.title = !r.actif ? (SON_ECRAN ? 'Son coupé dans les Paramètres de la saisie' : 'Son coupé pour cet écran (son=0 dans l\'adresse)')
+      : (pret ? 'Son actif : cliquer pour écouter le carillon' : 'Le navigateur bloque le son : cliquer une fois pour l\'activer');
   }
   document.addEventListener('click', function (e) {
-    if (!e.target.closest('#v-son') && SC.sonDisponible()) return;
-    SC.deverrouillerSon().then(function () { majBoutonSon(); if (e.target.closest('#v-son')) SC.jouerCarillon(reglagesSon().volume); });
+    var surBouton = !!e.target.closest('#v-son');
+    if (!surBouton && SC.sonDisponible()) return;
+    SC.deverrouillerSon().then(function () { majBoutonSon(); if (surBouton && reglagesSon().actif) SC.jouerCarillon(reglagesSon().volume); });
   });
+  setInterval(majBoutonSon, 2000);
   function majVedettes() {
     var d = etat.d, cNav = $('#v-ved-nav'), cTr = $('#v-ved-trains'), grille = $('#v-grille');
     if (!cNav || !cTr) return;
