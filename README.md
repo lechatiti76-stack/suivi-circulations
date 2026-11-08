@@ -108,7 +108,9 @@ Copier chaque fichier sur le bureau du poste concerné. `Ecrans.bat` ouvre la pa
 
 ## Son des arrivées et alerte travaux
 
-- **Arrivée imminente** (navette ou train en approche) : les écrans jouent un **carillon** (mélodie de 4 notes propre à l'application, environ 4 s) puis une **annonce vocale** : « Attention, arrivée imminente de la navette F L 1, en provenance de TDF, voie V R 2 ». Réglages dans **Paramètres › Écrans et fichiers** : carillon, annonce vocale, volume, bouton ▶ Écouter. `&son=0` dans l'adresse d'un écran le rend muet.
+- **Arrivée imminente** (navette ou train en approche) : carillon (4 notes, ≈ 4 s) puis annonce vocale, par exemple « Attention, la navette F L 1 en provenance de T D F, numéro 504930, va rentrer en Ferroviaire V F 2 avec 27 wagons ». Voies dites en clair : VR = Réception, VF = Ferroviaire, VFL = Fluvial, VEXT = voie extérieure. Numéro : celui du planning, sinon celui tapé dans le journal.
+- **Nouveau flash info** : jingle de 2 s. **Nouvel avis de travaux** (Notion) : signal de 2,5 s.
+- Réglages dans **Paramètres › Écrans TV : affichage et sons** : chaque son, la voix, le volume, boutons ▶ Écouter ; **Tableau complet** (tous les groupes en grand, sans colonne réduite ni « terminé ») ; **Animations en grand** (les annonces sonores restent si elles sont coupées). `&son=0` dans l'adresse d'un écran le rend muet.
 - Le navigateur bloque le son tant qu'on n'a pas cliqué sur la page : le symbole du son en haut de l'écran, à gauche de « Direct », indique l'état : 🔇 **Cliquer pour le son** (orange, à cliquer une fois au démarrage), 🔊 **Son 70 %** (prêt ; un clic fait écouter le carillon), 🔇 **Son coupé** (désactivé dans les Paramètres). Sur un PC dédié, Chrome lancé avec `--autoplay-policy=no-user-gesture-required` n'a plus besoin de ce clic.
 - **Alerte travaux** : moitié basse de l'écran, fond clignotant ; durée dans **Paramètres › Travaux** (0 = pas d'alerte en grand).
 

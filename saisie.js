@@ -760,9 +760,12 @@
   });
   $('#pa-tx-url').addEventListener('focus', function () { this.select(); });
   $('#pa-volume').addEventListener('input', function () { $('#pa-volume-val').textContent = this.value + ' %'; });
-  $('#pa-son-essai').addEventListener('click', function () {
-    var v = +$('#pa-volume').value;
-    SC.jouerCarillon(v).then(function () { if ($('#pa-voix').checked) SC.annoncer('Attention, arrivée imminente de la navette F L 1, en provenance de TDF, voie V R 2.', v); });
+  $$('[data-son-essai]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var v = +$('#pa-volume').value, t = b.getAttribute('data-son-essai');
+      if (t === 'voix') SC.jouerCarillon(v, 'arrivee').then(function () { SC.annoncer('Attention, la navette F L 1 en provenance de T D F, numéro 504930, va rentrer en Ferroviaire V F 2 avec 27 wagons.', v); });
+      else SC.jouerCarillon(v, t);
+    });
   });
   $$('[data-tx-essai]').forEach(function (b) {
     b.addEventListener('click', function () {
@@ -1322,6 +1325,8 @@
     var vis = p.visuel || {};
     $('#pa-tx-duree').value = vis.alerteTravauxSecondes == null ? 5 : vis.alerteTravauxSecondes;
     $('#pa-son').checked = vis.sonArrivees !== false; $('#pa-voix').checked = vis.voixArrivees !== false;
+    $('#pa-son-flash').checked = vis.sonFlash !== false; $('#pa-son-travaux').checked = vis.sonTravaux !== false;
+    $('#pa-complet').checked = !!vis.tableauComplet; $('#pa-vedettes').checked = vis.vedettes !== false;
     $('#pa-volume').value = vis.volumeSon == null ? 70 : vis.volumeSon; $('#pa-volume-val').textContent = $('#pa-volume').value + ' %';
     var noms = Object.assign({}, SC.NOMS_TRAINS, (p.visuel || {}).nomsTrains || {});
     $('#pa-noms').value = Object.keys(noms).map(function (k) { return k + '=' + noms[k]; }).join(', ');
@@ -1435,6 +1440,8 @@
     if (dtx !== '' && !(/^\d{1,3}$/.test(dtx) && +dtx <= 120)) err.push('Alerte travaux : de 0 à 120 secondes.');
     p.visuel.alerteTravauxSecondes = dtx === '' ? 5 : +dtx;
     p.visuel.sonArrivees = $('#pa-son').checked; p.visuel.voixArrivees = $('#pa-voix').checked; p.visuel.volumeSon = +$('#pa-volume').value;
+    p.visuel.sonFlash = $('#pa-son-flash').checked; p.visuel.sonTravaux = $('#pa-son-travaux').checked;
+    p.visuel.tableauComplet = $('#pa-complet').checked; p.visuel.vedettes = $('#pa-vedettes').checked;
     p.visuel.phrasesFlash = $('#pa-phrases').value.split(/\r?\n/).map(function (x) { return x.trim(); }).filter(Boolean);
     var nomsTrains = {};
     $('#pa-noms').value.split(/[,;]+/).forEach(function (x) {

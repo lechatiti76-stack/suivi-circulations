@@ -359,6 +359,7 @@ html, body { margin: 0; height: 100%; background: var(--fond); color: var(--encr
 .fini-badge { color: var(--ce, #fff) !important; font-weight: 800; }
 .fini { margin: .5rem .7rem .7rem; padding: .8rem .9rem .9rem; border-radius: .8rem; background: #45D68B14; border: .12rem solid #45D68B55; }
 .fini-tete { display: flex; align-items: center; gap: .7rem; font-weight: 700; font-size: 1.3rem; color: #CFF5DE; }
+.fini-tete::before { content: none; }
 .fini-ok { display: inline-grid; place-items: center; width: 2.2rem; height: 2.2rem; border-radius: 50%; background: var(--vert); color: #06240f; font-size: 1.35rem; font-weight: 800; flex: none; }
 .fini-codes { display: flex; flex-wrap: wrap; gap: .45rem; margin-top: .7rem; }
 .fc { display: inline-flex; align-items: center; gap: .35rem; padding: .2rem .65rem .2rem .3rem; border-radius: 999px; background: #0E2A1A; border: .1rem solid #45D68B66; font-weight: 700; font-size: 1.1rem; font-family: var(--mono, ui-monospace, monospace); }

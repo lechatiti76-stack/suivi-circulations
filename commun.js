@@ -233,7 +233,8 @@
   function etatCirculation(c, j) {
     var liens = mouvementsActifs(j).filter(function (m) { return m.lien === c.id; })
       .sort(function (a, b) { return a.annonce < b.annonce ? -1 : (a.annonce > b.annonce ? 1 : a.n - b.n); });
-    var d = { annonce: liens.length ? liens[0].annonce : null, voie: null, wagons: null, cv: null, reel: c.reel || null, liens: liens.length };
+    var d = { annonce: liens.length ? liens[0].annonce : null, voie: null, wagons: null, cv: null, reel: c.reel || null, liens: liens.length, num: null };
+    for (var q = liens.length - 1; q >= 0; q--) if (/^\d{5,6}$/.test(String(liens[q].num || ''))) { d.num = String(liens[q].num); break; }
     if (liens.length) d.voie = liens[liens.length - 1].voie || null;
     for (var i = liens.length - 1; i >= 0; i--) {
       if (/^\d+$/.test(String(liens[i].compo || ''))) { d.wagons = +liens[i].compo; d.cv = liens[i].cv || null; break; }
@@ -330,6 +331,8 @@
     return {
       id: c.id, code: c.code, sens: c.sens,
       numero: fam === 'navette' ? (c.numero || c.sillon) : (c.sillon || c.numero),
+      // numéro tapé dans le journal pour cette circulation (annonce vocale quand le planning n'en a pas)
+      numeroSaisi: d.num || null,
       theo: c.theo || null, hlr: c.hlr || '',
       annonce: !!d.annonce, reel: d.reel || null,
       wagons: d.wagons != null ? d.wagons : (c.wagonsDemandes != null ? c.wagonsDemandes : null),
@@ -440,7 +443,10 @@
       alerteSansNouvellesSecondes: vis.alerteSansNouvellesSecondes || 45,
       // alerte travaux en grand (secondes, 0 = pas d'alerte) ; mélodie et annonce vocale des arrivées imminentes
       alerteTravaux: vis.alerteTravauxSecondes == null ? 5 : +vis.alerteTravauxSecondes,
-      son: { actif: vis.sonArrivees !== false, volume: vis.volumeSon == null ? 70 : +vis.volumeSon, voix: vis.voixArrivees !== false },
+      son: { actif: vis.sonArrivees !== false, volume: vis.volumeSon == null ? 70 : +vis.volumeSon, voix: vis.voixArrivees !== false,
+        flash: vis.sonFlash !== false, travaux: vis.sonTravaux !== false },
+      // tableau complet : tous les groupes de navettes en grand (pas de colonne réduite ni « terminé ») ; animations en grand
+      tableauComplet: !!vis.tableauComplet, vedettes: vis.vedettes !== false,
       version: j.version, publieA: maint,
       navettes: navettes, trains: trains,
       flash: flashActif ? { texte: String(f.texte).trim(), jusqua: f.jusqua || '' } : null
@@ -897,8 +903,9 @@
   }
   function sonDisponible() { var c = contexteAudio(); return !!c && c.state === 'running'; }
   function deverrouillerSon() { var c = contexteAudio(); return c && c.state !== 'running' ? c.resume() : Promise.resolve(); }
-  function cloche(c, sortie, f, t, duree, force) {
-    [[1, 1], [2.0, 0.28], [3.01, 0.1], [4.2, 0.04]].forEach(function (h) {
+  function cloche(c, sortie, f, t, duree, force, dur) {
+    // « dur » : timbre plus métallique (harmoniques impaires), pour l'avertissement travaux
+    (dur ? [[1, 1], [2.0, 0.2], [3.0, 0.22], [5.0, 0.08]] : [[1, 1], [2.0, 0.28], [3.01, 0.1], [4.2, 0.04]]).forEach(function (h) {
       var o = c.createOscillator(), g = c.createGain();
       o.type = 'sine'; o.frequency.value = f * h[0];
       g.gain.setValueAtTime(0.0001, t);
@@ -908,8 +915,18 @@
       o.connect(g); g.connect(sortie); o.start(t); o.stop(t + duree + 0.05);
     });
   }
-  /** Joue le carillon (volume 0-100). Promesse résolue à la fin. */
-  function jouerCarillon(volume) {
+  /**
+   * Motifs (fréquence Hz, départ s, durée s) : arrivée = sol ré si mi (≈ 4 s) ; flash info = sol do mi, arpège clair (≈ 2 s) ;
+   * travaux = mi do mi do, deux tons d'avertissement (≈ 2,5 s). Mélodies propres à l'application.
+   */
+  var MOTIFS = {
+    arrivee: { notes: [[392.0, 0, 1.8], [587.33, 0.42, 1.8], [493.88, 0.84, 1.8], [659.26, 1.26, 3.2]], fin: 3600, force: 0.5 },
+    flash: { notes: [[783.99, 0, 1.0], [1046.5, 0.16, 1.0], [1318.51, 0.32, 1.9]], fin: 2100, force: 0.36 },
+    travaux: { notes: [[659.26, 0, 0.7], [523.25, 0.26, 0.7], [659.26, 0.52, 0.7], [523.25, 0.78, 1.7]], fin: 2500, force: 0.48, dur: true }
+  };
+  /** Joue le carillon (volume 0-100, motif arrivee | flash | travaux). Promesse résolue à la fin. */
+  function jouerCarillon(volume, motif) {
+    var m = MOTIFS[motif] || MOTIFS.arrivee;
     var c = contexteAudio();
     if (!c) return Promise.resolve(false);
     return deverrouillerSon().then(function () {
@@ -918,8 +935,8 @@
       var sortie = c.createGain(); sortie.gain.value = 0.9 * v;
       sortie.connect(c.destination); sortie.connect(audio.rev);
       var t0 = c.currentTime + 0.05;
-      [[392.0, 0, 1.8], [587.33, 0.42, 1.8], [493.88, 0.84, 1.8], [659.26, 1.26, 3.2]].forEach(function (n) { cloche(c, sortie, n[0], t0 + n[1], n[2], 0.5); });
-      return new Promise(function (ok) { setTimeout(function () { ok(true); }, 3600); });
+      m.notes.forEach(function (n) { cloche(c, sortie, n[0], t0 + n[1], n[2], m.force, m.dur); });
+      return new Promise(function (ok) { setTimeout(function () { ok(true); }, m.fin); });
     }, function () { return false; });
   }
   /** Annonce vocale en français (synthèse du navigateur), si une voix est disponible. */

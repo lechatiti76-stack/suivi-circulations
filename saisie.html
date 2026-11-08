@@ -320,13 +320,19 @@
           <div class="champ large"><label for="pa-phrases">Phrases toutes prêtes du flash info (une par ligne)</label><textarea id="pa-phrases" style="min-height:110px"></textarea></div>
           <div class="champ large"><label for="pa-noms">Villes des trains de ligne sur les écrans (CODE=Nom, séparés par des virgules)</label><input id="pa-noms"></div>
         </div>
-        <p class="note" style="margin-top:10px">Arrivée imminente d'une navette ou d'un train : les écrans jouent un carillon (mélodie propre à l'application) puis annoncent l'arrivée et la voie.
-          Sur chaque écran, le navigateur demande un clic sur « Activer le son » au démarrage.</p>
+      </div>
+      <div class="section"><h4>Écrans TV : affichage et sons</h4>
         <div class="fl-coches">
-          <label><input type="checkbox" id="pa-son"> Carillon des arrivées imminentes</label>
-          <label><input type="checkbox" id="pa-voix"> Annonce vocale (navette / train, provenance, voie)</label>
-          <label>Volume <input type="range" id="pa-volume" min="0" max="100" step="5" style="width:160px"> <span id="pa-volume-val" class="mono"></span></label>
-          <button type="button" class="bouton petit" id="pa-son-essai">▶ Écouter</button>
+          <label><input type="checkbox" id="pa-complet"> Tableau complet : toutes les navettes de chaque groupe en grand (pas de colonne réduite ni « terminé »)</label>
+          <label><input type="checkbox" id="pa-vedettes"> Animations en grand (arrivées, départs imminents)</label>
+        </div>
+        <p class="note" style="margin-top:12px">Sons joués par les écrans (mélodies propres à l'application). Sur chaque écran, cliquer une fois sur le symbole du son au démarrage.</p>
+        <div class="sons-grille">
+          <label><input type="checkbox" id="pa-son"> Arrivée imminente : carillon (4 s)</label><button type="button" class="bouton petit" data-son-essai="arrivee">▶ Écouter</button>
+          <label><input type="checkbox" id="pa-voix"> Annonce vocale après le carillon (navette, provenance, numéro, voie, wagons)</label><button type="button" class="bouton petit" data-son-essai="voix">▶ Écouter</button>
+          <label><input type="checkbox" id="pa-son-flash"> Nouveau flash info : jingle (2 s)</label><button type="button" class="bouton petit" data-son-essai="flash">▶ Écouter</button>
+          <label><input type="checkbox" id="pa-son-travaux"> Nouvel avis de travaux (Notion) : signal (2,5 s)</label><button type="button" class="bouton petit" data-son-essai="travaux">▶ Écouter</button>
+          <label>Volume <input type="range" id="pa-volume" min="0" max="100" step="5" style="width:180px"> <span id="pa-volume-val" class="mono"></span></label><span></span>
         </div>
       </div>
     </div>

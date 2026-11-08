@@ -375,13 +375,35 @@
    * Les navigateurs bloquent le son tant qu'on n'a pas cliqué une fois sur la page : bouton « Activer le son ».
    */
   var SON_ECRAN = !/[?&]son=0\b/.test(location.search), annVus = null, annFile = [], annEnCours = false;
-  function reglagesSon() { var s = (etat.d && etat.d.son) || {}; return { actif: SON_ECRAN && s.actif !== false, volume: s.volume == null ? 70 : s.volume, voix: s.voix !== false }; }
+  function reglagesSon() {
+    var s = (etat.d && etat.d.son) || {};
+    return { actif: SON_ECRAN && s.actif !== false, volume: s.volume == null ? 70 : s.volume, voix: s.voix !== false,
+      flash: SON_ECRAN && s.flash !== false, travaux: SON_ECRAN && s.travaux !== false };
+  }
   /** « FL1 » → « F L 1 », « VR2 » → « V R 2 » : lu lettre par lettre par la voix. */
   function epeler(s) { return String(s || '').toUpperCase().replace(/([A-Z])(?=[A-Z0-9])/g, '$1 ').replace(/(\d)(?=[A-Z])/g, '$1 '); }
+  /** Voie dite en clair : VR = Réception, VF = Ferroviaire, VFL = Fluvial, VEXT = voie extérieure. */
+  function voieParlee(voie) {
+    return String(voie || '').split(/\s*[+,\/]\s*|\s+et\s+/i).filter(Boolean).map(function (v) {
+      var m = /^(VFL|VEXT|EXT|VR|VF)\s*(\d+)?$/i.exec(v.trim()), k = m ? m[1].toUpperCase() : '';
+      if (k === 'VEXT' || k === 'EXT') return 'voie extérieure' + (m[2] ? ' ' + m[2] : '');
+      if (k === 'VFL') return 'Fluvial ' + epeler(v);
+      if (k === 'VR') return 'Réception ' + epeler(v);
+      if (k === 'VF') return 'Ferroviaire ' + epeler(v);
+      return 'voie ' + epeler(v);
+    }).join(' et ');
+  }
+  /** Sigle court (TDF, TN, ATL) lu lettre par lettre, nom de ville tel quel. */
+  function nomParle(s) { s = String(s || ''); return /^[A-Z]{2,4}$/.test(s) ? epeler(s) : s; }
+  /**
+   * « Attention, la navette en provenance de T D F, numéro 504930, va rentrer en Ferroviaire V F 2 avec 27 wagons. »
+   * Numéro : celui du planning, sinon celui tapé dans le journal.
+   */
   function phraseArrivee(v) {
-    var l = v.l, voie = l.voie ? ', voie ' + String(l.voie).split(/\s*[+,\/]\s*/).map(epeler).join(' et ') : '';
-    if (v.g) return 'Attention, arrivée imminente de la navette ' + epeler(l.code) + ', en provenance de ' + v.g.libelle + voie + '.';
-    return 'Attention, arrivée imminente du train ' + (l.numero || v.t.code) + ', en provenance de ' + (v.t.nom || v.t.code) + voie + '.';
+    var l = v.l, num = l.numero || l.numeroSaisi || '', voie = voieParlee(l.voie);
+    var fin = (voie ? ' va rentrer en ' + voie : ' va arriver') + (l.wagons != null && l.wagons !== '' ? ' avec ' + l.wagons + ' wagons' : '') + '.';
+    if (v.g) return 'Attention, la navette ' + epeler(l.code) + ' en provenance de ' + nomParle(v.g.libelle) + (num ? ', numéro ' + num + ',' : '') + fin;
+    return 'Attention, le train' + (num ? ' numéro ' + num : '') + ' en provenance de ' + nomParle(v.t.nom || v.t.code) + fin;
   }
   function annoncerArrivees(vn, vt) {
     var premier = annVus === null, liste = vn.concat(vt).filter(function (v) { return v.ph.cle === 'approche'; });
@@ -392,42 +414,48 @@
       annVus[k] = true;
       // écran qui démarre : pas d'annonce pour une arrivée déjà en approche depuis plus d'une minute
       if (premier && !(v.ph.sec != null && v.ph.sec > VED.avant * 60 - 60)) return;
-      annFile.push(phraseArrivee(v));
+      annFile.push({ type: 'arrivee', texte: phraseArrivee(v) });
     });
     suivanteAnnonce();
   }
+  /** Sons en file (jamais deux en même temps) : arrivée (carillon + voix), flash info, avis travaux. */
+  function jouerSon(type) { annFile.push({ type: type }); suivanteAnnonce(); }
   function suivanteAnnonce() {
     if (annEnCours || !annFile.length) return;
-    var r = reglagesSon(), texte = annFile.shift();
-    if (!r.actif) { annFile = []; return; }
-    // son bloqué par le navigateur (pas encore de clic sur la page) : annonce perdue, bouton « Activer le son » affiché
+    var r = reglagesSon(), a = annFile.shift();
+    if (!(a.type === 'arrivee' ? r.actif : r[a.type])) { suivanteAnnonce(); return; }
+    // son bloqué par le navigateur (pas encore de clic sur la page) : son perdu, symbole « Cliquer pour le son » affiché
     if (!SC.sonDisponible()) { annFile = []; majBoutonSon(); return; }
     annEnCours = true;
-    SC.jouerCarillon(r.volume).then(function () { return r.voix ? SC.annoncer(texte, r.volume) : null; })
+    SC.jouerCarillon(r.volume, a.type).then(function () { return a.texte && r.voix ? SC.annoncer(a.texte, r.volume) : null; })
       .then(function () { annEnCours = false; suivanteAnnonce(); }, function () { annEnCours = false; suivanteAnnonce(); });
   }
   /** Symbole du son, toujours visible dans l'en-tête. */
   function majBoutonSon() {
     var b = $('#v-son');
     if (!b) return;
-    var r = reglagesSon(), pret = SC.sonDisponible();
-    var cls = 'son-etat' + (!r.actif ? ' coupe' : (pret ? '' : ' bloque'));
-    var html = !r.actif ? '🔇 <span>Son coupé</span>' : (pret ? '🔊 <span>Son ' + r.volume + ' %</span>' : '🔇 <span>Cliquer pour le son</span>');
+    var r = reglagesSon(), pret = SC.sonDisponible(), unSon = r.actif || r.flash || r.travaux;
+    var cls = 'son-etat' + (!unSon ? ' coupe' : (pret ? '' : ' bloque'));
+    var html = !unSon ? '🔇 <span>Son coupé</span>' : (pret ? '🔊 <span>Son ' + r.volume + ' %</span>' : '🔇 <span>Cliquer pour le son</span>');
     if (b.className !== cls) b.className = cls;
     if (b.innerHTML !== html) b.innerHTML = html;
-    b.title = !r.actif ? (SON_ECRAN ? 'Son coupé dans les Paramètres de la saisie' : 'Son coupé pour cet écran (son=0 dans l\'adresse)')
+    b.title = !unSon ? (SON_ECRAN ? 'Son coupé dans les Paramètres de la saisie' : 'Son coupé pour cet écran (son=0 dans l\'adresse)')
       : (pret ? 'Son actif : cliquer pour écouter le carillon' : 'Le navigateur bloque le son : cliquer une fois pour l\'activer');
   }
   document.addEventListener('click', function (e) {
     var surBouton = !!e.target.closest('#v-son');
     if (!surBouton && SC.sonDisponible()) return;
-    SC.deverrouillerSon().then(function () { majBoutonSon(); if (surBouton && reglagesSon().actif) SC.jouerCarillon(reglagesSon().volume); });
+    SC.deverrouillerSon().then(function () { majBoutonSon(); if (surBouton) jouerSon('arrivee'); });
   });
   setInterval(majBoutonSon, 2000);
   function majVedettes() {
     var d = etat.d, cNav = $('#v-ved-nav'), cTr = $('#v-ved-trains'), grille = $('#v-grille');
     if (!cNav || !cTr) return;
-    if (!d || !VED.actif) { cNav.hidden = cTr.hidden = true; grille.classList.remove('ved-nav-on', 'ved-trains-on'); return; }
+    if (!d || !VED.actif || d.vedettes === false) {
+      // sans animations en grand, les annonces sonores restent
+      if (d) annoncerArrivees(vue === 'trains' ? [] : vedettesNavettes(d), vue === 'navettes' ? [] : vedettesTrains(d));
+      cNav.hidden = cTr.hidden = true; grille.classList.remove('ved-nav-on', 'ved-trains-on'); return;
+    }
     var vn = vue === 'trains' ? [] : vedettesNavettes(d), vt = vue === 'navettes' ? [] : vedettesTrains(d);
     annoncerArrivees(vn, vt);
     // navettes : 4 carrés au plus côte à côte (les plus proches) ; le reste est compté
@@ -476,9 +504,9 @@
   }
   function etatGroupe(g) {
     // terminé pour la journée : petite colonne dès la fin de la dernière vedette (?fini=60 secondes après la dernière)
+    if (VED.tousGroupes || (etat.d && etat.d.tableauComplet)) return 'actif';
     var fin = finDuJour(g);
     if (fin && Date.now() - fin.getTime() >= VED.fini * 1000) return 'fini';
-    if (VED.tousGroupes) return 'actif';
     var maintenantMs = Date.now(), hor = VED.horizon * 60000, prochaine = null, actif = false;
     g.lignes.forEach(function (l) {
       if (l.etat === 'supprime') return;
@@ -499,8 +527,8 @@
     var vues = {}, codes = g.lignes.slice().sort(function (a, b) { return (a.theo || '') < (b.theo || '') ? -1 : 1; }).filter(function (l) {
       if (l.etat === 'nonprevu' || vues[l.code]) return false; vues[l.code] = true; return true;
     });
-    var html = '<div class="nav-tete"><h2>' + esc(g.libelle) + '</h2><span class="fini-badge">✓ terminé</span></div>' +
-      '<div class="fini"><div class="fini-tete"><span class="fini-ok">✓</span><span>Terminé pour la journée</span></div>' +
+    var html = '<div class="nav-tete"><h2>' + esc(g.libelle) + '</h2><span class="fini-badge">terminé</span></div>' +
+      '<div class="fini"><div class="fini-tete"><span>Terminé pour la journée</span></div>' +
       '<div class="fini-codes">' + codes.map(function (l) {
         var sup = l.etat === 'supprime';
         return '<span class="fc' + (sup ? ' sup' : '') + '"><i>' + (sup ? '✕' : '✓') + '</i>' + esc(l.code) + '</span>';
@@ -672,12 +700,14 @@
     var cle = function (x) { return x.code + '|' + x.couleur + '|' + (x.depuis || ''); };
     var premier = txVus === null;
     if (premier) txVus = {};
+    var nouveaux = 0;
     liste.forEach(function (x) {
       var k = cle(x); if (txVus[k]) return;
       txVus[k] = true;
       var recu = dateIso(x.a || x.depuis), recent = recu && Date.now() - recu.getTime() < 120000;
-      if (dureeAlerteTravaux() > 0 && (!premier || recent)) txFile.push(x);
+      if (!premier || recent) { nouveaux++; if (dureeAlerteTravaux() > 0) txFile.push(x); }
     });
+    if (nouveaux) jouerSon('travaux');
     suivanteAlerteTravaux();
   }
   function suivanteAlerteTravaux() {
@@ -699,8 +729,12 @@
   }
 
   // ----------------------------------------------------------- flash info
+  var flashVu = null;
   function majFlash(f) {
     var texte = f && f.texte ? f.texte : '';
+    // nouveau flash info (pas au démarrage de l'écran) : petit jingle
+    if (flashVu !== null && texte && texte !== flashVu) jouerSon('flash');
+    flashVu = texte;
     if (texte === etat.flash) return;
     etat.flash = texte;
     var bloc = $('#v-flash'), t = $('#v-flash-txt');

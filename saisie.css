@@ -346,3 +346,7 @@ iframe.apercu { width: 100%; height: 300px; border: 1px solid var(--trait); bord
 .fl-coches { display: flex; flex-wrap: wrap; gap: 8px 26px; margin-top: 10px; }
 .fl-coches label { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 600; color: var(--encre); cursor: pointer; }
 .fl-coches input { width: 18px; height: 18px; margin: 0; }
+.sons-grille { display: grid; grid-template-columns: minmax(0, max-content) auto; gap: 8px 16px; align-items: center; margin-top: 8px; }
+.sons-grille label { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 600; color: var(--encre); }
+.sons-grille input[type=checkbox] { width: 18px; height: 18px; margin: 0; }
+.sons-grille .bouton { justify-self: start; }
