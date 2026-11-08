@@ -22,12 +22,12 @@
   // ------------------------------------------------------------ réception
   window.__diffusion = function (d, meta, travaux) {
     if (!d || d.schema !== 1) return;
-    if (travaux) majTravaux(travaux);
+    if (travaux) { try { majTravaux(travaux); } catch (e) { signaler(e); } }
     etat.echecs = 0;
     var b = meta && meta.battement;
     if (b !== etat.battement) { etat.battement = b; etat.battementVuA = Date.now(); }
     var cle = JSON.stringify(d);
-    if (cle !== etat.cle) { etat.cle = cle; etat.d = d; rendre(); }
+    if (cle !== etat.cle) { etat.cle = cle; etat.d = d; try { rendre(); } catch (e) { signaler(e); } }
     majLiaison();
   };
   function charger() {
@@ -418,8 +418,10 @@
     });
     suivanteAnnonce();
   }
+  /** Erreur d'un élément secondaire (son, animation) : notée dans la console, l'affichage continue. */
+  function signaler(e) { try { console.error('[écrans]', e); } catch (x) { /* rien */ } }
   /** Sons en file (jamais deux en même temps) : arrivée (carillon + voix), flash info, avis travaux. */
-  function jouerSon(type) { annFile.push({ type: type }); suivanteAnnonce(); }
+  function jouerSon(type) { try { annFile.push({ type: type }); suivanteAnnonce(); } catch (e) { annEnCours = false; signaler(e); } }
   function suivanteAnnonce() {
     if (annEnCours || !annFile.length) return;
     var r = reglagesSon(), a = annFile.shift();
@@ -653,10 +655,10 @@
     var trains = $('#v-trains');
     trains.className = 'trains panneau';
     change = majBloc(trains, blocTrains(d.trains || [])) || change;
-    majFlash(d.flash);
+    try { majFlash(d.flash); } catch (e) { signaler(e); }
     if (change) ajuster();
-    majVedettes();
-    majBoutonSon();
+    try { majVedettes(); } catch (e) { signaler(e); }
+    try { majBoutonSon(); } catch (e) { signaler(e); }
   }
 
   // ------------------------------------------------------------- travaux
@@ -733,7 +735,7 @@
   function majFlash(f) {
     var texte = f && f.texte ? f.texte : '';
     // nouveau flash info (pas au démarrage de l'écran) : petit jingle
-    if (flashVu !== null && texte && texte !== flashVu) jouerSon('flash');
+    if (flashVu !== null && texte && texte !== flashVu) setTimeout(function () { jouerSon('flash'); }, 0);
     flashVu = texte;
     if (texte === etat.flash) return;
     etat.flash = texte;

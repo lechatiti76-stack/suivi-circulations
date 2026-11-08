@@ -1095,6 +1095,14 @@
     if ($('#fl-creneau-texte').checked) cr = de && jq ? 'de ' + hFr(de) + ' à ' + hFr(jq) : (jq ? 'jusqu\'à ' + hFr(jq) : (de ? 'à partir de ' + hFr(de) : ''));
     return [base, comp].filter(Boolean).join(' ') + (base || comp ? (cr ? ' — ' + cr : '') : '');
   }
+  /** État du flash d'après son créneau : affiché, programmé (pas encore l'heure) ou terminé (heure de fin passée). */
+  function etatFlash(f) {
+    if (!f || !f.actif || !f.texte) return 'Aucun flash affiché';
+    var h = SC.hm(maintenant());
+    if (f.de && h < f.de) return 'Programmé : pas encore sur les écrans, affiché à partir de ' + f.de + (f.jusqua ? ' jusqu\'à ' + f.jusqua : '');
+    if (f.jusqua && h >= f.jusqua) return 'Terminé à ' + f.jusqua + ' : plus affiché sur les écrans (videz « Jusqu\'à » puis Publier pour le remettre)';
+    return 'Affiché actuellement' + (f.de ? ' depuis ' + f.de : '') + (f.jusqua ? ' jusqu\'à ' + f.jusqua : '');
+  }
   function majApercuFlash() { var t = texteFlash(); $('#fl-apercu').textContent = t || '—'; }
   $('#b-flash').addEventListener('click', function () {
     var f = app.journee.flash || {};
@@ -1103,7 +1111,7 @@
     $('#fl-creneau-texte').checked = f.creneauTexte !== false;
     $('#fl-actif').checked = true;
     $('#fl-phrases').innerHTML = phrasesFlash().map(function (ph, i) { return '<button type="button" class="fl-ph" data-fl-ph="' + i + '">' + esc(ph) + '</button>'; }).join('');
-    $('#fl-etat').textContent = f.actif && f.texte ? 'Affiché actuellement' + (f.de ? ' de ' + f.de : '') + (f.jusqua ? ' jusqu\'à ' + f.jusqua : '') : 'Aucun flash affiché';
+    $('#fl-etat').textContent = etatFlash(f);
     majApercuFlash();
     ouvrir('#d-flash'); $('#fl-texte').focus();
   });
@@ -1133,6 +1141,8 @@
         de: SC.normHeure(de) || '', jusqua: SC.normHeure(jusqua) || '', depuis: maintenant() };
     });
     fermer($('#fm-flash'));
+    var etf = etatFlash(app.journee.flash);
+    if (/^Programmé|^Terminé/.test(etf)) toast('Flash info : ' + etf.charAt(0).toLowerCase() + etf.slice(1));
   });
   $('#fl-retirer').addEventListener('click', function () {
     modifier('Flash info retiré', 'flash', function (j) { var f = j.flash || {}; j.flash = { actif: false, texte: f.texte || '', base: f.base, complement: f.complement || '', creneauTexte: f.creneauTexte, de: '', jusqua: '' }; });

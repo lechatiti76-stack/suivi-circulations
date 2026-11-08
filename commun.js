@@ -901,8 +901,12 @@
     }
     return audio.ctx;
   }
-  function sonDisponible() { var c = contexteAudio(); return !!c && c.state === 'running'; }
-  function deverrouillerSon() { var c = contexteAudio(); return c && c.state !== 'running' ? c.resume() : Promise.resolve(); }
+  // jamais d'erreur vers l'affichage : un navigateur sans son (ou qui refuse) affiche quand même les écrans
+  function sonDisponible() { try { var c = contexteAudio(); return !!c && c.state === 'running'; } catch (e) { return false; } }
+  function deverrouillerSon() {
+    try { var c = contexteAudio(); return c && c.state !== 'running' ? Promise.resolve(c.resume()).catch(function () {}) : Promise.resolve(); }
+    catch (e) { return Promise.resolve(); }
+  }
   function cloche(c, sortie, f, t, duree, force, dur) {
     // « dur » : timbre plus métallique (harmoniques impaires), pour l'avertissement travaux
     (dur ? [[1, 1], [2.0, 0.2], [3.0, 0.22], [5.0, 0.08]] : [[1, 1], [2.0, 0.28], [3.01, 0.1], [4.2, 0.04]]).forEach(function (h) {
@@ -926,8 +930,8 @@
   };
   /** Joue le carillon (volume 0-100, motif arrivee | flash | travaux). Promesse résolue à la fin. */
   function jouerCarillon(volume, motif) {
-    var m = MOTIFS[motif] || MOTIFS.arrivee;
-    var c = contexteAudio();
+    var m = MOTIFS[motif] || MOTIFS.arrivee, c = null;
+    try { c = contexteAudio(); } catch (e) { c = null; }
     if (!c) return Promise.resolve(false);
     return deverrouillerSon().then(function () {
       if (c.state !== 'running') return false;
