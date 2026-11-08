@@ -374,11 +374,19 @@
    * arrivée. Réglages dans la saisie (Paramètres › Écrans) ; ?son=0 dans l'adresse coupe le son de cet écran.
    * Les navigateurs bloquent le son tant qu'on n'a pas cliqué une fois sur la page : bouton « Activer le son ».
    */
-  var SON_ECRAN = !/[?&]son=0\b/.test(location.search), annVus = null, annFile = [], annEnCours = false;
+  // démonstration (?demo=1) : muette, sauf &son=1 dans l'adresse
+  var SON_ECRAN = DEMO ? /[?&]son=1\b/.test(location.search) : !/[?&]son=0\b/.test(location.search), annVus = null, annFile = [], annEnCours = false;
+  /** Arrivées déjà annoncées aujourd'hui, gardées dans le navigateur : un rechargement de l'écran ne les répète pas. */
+  function annoncesDuJour() {
+    var cle = 'suivi:annonces:' + SC.cleDate(new Date()), vus = {};
+    try { vus = JSON.parse(localStorage.getItem(cle) || '{}') || {}; } catch (e) { vus = {}; }
+    return { vus: vus, garder: function () { try { localStorage.setItem(cle, JSON.stringify(vus)); } catch (e) { /* stockage indisponible */ } } };
+  }
   function reglagesSon() {
     var s = (etat.d && etat.d.son) || {};
     return { actif: SON_ECRAN && s.actif !== false, volume: s.volume == null ? 70 : s.volume, voix: s.voix !== false,
-      flash: SON_ECRAN && s.flash !== false, travaux: SON_ECRAN && s.travaux !== false };
+      flash: SON_ECRAN && s.flash !== false, travaux: SON_ECRAN && s.travaux !== false,
+      choix: Object.assign({ arrivee: 'arrivee', flash: 'flash', orange: 's6_important', rouge: 's2_urgent' }, s.choix || {}) };
   }
   /** « FL1 » → « F L 1 », « VR2 » → « V R 2 » : lu lettre par lettre par la voix. */
   function epeler(s) { return String(s || '').toUpperCase().replace(/([A-Z])(?=[A-Z0-9])/g, '$1 ').replace(/(\d)(?=[A-Z])/g, '$1 '); }
@@ -407,11 +415,12 @@
   }
   function annoncerArrivees(vn, vt) {
     var premier = annVus === null, liste = vn.concat(vt).filter(function (v) { return v.ph.cle === 'approche'; });
-    if (premier) annVus = {};
+    if (premier) annVus = annoncesDuJour();
     liste.forEach(function (v) {
-      var k = (v.l.id || v.l.code) + '|' + (v.l.partie || '');
-      if (annVus[k]) return;
-      annVus[k] = true;
+      // une seule annonce par arrivée et par jour, même si l'heure « En approche » est corrigée ensuite
+      var k = (v.l.id || v.l.code) + '|' + (v.l.theo || '');
+      if (annVus.vus[k]) return;
+      annVus.vus[k] = Date.now(); annVus.garder();
       // écran qui démarre : pas d'annonce pour une arrivée déjà en approche depuis plus d'une minute
       if (premier && !(v.ph.sec != null && v.ph.sec > VED.avant * 60 - 60)) return;
       annFile.push({ type: 'arrivee', texte: phraseArrivee(v) });
@@ -421,7 +430,7 @@
   /** Erreur d'un élément secondaire (son, animation) : notée dans la console, l'affichage continue. */
   function signaler(e) { try { console.error('[écrans]', e); } catch (x) { /* rien */ } }
   /** Sons en file (jamais deux en même temps) : arrivée (carillon + voix), flash info, avis travaux. */
-  function jouerSon(type) { try { annFile.push({ type: type }); suivanteAnnonce(); } catch (e) { annEnCours = false; signaler(e); } }
+  function jouerSon(type, variante) { try { annFile.push({ type: type, variante: variante }); suivanteAnnonce(); } catch (e) { annEnCours = false; signaler(e); } }
   function suivanteAnnonce() {
     if (annEnCours || !annFile.length) return;
     var r = reglagesSon(), a = annFile.shift();
@@ -429,7 +438,8 @@
     // son bloqué par le navigateur (pas encore de clic sur la page) : son perdu, symbole « Cliquer pour le son » affiché
     if (!SC.sonDisponible()) { annFile = []; majBoutonSon(); return; }
     annEnCours = true;
-    SC.jouerCarillon(r.volume, a.type).then(function () { return a.texte && r.voix ? SC.annoncer(a.texte, r.volume) : null; })
+    // son choisi dans la saisie : arrivée, flash, travaux orange / rouge
+    SC.jouerCarillon(r.volume, r.choix[a.type === 'travaux' ? (a.variante === 'rouge' ? 'rouge' : 'orange') : a.type]).then(function () { return a.texte && r.voix ? SC.annoncer(a.texte, r.volume) : null; })
       .then(function () { annEnCours = false; suivanteAnnonce(); }, function () { annEnCours = false; suivanteAnnonce(); });
   }
   /** Symbole du son, toujours visible dans l'en-tête. */
@@ -702,14 +712,14 @@
     var cle = function (x) { return x.code + '|' + x.couleur + '|' + (x.depuis || ''); };
     var premier = txVus === null;
     if (premier) txVus = {};
-    var nouveaux = 0;
+    var nouveaux = 0, rouge = false;
     liste.forEach(function (x) {
       var k = cle(x); if (txVus[k]) return;
       txVus[k] = true;
       var recu = dateIso(x.a || x.depuis), recent = recu && Date.now() - recu.getTime() < 120000;
-      if (!premier || recent) { nouveaux++; if (dureeAlerteTravaux() > 0) txFile.push(x); }
+      if (!premier || recent) { nouveaux++; if (x.couleur === 'rouge') rouge = true; if (dureeAlerteTravaux() > 0) txFile.push(x); }
     });
-    if (nouveaux) jouerSon('travaux');
+    if (nouveaux) jouerSon('travaux', rouge ? 'rouge' : 'orange');
     suivanteAlerteTravaux();
   }
   function suivanteAlerteTravaux() {
