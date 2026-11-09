@@ -176,10 +176,23 @@
    * entre-temps : elle est relue d'abord, pour ne jamais remettre aux écrans et au Suivi trains un état dépassé
    * (navette de nouveau « pas partie »).
    */
+  /**
+   * Paramètres changés depuis un autre poste de saisie (sons, flash, écrans…) : relus avant chaque publication de la
+   * minute, sinon ce poste remettrait aux écrans ses anciens réglages.
+   */
+  function relireParametres() {
+    if (!GOOGLE || document.querySelector('#d-params[open]')) return Promise.resolve();
+    return api('GET', '/api/config').then(function (r) {
+      if (r.status !== 200 || !r.data || !r.data.parametres) return;
+      if (JSON.stringify(r.data.parametres) === JSON.stringify(app.params)) return;
+      app.params = r.data.parametres; reglerJours(); remplirListes();
+    }, function () { /* signalé par verifierService */ });
+  }
   function publierPeriodique() {
     if (!estJourActif() || !app.prete || app.publication || sauvegardeEnCours()) return;
     var date = app.journee.date, version = app.version;
-    api('GET', '/api/journee/' + date).then(function (r) {
+    relireParametres().then(function () { return api('GET', '/api/journee/' + date); }).then(function (r) {
+      if (!r) return;
       if (r.status !== 200 || !estJourActif() || app.journee.date !== date || app.version !== version || sauvegardeEnCours()) return;
       if (r.data.version !== version) {
         // modification en cours dans le tableau : relu à la minute suivante, sans publier d'ici là
@@ -586,6 +599,8 @@
     return api('PUT', '/api/parametres', JSON.stringify(p, null, 2)).then(function (r) {
       if (r.status !== 200) throw new Error((r.data && r.data.erreur) || 'enregistrement refusé');
       app.params = p; reglerJours(); remplirListes();
+      // les écrans prennent les nouveaux réglages (sons…) tout de suite, même si une publication était en cours
+      setTimeout(publier, 2500);
       if (app.journee && !app.lectureSeule && SC.recalerPreps(SC.copie(app.journee), app.planning)) {
         modifier('Jours préparés recalés (samedi / dimanche)', 'demain.recalage', function (j) { SC.recalerPreps(j, app.planning); });
       }
@@ -770,6 +785,10 @@
   });
   $$('[data-tx-essai]').forEach(function (b) {
     b.addEventListener('click', function () {
+      var sons = ((app.params || {}).visuel || {}).sons || {}, change = $$('[data-son-choix]').some(function (sel) {
+        var k = sel.getAttribute('data-son-choix'); return sel.value !== (sons[k] || { arrivee: 'arrivee', flash: 'flash', orange: 's6_important', rouge: 's2_urgent' }[k]);
+      });
+      if (change) toast('Sons modifiés mais pas encore enregistrés : les écrans jouent encore l\'ancien son. Cliquez « Enregistrer » puis refaites l\'essai.', 'crit');
       api('POST', '/api/travaux', JSON.stringify({ appareil: $('#pa-tx-essai-app').value, couleur: b.getAttribute('data-tx-essai'), message: 'essai depuis la saisie', creneau: $('#pa-tx-essai-cr').value.trim() })).then(function (r) {
         if (r.status !== 200) { toast('Essai refusé : ' + ((r.data && r.data.erreur) || r.status) + ' (serveur 2.6.0 ?)', 'crit'); return; }
         majTravauxSaisie(r.data.liste || []);
