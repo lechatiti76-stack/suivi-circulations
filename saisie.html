@@ -328,11 +328,12 @@
         </div>
         <p class="note" style="margin-top:12px">Sons joués par les écrans (mélodies propres à l'application). Sur chaque écran, cliquer une fois sur le symbole du son au démarrage.</p>
         <div class="sons-grille">
-          <label><input type="checkbox" id="pa-son"> Arrivée imminente : carillon (4 s)</label><button type="button" class="bouton petit" data-son-essai="arrivee">▶ Écouter</button>
-          <label><input type="checkbox" id="pa-voix"> Annonce vocale après le carillon (navette, provenance, numéro, voie, wagons)</label><button type="button" class="bouton petit" data-son-essai="voix">▶ Écouter</button>
-          <label><input type="checkbox" id="pa-son-flash"> Nouveau flash info : jingle (2 s)</label><button type="button" class="bouton petit" data-son-essai="flash">▶ Écouter</button>
-          <label><input type="checkbox" id="pa-son-travaux"> Nouvel avis de travaux (Notion) : signal (2,5 s)</label><button type="button" class="bouton petit" data-son-essai="travaux">▶ Écouter</button>
-          <label>Volume <input type="range" id="pa-volume" min="0" max="100" step="5" style="width:180px"> <span id="pa-volume-val" class="mono"></span></label><span></span>
+          <label><input type="checkbox" id="pa-son"> Arrivée imminente</label><select id="pa-son-ch-arrivee" data-son-choix="arrivee"></select><button type="button" class="bouton petit" data-son-essai="arrivee">▶ Écouter</button>
+          <label><input type="checkbox" id="pa-voix"> Annonce vocale après le son d'arrivée</label><span class="note">navette, provenance, numéro, voie, wagons</span><button type="button" class="bouton petit" data-son-essai="voix">▶ Écouter</button>
+          <label><input type="checkbox" id="pa-son-flash"> Nouveau flash info</label><select id="pa-son-ch-flash" data-son-choix="flash"></select><button type="button" class="bouton petit" data-son-essai="flash">▶ Écouter</button>
+          <label><input type="checkbox" id="pa-son-travaux"> Avis travaux orange (maintenance)</label><select id="pa-son-ch-orange" data-son-choix="orange"></select><button type="button" class="bouton petit" data-son-essai="orange">▶ Écouter</button>
+          <label class="retrait">Avis travaux rouge (hors service)</label><select id="pa-son-ch-rouge" data-son-choix="rouge"></select><button type="button" class="bouton petit" data-son-essai="rouge">▶ Écouter</button>
+          <label>Volume <input type="range" id="pa-volume" min="0" max="100" step="5" style="width:180px"> <span id="pa-volume-val" class="mono"></span></label><span></span><span></span>
         </div>
       </div>
     </div>

@@ -374,14 +374,7 @@
    * arrivée. Réglages dans la saisie (Paramètres › Écrans) ; ?son=0 dans l'adresse coupe le son de cet écran.
    * Les navigateurs bloquent le son tant qu'on n'a pas cliqué une fois sur la page : bouton « Activer le son ».
    */
-  // démonstration (?demo=1) : muette, sauf &son=1 dans l'adresse
-  var SON_ECRAN = DEMO ? /[?&]son=1\b/.test(location.search) : !/[?&]son=0\b/.test(location.search), annVus = null, annFile = [], annEnCours = false;
-  /** Arrivées déjà annoncées aujourd'hui, gardées dans le navigateur : un rechargement de l'écran ne les répète pas. */
-  function annoncesDuJour() {
-    var cle = 'suivi:annonces:' + SC.cleDate(new Date()), vus = {};
-    try { vus = JSON.parse(localStorage.getItem(cle) || '{}') || {}; } catch (e) { vus = {}; }
-    return { vus: vus, garder: function () { try { localStorage.setItem(cle, JSON.stringify(vus)); } catch (e) { /* stockage indisponible */ } } };
-  }
+  var SON_ECRAN = !/[?&]son=0\b/.test(location.search), annVus = null, annFile = [], annEnCours = false;
   function reglagesSon() {
     var s = (etat.d && etat.d.son) || {};
     return { actif: SON_ECRAN && s.actif !== false, volume: s.volume == null ? 70 : s.volume, voix: s.voix !== false,
@@ -415,12 +408,11 @@
   }
   function annoncerArrivees(vn, vt) {
     var premier = annVus === null, liste = vn.concat(vt).filter(function (v) { return v.ph.cle === 'approche'; });
-    if (premier) annVus = annoncesDuJour();
+    if (premier) annVus = {};
     liste.forEach(function (v) {
-      // une seule annonce par arrivée et par jour, même si l'heure « En approche » est corrigée ensuite
-      var k = (v.l.id || v.l.code) + '|' + (v.l.theo || '');
-      if (annVus.vus[k]) return;
-      annVus.vus[k] = Date.now(); annVus.garder();
+      var k = (v.l.id || v.l.code) + '|' + (v.l.partie || '');
+      if (annVus[k]) return;
+      annVus[k] = true;
       // écran qui démarre : pas d'annonce pour une arrivée déjà en approche depuis plus d'une minute
       if (premier && !(v.ph.sec != null && v.ph.sec > VED.avant * 60 - 60)) return;
       annFile.push({ type: 'arrivee', texte: phraseArrivee(v) });

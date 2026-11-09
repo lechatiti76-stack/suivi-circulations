@@ -762,8 +762,9 @@
   $('#pa-volume').addEventListener('input', function () { $('#pa-volume-val').textContent = this.value + ' %'; });
   $$('[data-son-essai]').forEach(function (b) {
     b.addEventListener('click', function () {
-      var v = +$('#pa-volume').value, t = b.getAttribute('data-son-essai');
-      if (t === 'voix') SC.jouerCarillon(v, 'arrivee').then(function () { SC.annoncer('Attention, la navette F L 1 en provenance de T D F, numéro 504930, va rentrer en Ferroviaire V F 2 avec 27 wagons.', v); });
+      var v = +$('#pa-volume').value, t = b.getAttribute('data-son-essai'), ch = $('#pa-son-ch-' + t);
+      if (ch) { SC.jouerCarillon(v, ch.value); return; }
+      if (t === 'voix') SC.jouerCarillon(v, $('#pa-son-ch-arrivee').value).then(function () { SC.annoncer('Attention, la navette F L 1 en provenance de T D F, numéro 504930, va rentrer en Ferroviaire V F 2 avec 27 wagons.', v); });
       else SC.jouerCarillon(v, t);
     });
   });
@@ -1335,6 +1336,11 @@
     var vis = p.visuel || {};
     $('#pa-tx-duree').value = vis.alerteTravauxSecondes == null ? 5 : vis.alerteTravauxSecondes;
     $('#pa-son').checked = vis.sonArrivees !== false; $('#pa-voix').checked = vis.voixArrivees !== false;
+    var choix = Object.assign({ arrivee: 'arrivee', flash: 'flash', orange: 's6_important', rouge: 's2_urgent' }, vis.sons || {});
+    $$('[data-son-choix]').forEach(function (sel) {
+      sel.innerHTML = SC.SONS.map(function (x) { return '<option value="' + x.id + '">' + esc(x.nom) + '</option>'; }).join('');
+      sel.value = choix[sel.getAttribute('data-son-choix')];
+    });
     $('#pa-son-flash').checked = vis.sonFlash !== false; $('#pa-son-travaux').checked = vis.sonTravaux !== false;
     $('#pa-complet').checked = !!vis.tableauComplet; $('#pa-vedettes').checked = vis.vedettes !== false;
     $('#pa-volume').value = vis.volumeSon == null ? 70 : vis.volumeSon; $('#pa-volume-val').textContent = $('#pa-volume').value + ' %';
@@ -1450,6 +1456,8 @@
     if (dtx !== '' && !(/^\d{1,3}$/.test(dtx) && +dtx <= 120)) err.push('Alerte travaux : de 0 à 120 secondes.');
     p.visuel.alerteTravauxSecondes = dtx === '' ? 5 : +dtx;
     p.visuel.sonArrivees = $('#pa-son').checked; p.visuel.voixArrivees = $('#pa-voix').checked; p.visuel.volumeSon = +$('#pa-volume').value;
+    p.visuel.sons = {};
+    $$('[data-son-choix]').forEach(function (sel) { p.visuel.sons[sel.getAttribute('data-son-choix')] = sel.value; });
     p.visuel.sonFlash = $('#pa-son-flash').checked; p.visuel.sonTravaux = $('#pa-son-travaux').checked;
     p.visuel.tableauComplet = $('#pa-complet').checked; p.visuel.vedettes = $('#pa-vedettes').checked;
     p.visuel.phrasesFlash = $('#pa-phrases').value.split(/\r?\n/).map(function (x) { return x.trim(); }).filter(Boolean);

@@ -444,7 +444,9 @@
       // alerte travaux en grand (secondes, 0 = pas d'alerte) ; mélodie et annonce vocale des arrivées imminentes
       alerteTravaux: vis.alerteTravauxSecondes == null ? 5 : +vis.alerteTravauxSecondes,
       son: { actif: vis.sonArrivees !== false, volume: vis.volumeSon == null ? 70 : +vis.volumeSon, voix: vis.voixArrivees !== false,
-        flash: vis.sonFlash !== false, travaux: vis.sonTravaux !== false },
+        flash: vis.sonFlash !== false, travaux: vis.sonTravaux !== false,
+        // sons choisis (voir SONS) : arrivée, flash info, avis travaux orange et rouge
+        choix: Object.assign({ arrivee: 'arrivee', flash: 'flash', orange: 's6_important', rouge: 's2_urgent' }, vis.sons || {}) },
       // tableau complet : tous les groupes de navettes en grand (pas de colonne réduite ni « terminé ») ; animations en grand
       tableauComplet: !!vis.tableauComplet, vedettes: vis.vedettes !== false,
       version: j.version, publieA: maint,
@@ -926,8 +928,78 @@
   var MOTIFS = {
     arrivee: { notes: [[392.0, 0, 1.8], [587.33, 0.42, 1.8], [493.88, 0.84, 1.8], [659.26, 1.26, 3.2]], fin: 3600, force: 0.5 },
     flash: { notes: [[783.99, 0, 1.0], [1046.5, 0.16, 1.0], [1318.51, 0.32, 1.9]], fin: 2100, force: 0.36 },
-    travaux: { notes: [[659.26, 0, 0.7], [523.25, 0.26, 0.7], [659.26, 0.52, 0.7], [523.25, 0.78, 1.7]], fin: 2500, force: 0.48, dur: true }
+    travaux: { notes: [[659.26, 0, 0.7], [523.25, 0.26, 0.7], [659.26, 0.52, 0.7], [523.25, 0.78, 1.7]], fin: 2500, force: 0.48, dur: true },
+    // sons proposés pour les avis travaux / alertes (≈ 3,5 s chacun) : n = [fréquence, départ, durée, timbre, fréquence de fin]
+    s1_deuxTons: { notes: [[659.26, 0, 0.7], [523.25, 0.3, 0.7], [659.26, 0.6, 0.7], [523.25, 0.9, 0.7], [659.26, 1.2, 0.7], [523.25, 1.5, 2.0]], fin: 3500, force: 0.6, dur: true },
+    s2_urgent: { notes: [[880, 0, 0.11, 'bip'], [880, 0.15, 0.11, 'bip'], [880, 0.3, 0.11, 'bip'], [880, 0.75, 0.11, 'bip'], [880, 0.9, 0.11, 'bip'], [880, 1.05, 0.11, 'bip'],
+      [880, 1.5, 0.11, 'bip'], [880, 1.65, 0.11, 'bip'], [880, 1.8, 0.11, 'bip'], [1318.51, 2.25, 1.1, 'bip']], fin: 3500, force: 0.22 },
+    s3_sirene: { notes: [[620, 0, 0.8, 'sirene', 930], [930, 0.8, 0.8, 'sirene', 620], [620, 1.6, 0.8, 'sirene', 930], [930, 2.4, 0.9, 'sirene', 620]], fin: 3400, force: 0.2 },
+    s4_gong: { notes: [[130.81, 0, 3.4, 'gong'], [392.0, 0.7, 1.8], [329.63, 1.15, 1.8], [261.63, 1.6, 2.0]], fin: 3600, force: 0.5 },
+    s5_chantier: { notes: [[1046.5, 0, 0.32, 'bip'], [1046.5, 0.6, 0.32, 'bip'], [1046.5, 1.2, 0.32, 'bip'], [1046.5, 1.8, 0.32, 'bip'], [1046.5, 2.4, 0.32, 'bip'], [783.99, 3.0, 0.45, 'bip']], fin: 3500, force: 0.2 },
+    s6_important: { notes: [[523.25, 0, 1.4], [659.26, 0.28, 1.4], [783.99, 0.56, 1.4], [523.25, 1.0, 2.5], [659.26, 1.0, 2.5], [783.99, 1.0, 2.5], [1046.5, 1.0, 2.5]], fin: 3600, force: 0.2 },
+    // dans l'esprit de 2 (bips d'alerte) et de 6 (annonce + accord)
+    s7_urgentDeuxTons: { notes: [[880, 0, 0.11, 'bip'], [1174.66, 0.15, 0.11, 'bip'], [880, 0.3, 0.11, 'bip'], [880, 0.75, 0.11, 'bip'], [1174.66, 0.9, 0.11, 'bip'], [880, 1.05, 0.11, 'bip'],
+      [880, 1.5, 0.11, 'bip'], [1174.66, 1.65, 0.11, 'bip'], [880, 1.8, 0.11, 'bip'], [1174.66, 2.25, 1.1, 'bip']], fin: 3500, force: 0.22 },
+    s8_alerteMontante: { notes: [[784, 0, 0.12, 'bip'], [880, 0.16, 0.12, 'bip'], [988, 0.32, 0.12, 'bip'], [784, 0.75, 0.12, 'bip'], [880, 0.91, 0.12, 'bip'], [988, 1.07, 0.12, 'bip'],
+      [784, 1.5, 0.12, 'bip'], [880, 1.66, 0.12, 'bip'], [988, 1.82, 0.12, 'bip'], [1318.51, 2.25, 1.2, 'bip']], fin: 3600, force: 0.22 },
+    s9_information: { notes: [[392.0, 0, 1.3], [523.25, 0.24, 1.3], [659.26, 0.48, 1.3], [783.99, 0.72, 1.3], [392.0, 1.15, 2.4], [523.25, 1.15, 2.4], [659.26, 1.15, 2.4], [783.99, 1.15, 2.4]], fin: 3700, force: 0.19 },
+    s10_solennel: { notes: [[523.25, 0, 1.3], [783.99, 0.3, 1.3], [659.26, 0.6, 1.3], [440.0, 1.05, 2.5], [523.25, 1.05, 2.5], [659.26, 1.05, 2.5], [880.0, 1.05, 2.5]], fin: 3700, force: 0.2 },
+    // sirène d'alerte « défense civile » : montée lente, plateau qui ondule, descente (dans l'esprit des sirènes de film)
+    s11_sireneAlerte: { notes: [[180, 0, 4.4, 'alarme', 640]], fin: 4500, force: 0.17 }
   };
+  /** Sons au choix dans la saisie (Paramètres › Écrans TV : affichage et sons). */
+  var SONS = [
+    { id: 'arrivee', nom: 'Carillon d\'arrivée (4 notes)' }, { id: 'flash', nom: 'Jingle 3 notes (court)' },
+    { id: 's2_urgent', nom: 'Alerte urgente (bips)' }, { id: 's7_urgentDeuxTons', nom: 'Alerte urgente deux tons' }, { id: 's8_alerteMontante', nom: 'Alerte montante' },
+    { id: 's6_important', nom: 'Annonce importante (accord)' }, { id: 's9_information', nom: 'Annonce information' }, { id: 's10_solennel', nom: 'Annonce solennelle' },
+    { id: 's11_sireneAlerte', nom: 'Sirène d\'alerte (style film)' }, { id: 's3_sirene', nom: 'Sirène douce' },
+    { id: 's1_deuxTons', nom: 'Deux tons travaux' }, { id: 's4_gong', nom: 'Gong important' }, { id: 's5_chantier', nom: 'Bips de chantier' }
+  ];
+  /** Son tenu : « bip » (timbre carré adouci) ou « sirène » (glissando de f à fFin). */
+  function tenue(c, sortie, f, t, duree, force, timbre, fFin) {
+    var harm = timbre === 'bip' ? [[1, 1], [3, 0.3], [5, 0.12]] : [[1, 1], [2, 0.18], [3, 0.1]];
+    harm.forEach(function (h) {
+      var o = c.createOscillator(), g = c.createGain();
+      o.type = 'sine'; o.frequency.setValueAtTime(f * h[0], t);
+      if (fFin) o.frequency.linearRampToValueAtTime(fFin * h[0], t + duree);
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.linearRampToValueAtTime(force * h[1], t + 0.015);
+      g.gain.setValueAtTime(force * h[1] * 0.85, t + Math.max(0.02, duree - 0.04));
+      g.gain.linearRampToValueAtTime(0.0001, t + duree);
+      o.connect(g); g.connect(sortie); o.start(t); o.stop(t + duree + 0.05);
+    });
+  }
+  /** Sirène mécanique : montée de fBas à fHaut (40 %), plateau avec ondulation lente, descente (dernier tiers). */
+  function alarme(c, sortie, fBas, fHaut, t, duree, force) {
+    var monte = duree * 0.4, plat = duree * 0.3, lfo = c.createOscillator(), prof = c.createGain();
+    lfo.frequency.value = 5.5; prof.gain.setValueAtTime(0, t); prof.gain.linearRampToValueAtTime(fHaut * 0.012, t + monte); prof.gain.linearRampToValueAtTime(0, t + duree);
+    lfo.connect(prof); lfo.start(t); lfo.stop(t + duree + 0.05);
+    [[1, 1], [2, 0.42], [3, 0.22], [4, 0.1], [5, 0.05]].forEach(function (h) {
+      var o = c.createOscillator(), g = c.createGain(), pr = c.createGain();
+      o.type = 'sine';
+      o.frequency.setValueAtTime(fBas * h[0], t);
+      o.frequency.exponentialRampToValueAtTime(fHaut * h[0], t + monte);
+      o.frequency.setValueAtTime(fHaut * h[0], t + monte + plat);
+      o.frequency.exponentialRampToValueAtTime(fBas * 1.1 * h[0], t + duree);
+      pr.gain.value = h[0]; prof.connect(pr); pr.connect(o.frequency);
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.linearRampToValueAtTime(force * h[1], t + monte * 0.6);
+      g.gain.setValueAtTime(force * h[1], t + monte + plat);
+      g.gain.linearRampToValueAtTime(0.0001, t + duree);
+      o.connect(g); g.connect(sortie); o.start(t); o.stop(t + duree + 0.05);
+    });
+  }
+  /** Gong grave (partiels inharmoniques, longue résonance). */
+  function gong(c, sortie, f, t, duree, force) {
+    [[1, 1], [2.76, 0.35], [5.4, 0.15], [8.93, 0.06]].forEach(function (h) {
+      var o = c.createOscillator(), g = c.createGain();
+      o.type = 'sine'; o.frequency.value = f * h[0];
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(force * h[1] * 1.2, t + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.001, t + duree / (h[0] > 1 ? 1.6 : 1));
+      o.connect(g); g.connect(sortie); o.start(t); o.stop(t + duree + 0.05);
+    });
+  }
   /** Joue le carillon (volume 0-100, motif arrivee | flash | travaux). Promesse résolue à la fin. */
   function jouerCarillon(volume, motif) {
     var m = MOTIFS[motif] || MOTIFS.arrivee, c = null;
@@ -939,7 +1011,12 @@
       var sortie = c.createGain(); sortie.gain.value = 0.9 * v;
       sortie.connect(c.destination); sortie.connect(audio.rev);
       var t0 = c.currentTime + 0.05;
-      m.notes.forEach(function (n) { cloche(c, sortie, n[0], t0 + n[1], n[2], m.force, m.dur); });
+      m.notes.forEach(function (n) {
+        if (n[3] === 'bip' || n[3] === 'sirene') tenue(c, sortie, n[0], t0 + n[1], n[2], m.force, n[3], n[4]);
+        else if (n[3] === 'gong') gong(c, sortie, n[0], t0 + n[1], n[2], m.force);
+        else if (n[3] === 'alarme') alarme(c, sortie, n[0], n[4], t0 + n[1], n[2], m.force);
+        else cloche(c, sortie, n[0], t0 + n[1], n[2], m.force, m.dur);
+      });
       return new Promise(function (ok) { setTimeout(function () { ok(true); }, m.fin); });
     }, function () { return false; });
   }
@@ -957,7 +1034,7 @@
   }
 
   return {
-    jouerCarillon: jouerCarillon, annoncer: annoncer, sonDisponible: sonDisponible, deverrouillerSon: deverrouillerSon,
+    jouerCarillon: jouerCarillon, SONS: SONS, annoncer: annoncer, sonDisponible: sonDisponible, deverrouillerSon: deverrouillerSon,
     JOURS: JOURS, JOURS_COURTS: JOURS_COURTS, TYPES_MAIL: TYPES_MAIL, DEROULE: DEROULE, ENTETE_STATS: ENTETE_STATS,
     PARCOURS_DEFAUT: PARCOURS_DEFAUT, CORRESPONDANCES_SUIVI: CORRESPONDANCES_SUIVI, NOMS_TRAINS: NOMS_TRAINS, nomTrain: nomTrain,
     parcoursDe: parcoursDe, parcoursEnTexte: parcoursEnTexte, texteEnParcours: texteEnParcours, prochainesNavettes: prochainesNavettes,
