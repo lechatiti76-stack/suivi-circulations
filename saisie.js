@@ -775,18 +775,25 @@
   });
   $('#pa-tx-url').addEventListener('focus', function () { this.select(); });
   $('#pa-volume').addEventListener('input', function () { $('#pa-volume-val').textContent = this.value + ' %'; });
+  $('#pa-vitesse-voix').addEventListener('input', function () { $('#pa-vitesse-voix-val').textContent = '× ' + (+this.value).toFixed(2); });
   $$('[data-son-essai]').forEach(function (b) {
     b.addEventListener('click', function () {
       var v = +$('#pa-volume').value, t = b.getAttribute('data-son-essai'), ch = $('#pa-son-ch-' + t);
       if (ch) { SC.jouerCarillon(v, ch.value); return; }
-      if (t === 'voix') SC.jouerCarillon(v, $('#pa-son-ch-arrivee').value).then(function () { SC.annoncer('Attention, la navette F L 1 en provenance de T D F, numéro 504930, va rentrer en Ferroviaire V F 2 avec 27 wagons.', v); });
+      if (t === 'voix') {
+        var pr = SC.lirePrononciation($('#pa-prononciation').value), prov = pr.ATL || 'A T L';
+        SC.jouerCarillon(v, $('#pa-son-ch-arrivee').value).then(function () {
+          SC.annoncer('Attention, la navette ' + (pr.LA1 || 'L A 1') + ' en provenance ' + (/^[aeiouyéèê]/i.test(prov) ? 'd\'' : 'de ') + prov + ', numéro 504930, va rentrer en Ferroviaire V F 2 avec 27 wagons.', v,
+            { nomVoix: $('#pa-nom-voix').value, vitesse: +$('#pa-vitesse-voix').value });
+        });
+      }
       else SC.jouerCarillon(v, t);
     });
   });
   $$('[data-tx-essai]').forEach(function (b) {
     b.addEventListener('click', function () {
       var sons = ((app.params || {}).visuel || {}).sons || {}, change = $$('[data-son-choix]').some(function (sel) {
-        var k = sel.getAttribute('data-son-choix'); return sel.value !== (sons[k] || { arrivee: 'arrivee', flash: 'flash', orange: 's6_important', rouge: 's2_urgent' }[k]);
+        var k = sel.getAttribute('data-son-choix'); return sel.value !== (sons[k] || { arrivee: 'arrivee', flash: 'flash', orange: 's6_important', rouge: 's2_urgent', fin: 's12_finJoyeux' }[k]);
       });
       if (change) toast('Sons modifiés mais pas encore enregistrés : les écrans jouent encore l\'ancien son. Cliquez « Enregistrer » puis refaites l\'essai.', 'crit');
       api('POST', '/api/travaux', JSON.stringify({ appareil: $('#pa-tx-essai-app').value, couleur: b.getAttribute('data-tx-essai'), message: 'essai depuis la saisie', creneau: $('#pa-tx-essai-cr').value.trim() })).then(function (r) {
@@ -1355,7 +1362,15 @@
     var vis = p.visuel || {};
     $('#pa-tx-duree').value = vis.alerteTravauxSecondes == null ? 5 : vis.alerteTravauxSecondes;
     $('#pa-son').checked = vis.sonArrivees !== false; $('#pa-voix').checked = vis.voixArrivees !== false;
-    var choix = Object.assign({ arrivee: 'arrivee', flash: 'flash', orange: 's6_important', rouge: 's2_urgent' }, vis.sons || {});
+    var choix = Object.assign({ arrivee: 'arrivee', flash: 'flash', orange: 's6_important', rouge: 's2_urgent', fin: 's12_finJoyeux' }, vis.sons || {});
+    $('#pa-son-fin').checked = vis.sonFinTravaux !== false;
+    $('#pa-vitesse-voix').value = vis.vitesseVoix == null ? 1 : vis.vitesseVoix; $('#pa-vitesse-voix-val').textContent = '× ' + (+$('#pa-vitesse-voix').value).toFixed(2);
+    $('#pa-prononciation').value = vis.prononciation == null ? 'ATL=Atlantique' : vis.prononciation;
+    SC.voixFrancaises().then(function (l) {
+      $('#pa-nom-voix').innerHTML = '<option value="">Automatique : la plus naturelle de l\'écran</option>' + l.map(function (v) { return '<option value="' + esc(v.name) + '">' + esc(v.name + ' (' + v.lang + ')') + '</option>'; }).join('') +
+        (vis.nomVoix && !l.some(function (v) { return v.name === vis.nomVoix; }) ? '<option value="' + esc(vis.nomVoix) + '">' + esc(vis.nomVoix) + ' (pas sur ce PC)</option>' : '');
+      $('#pa-nom-voix').value = vis.nomVoix || '';
+    });
     $$('[data-son-choix]').forEach(function (sel) {
       sel.innerHTML = SC.SONS.map(function (x) { return '<option value="' + x.id + '">' + esc(x.nom) + '</option>'; }).join('');
       sel.value = choix[sel.getAttribute('data-son-choix')];
@@ -1475,6 +1490,8 @@
     if (dtx !== '' && !(/^\d{1,3}$/.test(dtx) && +dtx <= 120)) err.push('Alerte travaux : de 0 à 120 secondes.');
     p.visuel.alerteTravauxSecondes = dtx === '' ? 5 : +dtx;
     p.visuel.sonArrivees = $('#pa-son').checked; p.visuel.voixArrivees = $('#pa-voix').checked; p.visuel.volumeSon = +$('#pa-volume').value;
+    p.visuel.sonFinTravaux = $('#pa-son-fin').checked; p.visuel.nomVoix = $('#pa-nom-voix').value;
+    p.visuel.vitesseVoix = +$('#pa-vitesse-voix').value; p.visuel.prononciation = $('#pa-prononciation').value.trim();
     p.visuel.sons = {};
     $$('[data-son-choix]').forEach(function (sel) { p.visuel.sons[sel.getAttribute('data-son-choix')] = sel.value; });
     p.visuel.sonFlash = $('#pa-son-flash').checked; p.visuel.sonTravaux = $('#pa-son-travaux').checked;

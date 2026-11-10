@@ -446,7 +446,14 @@
       son: { actif: vis.sonArrivees !== false, volume: vis.volumeSon == null ? 70 : +vis.volumeSon, voix: vis.voixArrivees !== false,
         flash: vis.sonFlash !== false, travaux: vis.sonTravaux !== false,
         // sons choisis (voir SONS) : arrivée, flash info, avis travaux orange et rouge
-        choix: Object.assign({ arrivee: 'arrivee', flash: 'flash', orange: 's6_important', rouge: 's2_urgent' }, vis.sons || {}) },
+        choix: Object.assign({ arrivee: 'arrivee', flash: 'flash', orange: 's6_important', rouge: 's2_urgent', fin: 's12_finJoyeux' }, vis.sons || {}),
+        // voix : nom de la voix préférée (sinon la plus naturelle de l'écran), vitesse, mots dits autrement (ATL=Atlantique)
+        nomVoix: vis.nomVoix || '', vitesseVoix: vis.vitesseVoix == null ? 1 : +vis.vitesseVoix,
+        prononciation: lirePrononciation(vis.prononciation == null ? 'ATL=Atlantique' : vis.prononciation),
+        finTravaux: vis.sonFinTravaux !== false },
+      // appareils suivis (Paramètres › Travaux) : bandeau vert « tous en service » à la fin d'une intervention
+      appareils: ((params && params.travaux && params.travaux.appareils && params.travaux.appareils.length) ? params.travaux.appareils : APPAREILS_DEFAUT)
+        .map(function (a) { return { code: a.code, libelle: a.libelle }; }),
       // tableau complet : tous les groupes de navettes en grand (pas de colonne réduite ni « terminé ») ; animations en grand
       tableauComplet: !!vis.tableauComplet, vedettes: vis.vedettes !== false,
       version: j.version, publieA: maint,
@@ -945,14 +952,29 @@
     s9_information: { notes: [[392.0, 0, 1.3], [523.25, 0.24, 1.3], [659.26, 0.48, 1.3], [783.99, 0.72, 1.3], [392.0, 1.15, 2.4], [523.25, 1.15, 2.4], [659.26, 1.15, 2.4], [783.99, 1.15, 2.4]], fin: 3700, force: 0.19 },
     s10_solennel: { notes: [[523.25, 0, 1.3], [783.99, 0.3, 1.3], [659.26, 0.6, 1.3], [440.0, 1.05, 2.5], [523.25, 1.05, 2.5], [659.26, 1.05, 2.5], [880.0, 1.05, 2.5]], fin: 3700, force: 0.2 },
     // sirène d'alerte « défense civile » : montée lente, plateau qui ondule, descente (dans l'esprit des sirènes de film)
-    s11_sireneAlerte: { notes: [[180, 0, 4.4, 'alarme', 640]], fin: 4500, force: 0.17 }
+    s11_sireneAlerte: { notes: [[180, 0, 4.4, 'alarme', 640]], fin: 4500, force: 0.17 },
+    // joyeux : fin d'intervention (remise en service)
+    s12_finJoyeux: { notes: [[523.25, 0, 0.9], [659.26, 0.14, 0.9], [783.99, 0.28, 0.9], [1046.5, 0.42, 1.2], [783.99, 0.75, 0.9], [1046.5, 0.95, 1.4],
+      [523.25, 1.35, 2.0], [659.26, 1.35, 2.0], [783.99, 1.35, 2.0], [1318.51, 1.35, 2.2]], fin: 3700, force: 0.22 },
+    s13_carillonJoyeux: { notes: [[659.26, 0, 0.9], [783.99, 0.2, 0.9], [880, 0.4, 0.9], [1046.5, 0.6, 0.9], [1174.66, 0.8, 0.9], [1318.51, 1.0, 1.4],
+      [1046.5, 1.4, 1.2], [1318.51, 1.6, 2.2]], fin: 3700, force: 0.28 }
   };
+  var APPAREILS_DEFAUT = [{ code: 'RMG3', libelle: 'Le portique RMG3' }, { code: 'RMG4', libelle: 'Le portique RMG4' },
+    { code: 'PF1', libelle: 'Le portique fluvial 1' }, { code: 'PF2', libelle: 'Le portique fluvial 2' },
+    { code: 'PPMA', libelle: 'La PPM A' }, { code: 'PPMB', libelle: 'La PPM B' }, { code: 'PPMC', libelle: 'La PPM C' }];
+  /** « ATL=Atlantique, TN=Terminal Nord » → { ATL: 'Atlantique', … } */
+  function lirePrononciation(t) {
+    var o = {};
+    String(t || '').split(/[,;\n]+/).forEach(function (x) { var k = x.split('='); if (k.length === 2 && k[0].trim() && k[1].trim()) o[k[0].trim().toUpperCase()] = k[1].trim(); });
+    return o;
+  }
   /** Sons au choix dans la saisie (Paramètres › Écrans TV : affichage et sons). */
   var SONS = [
     { id: 'arrivee', nom: 'Carillon d\'arrivée (4 notes)' }, { id: 'flash', nom: 'Jingle 3 notes (court)' },
     { id: 's2_urgent', nom: 'Alerte urgente (bips)' }, { id: 's7_urgentDeuxTons', nom: 'Alerte urgente deux tons' }, { id: 's8_alerteMontante', nom: 'Alerte montante' },
     { id: 's6_important', nom: 'Annonce importante (accord)' }, { id: 's9_information', nom: 'Annonce information' }, { id: 's10_solennel', nom: 'Annonce solennelle' },
     { id: 's11_sireneAlerte', nom: 'Sirène d\'alerte (style film)' }, { id: 's3_sirene', nom: 'Sirène douce' },
+    { id: 's12_finJoyeux', nom: 'Fin joyeuse (arpège + accord)' }, { id: 's13_carillonJoyeux', nom: 'Carillon joyeux (gamme)' },
     { id: 's1_deuxTons', nom: 'Deux tons travaux' }, { id: 's4_gong', nom: 'Gong important' }, { id: 's5_chantier', nom: 'Bips de chantier' }
   ];
   /** Son tenu : « bip » (timbre carré adouci) ou « sirène » (glissando de f à fFin). */
@@ -1021,20 +1043,45 @@
     }, function () { return false; });
   }
   /** Annonce vocale en français (synthèse du navigateur), si une voix est disponible. */
-  function annoncer(texte, volume) {
-    if (typeof window === 'undefined' || !window.speechSynthesis || !texte) return Promise.resolve(false);
+  /**
+   * Voix françaises de ce navigateur, les plus naturelles d'abord : voix « Natural / Online » (Edge, Windows 11),
+   * puis Google, puis les autres. Chrome les charge en différé : on attend « voiceschanged » (1,5 s au plus).
+   */
+  function voixFrancaises() {
+    if (typeof window === 'undefined' || !window.speechSynthesis) return Promise.resolve([]);
+    var lire = function () {
+      var rang = function (v) { return /natural|neural|online/i.test(v.name) ? 0 : (/google/i.test(v.name) ? 1 : (/denise|henri|eloise|amelie|thomas|audrey|aurelie/i.test(v.name) ? 2 : 3)); };
+      return window.speechSynthesis.getVoices().filter(function (v) { return /^fr/i.test(v.lang); })
+        .sort(function (a, b) { return rang(a) - rang(b) || (/fr-FR/i.test(b.lang) ? 1 : 0) - (/fr-FR/i.test(a.lang) ? 1 : 0); });
+    };
+    var l = lire();
+    if (l.length) return Promise.resolve(l);
     return new Promise(function (ok) {
-      var u = new SpeechSynthesisUtterance(texte), voix = window.speechSynthesis.getVoices().filter(function (v) { return /^fr/i.test(v.lang); });
-      u.lang = 'fr-FR'; if (voix.length) u.voice = voix.filter(function (v) { return /google|natural|amelie|thomas|denise|henri/i.test(v.name); })[0] || voix[0];
-      u.rate = 0.92; u.volume = Math.max(0, Math.min(1, (volume == null ? 70 : +volume) / 100));
-      var fini = false, fin = function () { if (!fini) { fini = true; ok(true); } };
-      u.onend = fin; u.onerror = fin; setTimeout(fin, 15000);
-      window.speechSynthesis.speak(u);
+      var fini = false, fin = function () { if (!fini) { fini = true; ok(lire()); } };
+      window.speechSynthesis.addEventListener('voiceschanged', fin, { once: true });
+      setTimeout(fin, 1500);
+    });
+  }
+  /** Annonce vocale en français. opts : { nomVoix, vitesse }. Phrases découpées aux virgules pour un débit plus naturel. */
+  function annoncer(texte, volume, opts) {
+    if (typeof window === 'undefined' || !window.speechSynthesis || !texte) return Promise.resolve(false);
+    opts = opts || {};
+    return voixFrancaises().then(function (liste) {
+      var voix = (opts.nomVoix && liste.filter(function (v) { return v.name === opts.nomVoix; })[0]) || liste[0] || null;
+      return new Promise(function (ok) {
+        var u = new SpeechSynthesisUtterance(texte);
+        u.lang = voix ? voix.lang : 'fr-FR'; if (voix) u.voice = voix;
+        u.rate = Math.max(0.7, Math.min(1.3, opts.vitesse || 1)); u.pitch = 1;
+        u.volume = Math.max(0, Math.min(1, (volume == null ? 70 : +volume) / 100));
+        var fini = false, fin = function () { if (!fini) { fini = true; ok(true); } };
+        u.onend = fin; u.onerror = fin; setTimeout(fin, 20000);
+        window.speechSynthesis.cancel(); window.speechSynthesis.speak(u);
+      });
     });
   }
 
   return {
-    jouerCarillon: jouerCarillon, SONS: SONS, annoncer: annoncer, sonDisponible: sonDisponible, deverrouillerSon: deverrouillerSon,
+    jouerCarillon: jouerCarillon, SONS: SONS, annoncer: annoncer, voixFrancaises: voixFrancaises, lirePrononciation: lirePrononciation, sonDisponible: sonDisponible, deverrouillerSon: deverrouillerSon,
     JOURS: JOURS, JOURS_COURTS: JOURS_COURTS, TYPES_MAIL: TYPES_MAIL, DEROULE: DEROULE, ENTETE_STATS: ENTETE_STATS,
     PARCOURS_DEFAUT: PARCOURS_DEFAUT, CORRESPONDANCES_SUIVI: CORRESPONDANCES_SUIVI, NOMS_TRAINS: NOMS_TRAINS, nomTrain: nomTrain,
     parcoursDe: parcoursDe, parcoursEnTexte: parcoursEnTexte, texteEnParcours: texteEnParcours, prochainesNavettes: prochainesNavettes,

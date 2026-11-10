@@ -36,7 +36,7 @@
         { code: 'PF2', couleur: 'rouge', texte: 'Le portique fluvial 2 est hors service pour le moment.', message: '', creneau: 'toute la journée', depuis: '2000-01-01T00:00:00' },
         { code: 'RMG4', couleur: 'orange', texte: 'Le portique RMG4 est actuellement en cours de maintenance.', message: 'retour prévu 14:00', creneau: '8h-12h', depuis: '2000-01-01T00:00:00' }];
       // un nouvel avis 40 s après le début de chaque boucle : alerte en grand puis bandeau
-      if (Date.now() - cyc > 40000) avis.unshift({ code: 'RMG3', couleur: 'rouge', texte: 'Le portique RMG3 est hors service pour le moment.', message: 'panne spreader', creneau: 'demi-journée', depuis: SC.iso(new Date(cyc + 40000)), a: SC.iso(new Date(cyc + 40000)) });
+      if (Date.now() - cyc > 40000 && Date.now() - cyc < 200000) avis.unshift({ code: 'RMG3', couleur: 'rouge', texte: 'Le portique RMG3 est hors service pour le moment.', message: 'panne spreader', creneau: 'demi-journée', depuis: SC.iso(new Date(cyc + 40000)), a: SC.iso(new Date(cyc + 40000)) });
       window.__diffusion(diffusionDemo(), { battement: Math.floor(Date.now() / 1000) }, avis);
       return;
     }
@@ -127,19 +127,21 @@
    * Arrivées : rotation plus lente (classe « lent »).
    */
   var volets = {};
-  function celluleVolets(cle, e, arrivee) {
-    var texte = texteVolets(e, arrivee).toUpperCase(), sig = e.cle + (e.urgent ? ' urgent' : '') + '|' + texte, v = volets[cle];
+  function celluleVolets(cle, e, arrivee, marque) {
+    var texte = texteVolets(e, arrivee).toUpperCase(), sig = e.cle + (e.urgent ? ' urgent' : '') + '|' + texte + '|' + (marque || ''), v = volets[cle];
     if (!v || v.sig !== sig) {
       var avant = v ? v.texte : '';
       var lettres = texte.split('').map(function (ch, i) {
         return '<b' + (ch !== avant.charAt(i) ? ' class="f" style="--i:' + i + '"' : '') + '>' + (ch === ' ' ? '' : esc(ch)) + '</b>';
       }).join('');
       // volets aussi grands que la case le permet (13,9 rem utiles, volet de 0,8 em + 0,1 rem d'écart)
-      var taille = Math.min(1.45, (13.9 / Math.max(1, texte.length) - 0.1) / 0.8).toFixed(2);
+      // avec la pastille ✓ / ✕ (train parti / calé) : 2 rem de moins
+      var taille = Math.min(1.45, ((marque ? 11.9 : 13.9) / Math.max(1, texte.length) - 0.1) / 0.8).toFixed(2);
       v = volets[cle] = { sig: sig, texte: texte, html: '<span class="sf ' + e.cle + (e.urgent ? ' urgent' : '') + (arrivee ? ' lent' : '') + '" style="font-size:' + taille + 'rem" title="' + esc(e.libelle) + '">' + lettres + '</span>' };
     }
     var sous = arrivee ? sousVoletsArrivee(e) : e.sous;
-    return '<span class="etat volets">' + v.html + (sous ? '<small class="sous">' + dfl(esc(sous)) + '</small>' : '') + '</span>';
+    var pastille = marque ? '<i class="tok ' + marque + '" title="' + (marque === 'ok' ? 'Parti' : 'Calé') + '">' + (marque === 'ok' ? '✓' : '✕') + '</i>' : '';
+    return '<span class="etat volets">' + (pastille ? '<span class="vrang">' + pastille + v.html + '</span>' : v.html) + (sous ? '<small class="sous">' + dfl(esc(sous)) + '</small>' : '') + '</span>';
   }
   /** Texte qui peut dépasser de sa case : défile doucement (voir defiler). */
   function dfl(html) { return html ? '<span class="dfl">' + html + '</span>' : ''; }
@@ -228,7 +230,7 @@
       '<span class="tville dest">' + (d ? '<small>À destination de</small>' + esc(nom) : '') + '</span></span>';
     var dep = d ? '<span class="num' + (ed.cle === 'supprime' ? ' barre' : '') + '">' + esc(d.numero || '') + '</span>' + celluleHeureTrain(d, ed.cle === 'supprime') +
       '<span class="ec hlr">' + (d.hlr && !d.reel && ed.cle !== 'supprime' ? esc(d.hlr) : '') + '</span>' +
-      celluleVoie(d, ed.cle === 'supprime') + celluleVolets(d.id || t.code, ed)
+      celluleVoie(d, ed.cle === 'supprime') + celluleVolets(d.id || t.code, ed, false, d.reel ? 'ok' : (d.cale ? 'ko' : ''))
       : '<span></span><span></span><span></span><span></span><span></span>';
     return '<div class="t" style="--c:' + c + '" data-k="' +
       esc(t.groupe + '|' + t.code + '|' + ((a && a.id) || '') + '|' + ((d && d.id) || '')) + '">' + arr + centre + dep + '</div>';
@@ -386,7 +388,9 @@
     var s = (etat.d && etat.d.son) || {};
     return { actif: SON_ECRAN && s.actif !== false, volume: s.volume == null ? 70 : s.volume, voix: s.voix !== false,
       flash: SON_ECRAN && s.flash !== false, travaux: SON_ECRAN && s.travaux !== false,
-      choix: Object.assign({ arrivee: 'arrivee', flash: 'flash', orange: 's6_important', rouge: 's2_urgent' }, s.choix || {}) };
+      choix: Object.assign({ arrivee: 'arrivee', flash: 'flash', orange: 's6_important', rouge: 's2_urgent', fin: 's12_finJoyeux' }, s.choix || {}),
+      fin: SON_ECRAN && s.finTravaux !== false && s.travaux !== false,
+      voixOpts: { nomVoix: s.nomVoix || '', vitesse: s.vitesseVoix || 1 }, prononciation: s.prononciation || { ATL: 'Atlantique' } };
   }
   /** « FL1 » → « F L 1 », « VR2 » → « V R 2 » : lu lettre par lettre par la voix. */
   function epeler(s) { return String(s || '').toUpperCase().replace(/([A-Z])(?=[A-Z0-9])/g, '$1 ').replace(/(\d)(?=[A-Z])/g, '$1 '); }
@@ -402,7 +406,12 @@
     }).join(' et ');
   }
   /** Sigle court (TDF, TN, ATL) lu lettre par lettre, nom de ville tel quel. */
-  function nomParle(s) { s = String(s || ''); return /^[A-Z]{2,4}$/.test(s) ? epeler(s) : s; }
+  function nomParle(s) {
+    s = String(s || ''); var p = reglagesSon().prononciation[s.toUpperCase()];
+    return p || (/^[A-Z]{2,4}$/.test(s) ? epeler(s) : s);
+  }
+  /** « de Vénissieux », « d'Atlantique » */
+  function de(nom) { return /^[aeiouyàâéèêëîïôöùûAEIOUYÀÂÉÈÊËÎÏÔÖÙÛ]/.test(nom) ? 'd\'' + nom : 'de ' + nom; }
   /**
    * « Attention, la navette en provenance de T D F, numéro 504930, va rentrer en Ferroviaire V F 2 avec 27 wagons. »
    * Numéro : celui du planning, sinon celui tapé dans le journal.
@@ -410,8 +419,8 @@
   function phraseArrivee(v) {
     var l = v.l, num = l.numero || l.numeroSaisi || '', voie = voieParlee(l.voie);
     var fin = (voie ? ' va rentrer en ' + voie : ' va arriver') + (l.wagons != null && l.wagons !== '' ? ' avec ' + l.wagons + ' wagons' : '') + '.';
-    if (v.g) return 'Attention, la navette ' + epeler(l.code) + ' en provenance de ' + nomParle(v.g.libelle) + (num ? ', numéro ' + num + ',' : '') + fin;
-    return 'Attention, le train' + (num ? ' numéro ' + num : '') + ' en provenance de ' + nomParle(v.t.nom || v.t.code) + fin;
+    if (v.g) return 'Attention, la navette ' + nomParle(l.code) + ' en provenance ' + de(nomParle(v.g.libelle)) + (num ? ', numéro ' + num + ',' : '') + fin;
+    return 'Attention, le train' + (num ? ' numéro ' + num : '') + ' en provenance ' + de(nomParle(v.t.nom || v.t.code)) + fin;
   }
   function annoncerArrivees(vn, vt) {
     var premier = annVus === null, liste = vn.concat(vt).filter(function (v) { return v.ph.cle === 'approche'; });
@@ -435,11 +444,12 @@
     if (annEnCours || !annFile.length) return;
     var r = reglagesSon(), a = annFile.shift();
     if (!(a.type === 'arrivee' ? r.actif : r[a.type])) { suivanteAnnonce(); return; }
+    var motif = r.choix[a.type === 'travaux' ? (a.variante === 'rouge' ? 'rouge' : 'orange') : a.type];
     // son bloqué par le navigateur (pas encore de clic sur la page) : son perdu, symbole « Cliquer pour le son » affiché
     if (!SC.sonDisponible()) { annFile = []; majBoutonSon(); return; }
     annEnCours = true;
     // son choisi dans la saisie : arrivée, flash, travaux orange / rouge
-    SC.jouerCarillon(r.volume, r.choix[a.type === 'travaux' ? (a.variante === 'rouge' ? 'rouge' : 'orange') : a.type]).then(function () { return a.texte && r.voix ? SC.annoncer(a.texte, r.volume) : null; })
+    SC.jouerCarillon(r.volume, motif).then(function () { return a.texte && r.voix ? SC.annoncer(a.texte, r.volume, r.voixOpts) : null; })
       .then(function () { annEnCours = false; suivanteAnnonce(); }, function () { annEnCours = false; suivanteAnnonce(); });
   }
   /** Symbole du son, toujours visible dans l'en-tête. */
@@ -705,7 +715,7 @@
    * l'autre, puis il reste dans le bandeau. Au démarrage de l'écran, seuls les avis reçus depuis moins de 2 minutes
    * s'affichent en grand.
    */
-  var txVus = null, txFile = [], txEnCours = false;
+  var txVus = null, txFile = [], txEnCours = false, txEnCoursListe = {};
   /** Durée de l'alerte en grand : adresse de l'écran (?alerteTravaux=8), sinon Paramètres de la saisie, sinon 5 s. */
   function dureeAlerteTravaux() { return paramNum('alerteTravaux', etat.d && etat.d.alerteTravaux != null ? etat.d.alerteTravaux : 5); }
   function alerterTravaux(liste) {
@@ -713,6 +723,15 @@
     var premier = txVus === null;
     if (premier) txVus = {};
     var nouveaux = 0, rouge = false;
+    // fin d'intervention : un avis en cours a disparu (vert envoyé, retiré, ou fin du créneau)
+    var avant = txEnCoursListe, maintenant = {};
+    liste.forEach(function (x) { maintenant[x.code] = x; });
+    var finis = premier ? [] : Object.keys(avant).filter(function (k) { return !maintenant[k]; }).map(function (k) { return avant[k]; });
+    txEnCoursListe = maintenant;
+    if (finis.length) {
+      jouerSon('fin');
+      if (dureeAlerteTravaux() > 0) txFile.push({ fin: true, finis: finis, enCours: liste.slice() });
+    }
     liste.forEach(function (x) {
       var k = cle(x); if (txVus[k]) return;
       txVus[k] = true;
@@ -726,6 +745,8 @@
     if (txEnCours || !txFile.length) return;
     var x = txFile.shift(), el = $('#v-tx-alerte'), rouge = x.couleur === 'rouge';
     txEnCours = true;
+    if (x.fin) { el.className = 'tx-alerte vert'; el.innerHTML = cadreFinTravaux(x); }
+    else {
     el.className = 'tx-alerte ' + (rouge ? 'rouge' : 'orange');
     el.innerHTML = '<div class="txa-cadre"><div class="txa-tete"><span>⚠</span> Alerte travaux <span>⚠</span></div>' +
       '<div class="txa-app">' + esc(x.libelle || x.code) + '</div>' +
@@ -733,11 +754,31 @@
       '<div class="txa-texte">' + esc(x.texte) + '</div>' +
       (x.creneau || x.message ? '<div class="txa-plus">' + [x.creneau ? '<b>' + esc(x.creneau) + '</b>' : '', x.message ? esc(x.message) : ''].filter(Boolean).join(' · ') + '</div>' : '') +
       '</div>';
+    }
     el.hidden = false;
     setTimeout(function () {
       el.classList.add('sortie');
       setTimeout(function () { el.hidden = true; el.classList.remove('sortie'); txEnCours = false; suivanteAlerteTravaux(); }, 600);
     }, dureeAlerteTravaux() * 1000);
+  }
+
+  /** « Le portique RMG4 » → « portique RMG4 », « La PPM A » → « PPM A » */
+  function nomCourt(lib) { return String(lib || '').replace(/^(le|la|les|l')\s*/i, ''); }
+  /** Bandeau vert de fin d'intervention : appareils remis en service, puis tous les appareils avec leur état. */
+  function cadreFinTravaux(x) {
+    var finis = x.finis.map(function (a) { return nomCourt(a.libelle || a.code); });
+    var tous = (etat.d && etat.d.appareils && etat.d.appareils.length) ? etat.d.appareils : x.finis.map(function (a) { return { code: a.code, libelle: a.libelle }; });
+    var parCode = {}; x.enCours.forEach(function (a) { parCode[a.code] = a; });
+    var puces = tous.map(function (a) {
+      var en = parCode[a.code], k = en ? (en.couleur === 'rouge' ? 'rouge' : 'orange') : 'ok';
+      return '<span class="txa-pc ' + k + '"><i>' + (en ? '!' : '✓') + '</i>' + esc(nomCourt(a.libelle || a.code)) + '</span>';
+    }).join('');
+    var tousOk = !x.enCours.length;
+    return '<div class="txa-cadre"><div class="txa-tete"><span>✓</span> Fin d\'intervention <span>✓</span></div>' +
+      '<div class="txa-app">' + esc(finis.join(' · ')) + '</div>' +
+      '<div class="txa-etat">' + (finis.length > 1 ? 'Remis en service' : 'Remis en service') + '</div>' +
+      '<div class="txa-texte">' + (tousOk ? 'Tous les appareils sont en service.' : 'Appareils en service :') + '</div>' +
+      '<div class="txa-puces">' + puces + '</div></div>';
   }
 
   // ----------------------------------------------------------- flash info

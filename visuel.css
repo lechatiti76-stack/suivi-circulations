@@ -366,3 +366,24 @@ html, body { margin: 0; height: 100%; background: var(--fond); color: var(--encr
 .fc i { display: inline-grid; place-items: center; width: 1.35rem; height: 1.35rem; border-radius: 50%; background: var(--vert); color: #06240f; font-style: normal; font-size: .85rem; }
 .fc.sup { background: #2a1210; border-color: #FF6B5E55; color: #f3b2ab; text-decoration: line-through; }
 .fc.sup i { background: var(--rouge); color: #fff; }
+
+/* ---------- fin d'intervention : même alerte, en vert ---------- */
+.tx-alerte.vert { background: repeating-linear-gradient(-45deg, #04170c 0 2rem, #1FA463 2rem 4rem); }
+.tx-alerte.vert:not(.sortie) { animation: txaEntree .35s ease-out, txaClignV 1.2s steps(1, end) .35s infinite; }
+@keyframes txaClignV { 50% { background: #0b3a22; } }
+.tx-alerte.vert .txa-cadre { border-color: #2ECC71; }
+.tx-alerte.vert .txa-tete { background: #2ECC71; color: #04210f; }
+.tx-alerte.vert .txa-etat { color: #7CF0AE; }
+.txa-puces { display: flex; flex-wrap: wrap; justify-content: center; gap: .6vh .8vw; margin-top: .4vh; }
+.txa-pc { display: inline-flex; align-items: center; gap: .45em; padding: .25em .8em .25em .3em; border-radius: 999px; font-weight: 800; font-size: clamp(.95rem, 2.7vh, 2rem);
+  background: #0E2A1A; border: .12rem solid #2ECC7188; color: #D7FBE6; }
+.txa-pc i { display: inline-grid; place-items: center; width: 1.35em; height: 1.35em; border-radius: 50%; background: #2ECC71; color: #04210f; font-style: normal; font-size: .85em; }
+.txa-pc.orange { background: #2a1a05; border-color: #F59E0B88; color: #FFE3A3; } .txa-pc.orange i { background: #F59E0B; color: #1a1200; }
+.txa-pc.rouge { background: #2a0b08; border-color: #E5251B88; color: #FFC9C4; } .txa-pc.rouge i { background: #E5251B; color: #fff; }
+@media (prefers-reduced-motion: reduce) { .tx-alerte.vert { animation: none; } }
+
+/* ---------- trains de ligne : pastille ✓ parti / ✕ calé devant le départ ---------- */
+.vrang { display: inline-flex; align-items: center; gap: .35rem; }
+.tok { display: inline-grid; place-items: center; width: 1.6rem; height: 1.6rem; border-radius: 50%; font-style: normal; font-weight: 900; font-size: 1rem; flex: none; }
+.tok.ok { background: var(--vert); color: #04210f; }
+.tok.ko { background: #E5251B; color: #fff; box-shadow: 0 0 .6rem #E5251B99; }

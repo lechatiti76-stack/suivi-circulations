@@ -114,6 +114,12 @@ Copier chaque fichier sur le bureau du poste concerné. `Ecrans.bat` ouvre la pa
 - Le navigateur bloque le son tant qu'on n'a pas cliqué sur la page : le symbole du son en haut de l'écran, à gauche de « Direct », indique l'état : 🔇 **Cliquer pour le son** (orange, à cliquer une fois au démarrage), 🔊 **Son 70 %** (prêt ; un clic fait écouter le carillon), 🔇 **Son coupé** (désactivé dans les Paramètres). Sur un PC dédié, Chrome lancé avec `--autoplay-policy=no-user-gesture-required` n'a plus besoin de ce clic.
 - **Alerte travaux** : moitié basse de l'écran, fond clignotant ; durée dans **Paramètres › Travaux** (0 = pas d'alerte en grand).
 
+## Fin d'intervention, voix, départs des trains
+
+- **Fin d'intervention** : quand un avis disparaît (vert envoyé par Notion, bouton Retirer, fin du créneau), les écrans affichent en grand un bandeau **vert** « Fin d'intervention » avec l'appareil remis en service et la liste de tous les appareils (✓ en service, ! encore en travaux), avec un son joyeux au choix.
+- **Voix** : la voix la plus naturelle de l'écran est choisie d'office (voix « Natural » d'Edge, puis Google…) ; on peut en imposer une, régler la vitesse et dire certains mots autrement (`ATL=Atlantique`), dans Paramètres › Écrans TV.
+- **Trains de ligne** : une pastille verte ✓ devant le départ une fois le train parti, rouge ✕ s'il est calé.
+
 ## Flash info
 
 - Bouton **Flash info** : phrases toutes prêtes (un clic), **complément** ajouté à la suite (ex. « Défaillance des installations de sécurité » + « ADV 5011 »), créneau **De / Jusqu'à** (boutons rapides 6h–13h30, 13h30–21h, 8h–12h, 1 h, 2 h…). Le flash ne passe sur les écrans que pendant le créneau ; « Indiquer le créneau dans le texte » ajoute « — de 8h à 12h ». « Afficher sur les écrans » est coché d'office. Aperçu en bas de la fenêtre.

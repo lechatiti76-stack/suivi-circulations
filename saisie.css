@@ -352,3 +352,4 @@ iframe.apercu { width: 100%; height: 300px; border: 1px solid var(--trait); bord
 .sons-grille label { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 600; color: var(--encre); }
 .sons-grille input[type=checkbox] { width: 18px; height: 18px; margin: 0; }
 .sons-grille .bouton { justify-self: start; }
+.sons-grille input[type=range] { width: 180px; } .sons-grille #pa-prononciation, .sons-grille #pa-nom-voix { padding: 5px 8px; border: 1px solid var(--trait); border-radius: 6px; background: var(--surface); font-size: 13.5px; }
