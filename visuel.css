@@ -387,3 +387,16 @@ html, body { margin: 0; height: 100%; background: var(--fond); color: var(--encr
 .tok { display: inline-grid; place-items: center; width: 1.6rem; height: 1.6rem; border-radius: 50%; font-style: normal; font-weight: 900; font-size: 1rem; flex: none; }
 .tok.ok { background: var(--vert); color: #04210f; }
 .tok.ko { background: #E5251B; color: #fff; box-shadow: 0 0 .6rem #E5251B99; }
+.txa-pc small { font-weight: 700; font-size: .7em; text-transform: uppercase; letter-spacing: .06em; opacity: .9; }
+.txa-reste { margin: .4vh auto 0; padding: .8vh 1.4vw; border-radius: .8rem; border: .15rem solid #E5251B; background: #2a0b08; max-width: 100%; }
+.txa-reste > b { display: block; color: #FF8A80; font-size: clamp(1rem, 2.8vh, 2.1rem); letter-spacing: .04em; margin-bottom: .5vh; }
+.txa-cadre.reste .txa-texte { margin-top: .4vh; }
+.txa-cadre.reste { gap: .7vh; padding-top: 1.4vh; padding-bottom: 1.6vh; }
+.txa-cadre.reste .txa-app { font-size: clamp(1.8rem, 7.5vh, 5.5rem); }
+.txa-cadre.reste .txa-etat { font-size: clamp(1rem, 3vh, 2.2rem); }
+.txa-cadre.reste .txa-tete { font-size: clamp(1rem, 3vh, 2.2rem); }
+.txa-cadre.reste .txa-pc { font-size: clamp(.85rem, 2.3vh, 1.7rem); }
+.txa-cadre.reste .txa-reste { padding: .6vh 1.2vw; }
+.txa-ligne { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: .5vh .8vw; }
+.txa-ligne .txa-texte { color: #7CF0AE; font-weight: 700; font-size: clamp(.9rem, 2.4vh, 1.8rem); }
+.txa-ligne .txa-puces { margin-top: 0; }

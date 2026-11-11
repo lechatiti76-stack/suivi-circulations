@@ -3,7 +3,7 @@
  * Toujours le réseau d'abord (les mises à jour arrivent tout de suite) ; la dernière copie des pages sert
  * seulement si le réseau manque. Le serveur Google (données, clé) n'est jamais intercepté ni gardé.
  */
-var CACHE = 'suivi-circulations-v13';
+var CACHE = 'suivi-circulations-v14';
 
 self.addEventListener('install', function () { self.skipWaiting(); });
 self.addEventListener('activate', function (e) {

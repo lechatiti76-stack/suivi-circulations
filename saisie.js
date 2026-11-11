@@ -1953,4 +1953,45 @@
     });
   }
   demarrer();
+
+  // ------------------------------------------- barre du milieu (largeur des deux parties)
+  /**
+   * Glisser la barre entre le journal et le tableau de droite ; la part du tableau de droite (en % de la largeur)
+   * est gardée sur ce poste. Flèches ← → au clavier, double-clic = largeur d'origine.
+   */
+  (function () {
+    var corps = $('.corps'), barre = $('#separateur'); if (!corps || !barre) return;
+    var MIN_G = 320, MIN_D = 460;
+    function appliquer(part) {
+      if (part == null) { corps.style.removeProperty('--droite'); return; }
+      var l = corps.clientWidth, d = Math.max(MIN_D, Math.min(l - MIN_G - 10, Math.round(l * part)));
+      corps.style.setProperty('--droite', d + 'px');
+    }
+    var part = lsLire('suivi:largeurDroite');
+    appliquer(part);
+    window.addEventListener('resize', function () { appliquer(part); });
+    function regler(x) {
+      var r = corps.getBoundingClientRect();
+      part = Math.max(0.2, Math.min(0.85, (r.right - x - 5) / r.width));
+      appliquer(part);
+    }
+    barre.addEventListener('pointerdown', function (e) {
+      e.preventDefault(); barre.setPointerCapture(e.pointerId); barre.classList.add('glisse'); document.body.classList.add('redim');
+      var bouge = function (ev) { regler(ev.clientX); };
+      var fin = function () {
+        barre.classList.remove('glisse'); document.body.classList.remove('redim');
+        barre.removeEventListener('pointermove', bouge); barre.removeEventListener('pointerup', fin); barre.removeEventListener('pointercancel', fin);
+        lsEcrire('suivi:largeurDroite', part);
+      };
+      barre.addEventListener('pointermove', bouge); barre.addEventListener('pointerup', fin); barre.addEventListener('pointercancel', fin);
+    });
+    barre.addEventListener('dblclick', function () { part = null; appliquer(null); lsEcrire('suivi:largeurDroite', null); toast('Largeurs d\'origine.'); });
+    barre.addEventListener('keydown', function (e) {
+      if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+      e.preventDefault();
+      var r = corps.getBoundingClientRect(), x = barre.getBoundingClientRect().left + (e.key === 'ArrowLeft' ? -30 : 30);
+      regler(x); lsEcrire('suivi:largeurDroite', part);
+      void r;
+    });
+  })();
 })();

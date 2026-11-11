@@ -730,7 +730,7 @@
     txEnCoursListe = maintenant;
     if (finis.length) {
       jouerSon('fin');
-      if (dureeAlerteTravaux() > 0) txFile.push({ fin: true, finis: finis, enCours: liste.slice() });
+      if (dureeAlerteTravaux() > 0) txFile.push({ finIntervention: true, finis: finis, enCours: liste.slice() });
     }
     liste.forEach(function (x) {
       var k = cle(x); if (txVus[k]) return;
@@ -745,7 +745,7 @@
     if (txEnCours || !txFile.length) return;
     var x = txFile.shift(), el = $('#v-tx-alerte'), rouge = x.couleur === 'rouge';
     txEnCours = true;
-    if (x.fin) { el.className = 'tx-alerte vert'; el.innerHTML = cadreFinTravaux(x); }
+    if (x.finIntervention) { el.className = 'tx-alerte vert'; el.innerHTML = cadreFinTravaux(x); }
     else {
     el.className = 'tx-alerte ' + (rouge ? 'rouge' : 'orange');
     el.innerHTML = '<div class="txa-cadre"><div class="txa-tete"><span>⚠</span> Alerte travaux <span>⚠</span></div>' +
@@ -764,21 +764,32 @@
 
   /** « Le portique RMG4 » → « portique RMG4 », « La PPM A » → « PPM A » */
   function nomCourt(lib) { return String(lib || '').replace(/^(le|la|les|l')\s*/i, ''); }
-  /** Bandeau vert de fin d'intervention : appareils remis en service, puis tous les appareils avec leur état. */
+  /**
+   * Bandeau vert de fin d'intervention : appareil(s) remis en service, puis les appareils en service (vert) et, à part,
+   * ceux encore hors service (rouge) ou en maintenance (orange), relus au moment de l'affichage.
+   */
   function cadreFinTravaux(x) {
     var finis = x.finis.map(function (a) { return nomCourt(a.libelle || a.code); });
-    var tous = (etat.d && etat.d.appareils && etat.d.appareils.length) ? etat.d.appareils : x.finis.map(function (a) { return { code: a.code, libelle: a.libelle }; });
-    var parCode = {}; x.enCours.forEach(function (a) { parCode[a.code] = a; });
-    var puces = tous.map(function (a) {
+    var enCours = Object.keys(txEnCoursListe).map(function (k) { return txEnCoursListe[k]; });
+    var tous = (etat.d && etat.d.appareils && etat.d.appareils.length) ? etat.d.appareils.slice() : x.finis.map(function (a) { return { code: a.code, libelle: a.libelle }; });
+    // un avis sur un appareil hors de la liste des Paramètres reste signalé
+    enCours.forEach(function (a) { if (!tous.some(function (t) { return t.code === a.code; })) tous.push({ code: a.code, libelle: a.libelle }); });
+    var parCode = {}; enCours.forEach(function (a) { parCode[a.code] = a; });
+    var ok = tous.filter(function (a) { return !parCode[a.code]; });
+    var ko = tous.filter(function (a) { return parCode[a.code]; }).sort(function (a, b) { return (parCode[a.code].couleur === 'rouge' ? 0 : 1) - (parCode[b.code].couleur === 'rouge' ? 0 : 1); });
+    var puce = function (a) {
       var en = parCode[a.code], k = en ? (en.couleur === 'rouge' ? 'rouge' : 'orange') : 'ok';
-      return '<span class="txa-pc ' + k + '"><i>' + (en ? '!' : '✓') + '</i>' + esc(nomCourt(a.libelle || a.code)) + '</span>';
-    }).join('');
-    var tousOk = !x.enCours.length;
-    return '<div class="txa-cadre"><div class="txa-tete"><span>✓</span> Fin d\'intervention <span>✓</span></div>' +
+      return '<span class="txa-pc ' + k + '"><i>' + (en ? '!' : '✓') + '</i>' + esc(nomCourt(a.libelle || a.code)) +
+        (en ? ' <small>' + (en.couleur === 'rouge' ? 'hors service' : 'maintenance') + (en.creneau ? ' · ' + esc(en.creneau) : '') + '</small>' : '') + '</span>';
+    };
+    return '<div class="txa-cadre' + (ko.length ? ' reste' : '') + '"><div class="txa-tete"><span>✓</span> Fin d\'intervention <span>✓</span></div>' +
       '<div class="txa-app">' + esc(finis.join(' · ')) + '</div>' +
-      '<div class="txa-etat">' + (finis.length > 1 ? 'Remis en service' : 'Remis en service') + '</div>' +
-      '<div class="txa-texte">' + (tousOk ? 'Tous les appareils sont en service.' : 'Appareils en service :') + '</div>' +
-      '<div class="txa-puces">' + puces + '</div></div>';
+      '<div class="txa-etat">Remis en service</div>' +
+      (ko.length
+        ? '<div class="txa-reste"><b>⚠ Encore en travaux :</b><div class="txa-puces">' + ko.map(puce).join('') + '</div></div>' +
+          (ok.length ? '<div class="txa-ligne"><span class="txa-texte">✓ En service :</span><div class="txa-puces">' + ok.map(puce).join('') + '</div></div>' : '')
+        : '<div class="txa-texte">✓ Tous les appareils sont en service</div><div class="txa-puces">' + ok.map(puce).join('') + '</div>') +
+      '</div>';
   }
 
   // ----------------------------------------------------------- flash info

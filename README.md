@@ -117,6 +117,8 @@ Copier chaque fichier sur le bureau du poste concerné. `Ecrans.bat` ouvre la pa
 ## Fin d'intervention, voix, départs des trains
 
 - **Fin d'intervention** : quand un avis disparaît (vert envoyé par Notion, bouton Retirer, fin du créneau), les écrans affichent en grand un bandeau **vert** « Fin d'intervention » avec l'appareil remis en service et la liste de tous les appareils (✓ en service, ! encore en travaux), avec un son joyeux au choix.
+- Si d'autres appareils sont encore en travaux, ils sont listés à part dans un cadre rouge (« Encore en travaux », avec HORS SERVICE / MAINTENANCE et le créneau) ; les appareils en service restent en vert.
+- **Saisie** : la barre entre le journal et le tableau de droite se glisse pour régler les largeurs (gardées sur ce poste) ; double-clic = largeurs d'origine ; flèches ← → au clavier.
 - **Voix** : la voix la plus naturelle de l'écran est choisie d'office (voix « Natural » d'Edge, puis Google…) ; on peut en imposer une, régler la vitesse et dire certains mots autrement (`ATL=Atlantique`), dans Paramètres › Écrans TV.
 - **Trains de ligne** : une pastille verte ✓ devant le départ une fois le train parti, rouge ✕ s'il est calé.
 

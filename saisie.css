@@ -94,7 +94,14 @@ button, input, select, textarea { font: inherit; color: inherit; }
 
 /* ---------- corps ---------- */
 /* tableau de droite assez large pour ses boutons sur une ligne ; le journal garde le reste */
-.corps { display: grid; grid-template-columns: minmax(0, 1fr) clamp(630px, 55%, 980px); min-height: 0; }
+.corps { display: grid; grid-template-columns: minmax(0, 1fr) 10px var(--droite, clamp(630px, 55%, 980px)); min-height: 0; }
+/* barre du milieu : glisser pour régler la largeur (gardée sur ce poste) */
+.separateur { position: relative; cursor: col-resize; background: var(--trait); touch-action: none; user-select: none; }
+.separateur span { position: absolute; left: 50%; top: 50%; width: 4px; height: 46px; margin: -23px 0 0 -2px; border-radius: 3px;
+  background: repeating-linear-gradient(to bottom, var(--encre-3) 0 3px, transparent 3px 6px); opacity: .7; }
+.separateur:hover, .separateur:focus-visible, .separateur.glisse { background: var(--accent); outline: none; }
+.separateur:hover span, .separateur.glisse span { background: repeating-linear-gradient(to bottom, #fff 0 3px, transparent 3px 6px); opacity: 1; }
+body.redim, body.redim * { cursor: col-resize !important; user-select: none !important; }
 .volet { display: grid; grid-template-rows: auto minmax(0, 1fr); min-height: 0; background: var(--surface); }
 .volet + .volet { border-left: 1px solid var(--trait); }
 .volet-tete { display: flex; gap: 10px; align-items: center; justify-content: space-between; padding: 7px 12px; border-bottom: 1px solid var(--trait); background: var(--surface-2); flex-wrap: wrap; }
