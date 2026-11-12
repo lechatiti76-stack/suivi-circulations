@@ -1853,9 +1853,20 @@ body[data-mode="simulation"] #fiche{display:none}
   let texteServeur = null, confVue = "{}", resume = "", donnees = { saisies: { contenus: {}, choix: {} }, previsions: [] };
   async function chercher(d) {
     if (!mcp && SRV) {
-      const r = await fetch(SRV + (SRV.indexOf("?") < 0 ? "?" : "&") + "action=plan&date=" + d + "&t=" + Date.now(), { cache: "no-store", redirect: "follow" })
-        .then(x => x.text()).catch(() => { throw new Error("serveur injoignable (réseau)"); })
-        .then(t => { try { return JSON.parse(t); } catch (e) { throw new Error("réponse illisible du serveur : " + String(t).replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").slice(0, 160)); } });
+      // poste de saisie (clé connue) : même chemin que la saisie ; écrans : lecture publique ?action=plan
+      let cx = {}; try { cx = JSON.parse(localStorage.getItem("suivi:connexion") || "null") || {}; } catch (e) { /* stockage indisponible */ }
+      const parCle = !!(cx.cle && cx.url && cx.url.split("?")[0] === SRV.split("?")[0]);
+      const lu = t => { try { return JSON.parse(t); } catch (e) { throw new Error("réponse illisible du serveur : " + String(t).replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").slice(0, 160)); } };
+      let r;
+      if (parCle) {
+        const o = await fetch(SRV, { method: "POST", cache: "no-store", redirect: "follow", body: JSON.stringify({ cle: cx.cle, methode: "GET", chemin: "/api/plan/" + d, corps: null }) })
+          .then(x => x.text()).catch(() => { throw new Error("serveur injoignable (réseau)"); }).then(lu);
+        if (o.status !== 200) throw new Error(/route inconnue/.test((o.data && o.data.erreur) || "") ? "serveur pas à jour : redéployez Code.gs 2.9.2 (Nouvelle version)" : "le serveur répond : " + ((o.data && o.data.erreur) || o.status));
+        r = o.data;
+      } else {
+        r = await fetch(SRV + (SRV.indexOf("?") < 0 ? "?" : "&") + "action=plan&date=" + d + "&t=" + Date.now(), { cache: "no-store", redirect: "follow" })
+          .then(x => x.text()).catch(() => { throw new Error(`serveur injoignable (réseau). Ouvrez ${SRV.slice(0, 60)}…?action=plan dans un onglet pour voir sa réponse`); }).then(lu);
+      }
       // réglages des voies (60/80 pieds, wagons HS) : redessin immédiat s'ils changent
       const conf = JSON.stringify((r && r.voies) || {});
       if (r && !r.erreur && conf !== confVue) { confVue = conf; window.LHTE_VOIES_CONF = r.voies || {}; Tn.changer(); }
