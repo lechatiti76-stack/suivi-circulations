@@ -28,6 +28,7 @@ html.plan-seul #plan-vue[hidden] { display: grid !important; }
 @media (max-width:900px) { html.plan-seul #plan-vue { grid-template-columns: minmax(0,1fr) 220px; grid-template-rows: none; overflow: hidden; } html.plan-seul #plan-svg { min-width: 0; } html.plan-seul #plan-zone { overflow: hidden; } html.plan-seul #plan-cote { border-top: 0; border-left: 1px solid var(--p-trait); padding: 10px; gap: 12px; } }
 @media (max-width:640px) { html.plan-seul #plan-vue { grid-template-columns: minmax(0,1fr); } html.plan-seul #plan-cote { display: none; } }
 @media (max-height:420px) { html.plan-seul #plan-tete { padding-top: 4px; } html.plan-seul #plan-tete h2 { font-size: 15px; } }
+#plan-qui li[style] { display: block; }
 #pe-conf { display: grid; grid-template-columns: auto 1fr; gap: 8px 10px; align-items: center; }
 #pe-conf[hidden] { display: none; }
 #pe-conf .seg { display: flex; gap: 6px; } #pe-conf .seg label { display: flex; gap: 4px; align-items: center; border: 1px solid var(--p-trait); border-radius: 5px; padding: 3px 8px; cursor: pointer; }
@@ -2245,7 +2246,8 @@ body[data-mode="simulation"] #fiche{display:none}
     let cx = {}; try { cx = JSON.parse(localStorage.getItem("suivi:connexion") || "null") || {}; } catch (e) { /* stockage indisponible */ }
     if (!cx.url || !cx.cle) throw new Error("Saisie possible seulement depuis le poste de saisie (connexion au serveur inconnue ici).");
     const r = await fetch(cx.url, { method: "POST", cache: "no-store", redirect: "follow", body: JSON.stringify({ cle: cx.cle, methode: "PUT", chemin: "/api/plan-saisie", corps: JSON.stringify(corps) }) }).then(x => x.json());
-    if (!r || r.status !== 200) throw new Error((r && r.data && r.data.erreur) || "enregistrement refusé (serveur à redéployer ?)");
+    const err = r && r.data && r.data.erreur;
+    if (!r || r.status !== 200) throw new Error(/route inconnue/.test(err || "") ? "Le serveur n'est pas à jour : collez Code.gs 2.9.0 dans Apps Script (votre CLE ligne 17) puis Déployer › Gérer les déploiements › ✏️ › Nouvelle version." : err || "enregistrement refusé");
     window.LHTE_VOIES_CONF = r.data.voies || {}; Tn.changer();
     try { new BroadcastChannel("suivi-plan").postMessage({ type: "relire" }); } catch (e) { /* une seule fenêtre */ }
     if (LHTE.direct && LHTE.direct.relire) LHTE.direct.relire();
