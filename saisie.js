@@ -120,7 +120,7 @@
     var evts = s.evenements.splice(0, s.evenements.length);
     var etat = SC.copie(app.journee);
     etat.version = app.version + 1;
-    var diff = estJourActif() ? JSON.stringify(SC.projeterDiffusion(etat, app.planning, app.params, maintenant())) : '';
+    var diff = estJourActif() ? JSON.stringify(avecServeur(SC.projeterDiffusion(etat, app.planning, app.params, maintenant()))) : '';
     var meta = { baseVersion: app.version, evenement: evts.length === 1 ? evts[0] : { type: 'lot', liste: evts } };
     var date = etat.date;
     api('PUT', '/api/journee/' + date, JSON.stringify(meta) + '\n' + JSON.stringify(etat) + '\n' + diff).then(function (r) {
@@ -158,7 +158,7 @@
   function publier() {
     // un enregistrement en cours publie déjà l'affichage avec la journée
     if (!estJourActif() || !app.prete || app.publication || sauvegardeEnCours()) return;
-    var d = SC.projeterDiffusion(app.journee, app.planning, app.params, maintenant());
+    var d = avecServeur(SC.projeterDiffusion(app.journee, app.planning, app.params, maintenant()));
     app.publication = true;
     api('POST', '/api/diffusion', JSON.stringify(d)).then(function (r) {
       if (r.status === 200) { app.diffusion = r.data.diffusion || []; app.serviceOk = true; }
@@ -671,7 +671,14 @@
   $('#pf-reduire').addEventListener('click', function () { pfEtat.reduit = !pfEtat.reduit; planAuto = false; pfGarder(); pfAppliquer(); });
   $('#pf-agrandir').addEventListener('click', function () { pfEtat.grand = !pfEtat.grand; pfEtat.reduit = false; pfGarder(); pfAppliquer(); });
   $('#pf-fermer').addEventListener('click', function () { fermerPlan(); F.num.focus(); });
-  function urlPlan() { return new URL(planVoie().adresse, location.href).href; }
+  // le plan lit le même serveur que la saisie (adresse passée dans ?source)
+  /** Les écrans ouvrent le plan de voie sur le serveur de la saisie (même s'ils lisent une autre adresse). */
+  function avecServeur(d) { if (d && d.planVoie && CONNEXION.mode === 'google' && CONNEXION.url) d.planVoie.serveur = CONNEXION.url; return d; }
+  function urlPlan() {
+    var u = new URL(planVoie().adresse, location.href);
+    if (CONNEXION.mode === 'google' && CONNEXION.url && !u.searchParams.get('source')) u.searchParams.set('source', CONNEXION.url);
+    return u.href;
+  }
   $('#pl-v-ouvrir').addEventListener('click', function () {
     var u = urlPlan(), w = window.open(u.replace(/#.*$/, '') + '#plan', 'planDeVoie', 'popup=yes,width=1280,height=780');
     if (w) { fermerPlan(); try { w.focus(); } catch (e) { /* fenêtre d'un autre écran */ } } else toast('Fenêtre bloquée par le navigateur : autorisez les fenêtres pour ce site.');

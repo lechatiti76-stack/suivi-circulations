@@ -12,7 +12,8 @@
 <script>
 window.LHTE_PLAN = (function () {
   var q = new URLSearchParams(location.search), src = q.get('source') || '';
-  try { if (!src) src = localStorage.getItem('suivi:source') || ((JSON.parse(localStorage.getItem('suivi:connexion') || 'null') || {}).url) || ''; } catch (e) { /* stockage indisponible */ }
+  // adresse de la saisie d'abord (serveur à jour) ; celle d'un écran TV de ce poste seulement à défaut
+  try { if (!src) src = ((JSON.parse(localStorage.getItem('suivi:connexion') || 'null') || {}).url) || localStorage.getItem('suivi:source') || ''; } catch (e) { /* stockage indisponible */ }
   var seul = q.get('seul') !== '0';
   if (seul) {
     document.documentElement.classList.add('plan-seul');

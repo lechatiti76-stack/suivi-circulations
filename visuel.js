@@ -584,7 +584,9 @@
     setTimeout(function () { afficherPlanVoie(pv); }, (VED.garde + 0.5) * 1000);
   }
   function afficherPlanVoie(pv) {
-    var el = $('#v-plan'), f = $('#v-plan-iframe'), url = new URL(pv.adresse, location.href).href;
+    var u = new URL(pv.adresse, location.href);
+    if (pv.serveur && !u.searchParams.get('source')) u.searchParams.set('source', pv.serveur);
+    var el = $('#v-plan'), f = $('#v-plan-iframe'), url = u.href;
     if (f.getAttribute('src') !== url) f.setAttribute('src', url);
     plan.fin = Date.now() + (pv.duree || 10) * 1000;
     el.hidden = false; el.classList.remove('sortie');
