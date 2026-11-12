@@ -15,7 +15,7 @@
  */
 
 const CLE = 'CHANGER-CE-MOT-DE-PASSE';
-const VERSION = '2.9.0';
+const VERSION = '2.9.1';
 const FUSEAU = 'Europe/Paris';
 const NOM_DOSSIER = 'Suivi des circulations - données';
 
@@ -376,7 +376,8 @@ function planPublic_(date) {
   });
   const out = { date: d, version: version, versionPlan: vVoies, jours: jours, voies: voies, saisies: saisies,
     previsions: jour ? previsionsPlan_(jour) : [], journee: jour || fusion.mouvements.length ? fusion : null };
-  cache.put(cle, JSON.stringify(out), 60);
+  // cache limité à 100 Ko par valeur : une grosse journée n'est simplement pas mise en cache
+  try { const t = JSON.stringify(out); if (t.length < 95000) cache.put(cle, t, 60); } catch (err) { /* sans cache */ }
   return out;
 }
 /** Circulations encore à venir (jour en cours, Demain, Après-demain) avec leur voie et leurs wagons prévus. */

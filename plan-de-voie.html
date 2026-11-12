@@ -1852,11 +1852,13 @@ body[data-mode="simulation"] #fiche{display:none}
   let texteServeur = null, confVue = "{}", resume = "", donnees = { saisies: { contenus: {}, choix: {} }, previsions: [] };
   async function chercher(d) {
     if (!mcp && SRV) {
-      const r = await fetch(SRV + (SRV.indexOf("?") < 0 ? "?" : "&") + "action=plan&date=" + d + "&t=" + Date.now(), { cache: "no-store", redirect: "follow" }).then(x => x.json()).catch(() => { throw { code: "server_unavailable" }; });
+      const r = await fetch(SRV + (SRV.indexOf("?") < 0 ? "?" : "&") + "action=plan&date=" + d + "&t=" + Date.now(), { cache: "no-store", redirect: "follow" })
+        .then(x => x.text()).catch(() => { throw new Error("serveur injoignable (réseau)"); })
+        .then(t => { try { return JSON.parse(t); } catch (e) { throw new Error("réponse illisible du serveur : " + String(t).replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").slice(0, 160)); } });
       // réglages des voies (60/80 pieds, wagons HS) : redessin immédiat s'ils changent
       const conf = JSON.stringify((r && r.voies) || {});
       if (r && !r.erreur && conf !== confVue) { confVue = conf; window.LHTE_VOIES_CONF = r.voies || {}; Tn.changer(); }
-      if (!r || r.erreur) throw { code: "server_unavailable" };
+      if (!r || r.erreur) throw new Error(r && r.erreur ? "le serveur répond : " + r.erreur : "réponse vide du serveur");
       donnees = { saisies: r.saisies || { contenus: {}, choix: {} }, previsions: r.previsions || [], date: r.date };
       if (!r.journee && !(SEUL && Object.keys(donnees.saisies.contenus || {}).length)) return null;
       texteServeur = JSON.stringify(r.journee || { date: d, mouvements: [], circulations: [] });
@@ -2179,6 +2181,7 @@ body[data-mode="simulation"] #fiche{display:none}
     else if (dec) html = `<b class="att">● ${dec.n} ligne${pl(dec.n)} déjà saisie${pl(dec.n)} aujourd'hui (${dec.de} → ${dec.a}).</b> Les appliquer `
       + [["deduit", "à l'état déduit de la journée"], ["appliquer", "à l'état actuel du site"], ["ignorer", "non : déjà prises en compte"]]
         .map(([v, t]) => `<button type="button" data-decider="${v}"${v === dec.defaut ? ' class="principal"' : ""}>${t}</button>`).join("");
+    else if (D.actif() && D.pilote() && /non lu|impossible|ne répond|illisible|injoignable/.test(D.texte())) html = `<b class="att">● ${echap(D.texte())}</b>`;
     else if (D.actif() && D.pilote()) html = `<b>● Direct</b> · ${D.lecture() ? "lu à " + new Date(D.lecture()).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "démarrage…"}`;
     else if (D.autrePoste()) html = "<b>● Direct</b> sur un autre poste";
     else if (D.actif()) html = echap(D.texte());
