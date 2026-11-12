@@ -21,7 +21,19 @@ window.LHTE_PLAN = (function () {
   return { serveur: src, seul: seul };
 })();
 </script>
-<style>html, body { margin: 0; height: 100%; } html.plan-seul .barre, html.plan-seul #pupitre { display: none !important; }</style>
+<style>html, body { margin: 0; height: 100%; } html.plan-seul .barre, html.plan-seul #pupitre { display: none !important; }
+/* vue seule : jamais la scène 3D, le plan s'affiche dès le chargement et s'adapte aux petites fenêtres */
+html.plan-seul #scene, html.plan-seul #sim-bandeau, html.plan-seul #sim-carte { display: none !important; }
+html.plan-seul #plan-vue[hidden] { display: grid !important; }
+@media (max-width:900px) { html.plan-seul #plan-vue { grid-template-columns: minmax(0,1fr) 220px; grid-template-rows: none; overflow: hidden; } html.plan-seul #plan-svg { min-width: 0; } html.plan-seul #plan-zone { overflow: hidden; } html.plan-seul #plan-cote { border-top: 0; border-left: 1px solid var(--p-trait); padding: 10px; gap: 12px; } }
+@media (max-width:640px) { html.plan-seul #plan-vue { grid-template-columns: minmax(0,1fr); } html.plan-seul #plan-cote { display: none; } }
+@media (max-height:420px) { html.plan-seul #plan-tete { padding-top: 4px; } html.plan-seul #plan-tete h2 { font-size: 15px; } }
+#pe-conf { display: grid; grid-template-columns: auto 1fr; gap: 8px 10px; align-items: center; }
+#pe-conf[hidden] { display: none; }
+#pe-conf .seg { display: flex; gap: 6px; } #pe-conf .seg label { display: flex; gap: 4px; align-items: center; border: 1px solid var(--p-trait); border-radius: 5px; padding: 3px 8px; cursor: pointer; }
+#pe-conf .seg label:has(input:checked) { border-color: #93c5fd; background: #1e3a5f; }
+html.plan-seul #plan-edition .boutons.saisie-wg, html.plan-seul #pe-lignes { display: none; }
+</style>
 <title>Plan de voie — LHTE</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@400;500;600&display=swap">
@@ -323,8 +335,13 @@ body[data-mode="simulation"] #fiche{display:none}
    <svg id="plan-svg" role="img" aria-label="Plan des voies du site LHTE, avec l'occupation de chaque voie"></svg>
    <div id="plan-edition" hidden role="dialog" aria-labelledby="pe-titre">
     <h3 id="pe-titre"></h3><p class="note" id="pe-note"></p>
+    <div id="pe-conf" hidden>
+     <span>Wagons</span><div class="seg" role="radiogroup" aria-label="Type de wagons"><label><input type="radio" name="pe-type" value="60" checked> 60 pieds</label><label><input type="radio" name="pe-type" value="80"> 80 pieds</label></div>
+     <span>Capacité</span><b id="pe-cap"></b>
+     <label for="pe-hs">Wagons HS</label><input type="number" id="pe-hs" min="0" max="80" step="1" value="0" style="width:6em">
+    </div>
     <div id="pe-lignes"></div>
-    <div class="boutons"><button type="button" id="pe-ajout">+ Entreprise</button><button type="button" id="pe-libre">Voie libre</button></div>
+    <div class="boutons saisie-wg"><button type="button" id="pe-ajout">+ Entreprise</button><button type="button" id="pe-libre">Voie libre</button></div>
     <p id="pe-msg" role="status"></p>
     <div class="boutons"><button type="button" id="pe-annuler">Annuler</button><button type="button" id="pe-ok" class="principal">Enregistrer</button></div>
    </div>
@@ -854,14 +871,17 @@ body[data-mode="simulation"] #fiche{display:none}
     /* trains : liste des trains et coupes ; marques : { voie: { reservee, indisponible } } ; mouvement : { origine, destination } ou null */
     function etat(voie, trains, marques, mouvement) {
       const v = R.voies[voie], m = (marques && marques[voie]) || {}, presents = trains.filter(t => t.troncon === v.troncon);
-      const wagons = presents.reduce((s, t) => s + t.nb, 0), locos = presents.filter(t => t.loco).length, cap = v.capacite_wagons;
+      // réglages de la voie (serveur de la saisie) : wagons de 80 pieds = capacité × 60/80 ; wagons HS stationnés
+      const conf = (racine.LHTE_VOIES_CONF || {})[voie] || {}, type = Number(conf.type) === 80 ? 80 : 60, hs = Math.max(0, Number(conf.hs) || 0);
+      const wagons = presents.reduce((s, t) => s + t.nb, 0) + hs, locos = presents.filter(t => t.loco).length,
+        cap = v.capacite_wagons ? (type === 80 ? Math.floor(v.capacite_wagons * 60 / 80) : v.capacite_wagons) : v.capacite_wagons;
       let code;
       if (m.indisponible) code = "indisponible";
       else if (mouvement && (mouvement.origine === v.troncon || mouvement.destination === v.troncon)) code = "manoeuvre";
-      else if (!presents.length) code = m.reservee ? "reservee" : "libre";
+      else if (!presents.length && !hs) code = m.reservee ? "reservee" : "libre";
       else code = cap ? (wagons >= cap ? "occupee" : "partielle") : "occupee";
       return { code, libelle: ETATS[code].libelle, couleur: ETATS[code].couleur, wagons, locos, capacite: cap, reste: cap ? Math.max(0, cap - wagons) : null,
-        taux: cap ? Math.round(100 * wagons / cap) : null, trains: presents.map(t => t.id), reservee: !!m.reservee, indisponible: !!m.indisponible };
+        taux: cap ? Math.round(100 * wagons / cap) : null, hs, type, trains: presents.map(t => t.id), reservee: !!m.reservee, indisponible: !!m.indisponible };
     }
     function bilan(trains, marques, mouvement) {
       const b = { wagons: 0, voies: 0 }; for (const k in ETATS) b[k] = 0;
@@ -890,13 +910,13 @@ body[data-mode="simulation"] #fiche{display:none}
       try { const s = await delai(db.doc("site/etat").get(), 10000); mode = "partage"; if (s && s.exists) { const d = s.data(); connue = d.maj; return JSON.parse(d.contenu); } return null; }
       catch (e) { db = null; }
     }
-    mode = "navigateur"; return local.lire(CLE);
+    mode = "navigateur"; return window.LHTE_PLAN && window.LHTE_PLAN.seul ? null : local.lire(CLE);
   }
   async function vider() {
     if (enCours || !dernier) return; enCours = true; const etat = dernier; dernier = null; connue = etat.maj;
     try {
       if (db) await db.doc("site/etat").set({ contenu: JSON.stringify(etat), maj: etat.maj });
-      else if (!local.ecrire(CLE, etat)) throw new Error("stockage refusé");
+      else if (!(window.LHTE_PLAN && window.LHTE_PLAN.seul) && !local.ecrire(CLE, etat)) throw new Error("stockage refusé");
       surStatut({ ok: true, mode, heure: new Date() });
     } catch (e) { surStatut({ ok: false, mode, message: (e && e.message) || "écriture refusée" }); }
     enCours = false; if (dernier) vider();
@@ -1214,7 +1234,8 @@ body[data-mode="simulation"] #fiche{display:none}
     for (const a in R.alias_voies_programme || {}) nomVersVoie[a] = R.alias_voies_programme[a];
     const horsSite = R.destinations_hors_site || {};
     const internes = new Set([].concat(...Object.values((M.programme && M.programme.mouvements_internes) || {})));
-    const PR = M.programme || {}, ATTENDRE_REEL = PR.attendre_heure_reelle !== false, LIGNE_LIBRE = PR.ligne_libre_avec_wagons || "depart";
+    const PR = M.programme || {}, ATTENDRE_REEL = PR.attendre_heure_reelle !== false,
+      SUR_ANNONCE = PR.arrivee_sur_annonce === true || !!(typeof window !== "undefined" && window.LHTE_PLAN && window.LHTE_PLAN.seul), LIGNE_LIBRE = PR.ligne_libre_avec_wagons || "depart";
     const ALIAS = {}; for (const c in M.relations || {}) if (M.relations[c].ef) { ALIAS[c] = M.relations[c].ef; ALIAS[M.relations[c].ef] = ALIAS[M.relations[c].ef] || c; }
     const ROTATION = Object.assign({ active: true, meme_relation: true, meme_ef: true }, (M.programme && M.programme.rotation) || {});
 
@@ -1297,7 +1318,7 @@ body[data-mode="simulation"] #fiche{display:none}
       if (!sens && !m.vers && choix && choix[m.id]) sens = choix[m.id];
       if (sens === "X") return refus("ignore", "Ignorée à votre demande.");
       // Arrivée ou départ d'une circulation : appliqué quand l'heure réelle est saisie (bouton « Arrivée » / « Parti »).
-      if (sensDe(m) && !m.vers && ATTENDRE_REEL && !m.reel && !(choix && choix[m.id]))
+      if (sensDe(m) && !m.vers && ATTENDRE_REEL && !m.reel && !(choix && choix[m.id]) && !(SUR_ANNONCE && sensDe(m) === "A"))
         return refus("annonce", `${sensDe(m) === "A" ? "Arrivée annoncée" : "Départ annoncé"}${m.annonce ? " à " + String(m.annonce).slice(11, 16) : ""}, en attente de l'heure réelle.`);
       // Ligne libre avec des wagons, sans destination ni sens (ex. 519401 Vf8 18 wagons) : départ de la voie par défaut.
       if (!sens && !m.vers && nb > 0 && LIGNE_LIBRE === "depart") { sens = "D"; parDefaut = true; }
@@ -1734,6 +1755,8 @@ body[data-mode="simulation"] #fiche{display:none}
   const PR = M.programme || {}, CONF = Object.assign({ intervalle_s: 60, animer: true, animation_max: 3 }, PR.suivi || {});
   // hors claude.ai, avec l'adresse du serveur de la saisie : lecture du serveur toutes les 15 s au lieu de Google Drive
   const SRV = !(window.claude && window.claude.use) && window.LHTE_PLAN && window.LHTE_PLAN.serveur ? window.LHTE_PLAN.serveur : "";
+  const SEUL = !!(SRV && window.LHTE_PLAN.seul);
+  const quand = m => (SRV ? "" : ` · dernière saisie à ${hm(m)}`);
   const PERIODE = (SRV ? 15 : Math.max(CONF.intervalle_min_s || 15, CONF.intervalle_s)) * 1000, DRIVE = SRV ? "le serveur de la saisie" : ((PR.drive && PR.drive.connecteur) || "Google Drive");
   const echap = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
   const hhmm = iso => (iso || "").slice(11, 16) || "--:--";
@@ -1795,10 +1818,13 @@ body[data-mode="simulation"] #fiche{display:none}
   const BLOQUANTS = ["server_not_connected", "needs_reauth", "selection_required", "not_in_manifest", "approval_required", "blocked_by_policy", "not_granted", "capability_disabled", "capability_removed"];
   const charge = r => { let x = r && r.payload !== undefined ? r.payload : r; if (typeof x === "string") { try { x = JSON.parse(x); } catch (e) { /* texte brut */ } } return x; };
   function base64Texte(b) { const s = atob(String(b).replace(/\s/g, "")), o = new Uint8Array(s.length); for (let k = 0; k < s.length; k++) o[k] = s.charCodeAt(k); return new TextDecoder("utf-8").decode(o); }
-  let texteServeur = null;
+  let texteServeur = null, confVue = "{}", resume = "";
   async function chercher(d) {
     if (!mcp && SRV) {
       const r = await fetch(SRV + (SRV.indexOf("?") < 0 ? "?" : "&") + "action=plan&date=" + d + "&t=" + Date.now(), { cache: "no-store", redirect: "follow" }).then(x => x.json()).catch(() => { throw { code: "server_unavailable" }; });
+      // réglages des voies (60/80 pieds, wagons HS) : redessin immédiat s'ils changent
+      const conf = JSON.stringify((r && r.voies) || {});
+      if (r && !r.erreur && conf !== confVue) { confVue = conf; window.LHTE_VOIES_CONF = r.voies || {}; Tn.changer(); }
       if (!r || !r.journee) return null;
       texteServeur = JSON.stringify(r.journee);
       return { title: d + ".json", id: "serveur", modifiedTime: String(r.version || r.journee.version || 0) + "·" + texteServeur.length };
@@ -1827,7 +1853,7 @@ body[data-mode="simulation"] #fiche{display:none}
       etat(MOTIFS[code] || (code === "illisible" ? "Fichier du jour illisible : nouvel essai à la prochaine lecture." : e instanceof Error ? `Fichier du jour non lu : ${e.message}` : `Lecture dans ${DRIVE} impossible (${code || "erreur"}) : nouvel essai à la prochaine lecture.`));
     }
     cycleEnCours = false; badge();
-    if (actif) minuteur = setTimeout(tour, PERIODE);
+    if (actif) minuteur = setTimeout(tour, relireApres ? 300 : PERIODE); relireApres = false;
   }
   async function cycle() {
     if (occupeFile || decision) return;
@@ -1842,9 +1868,24 @@ body[data-mode="simulation"] #fiche{display:none}
   async function lireJour(d) {
     const f = await chercher(d); lecture = new Date().toISOString(); dejaLu = true;
     if (!f) { if (!memo.decide) { memo.decide = true; sauverMemo(); } etat(`Lu à ${hm(lecture)} : le fichier ${d}.json n'existe pas encore dans ${DRIVE}.`); return; }
-    if (f.modifiedTime === memo.fichier && texte && texteDate === d) { etat(`À jour · lu à ${hm(lecture)} · dernière saisie à ${hm(f.modifiedTime)}.`); return; }
+    if (f.modifiedTime === memo.fichier && texte && texteDate === d) { etat(SEUL ? `À jour · lu à ${hm(lecture)}${resume ? " · " + resume : ""}.` : `À jour · lu à ${hm(lecture)}${quand(f.modifiedTime)}.`); return; }
     texte = await telecharger(f.id); texteDate = d;
+    if (SEUL) { recalculer(f.modifiedTime); return; }
     traiter(f.modifiedTime);
+  }
+  /* Vue seule (saisie, écrans) : l'occupation est recalculée en entier à chaque changement de la journée — état de départ
+   * déduit de la journée, puis tous les mouvements appliqués sans animation. Toutes les fenêtres montrent donc la même
+   * chose, sans mémoire locale qui pourrait diverger. */
+  function recalculer(modif) {
+    const P = J.preparer(J.lire(texte), {}), E = A.initial(P);
+    P.mouvements.forEach(x => { try { A.appliquer(E, x); } catch (e) { console.error(e); } });
+    A.reconstruire(E);
+    memo.fichier = modif; memo.decide = true;
+    const ann = P.autres.filter(x => x.statut === "annonce").length;
+    if (LHTE.vues && LHTE.vues.mouvements) LHTE.vues.mouvements(P.mouvements.slice(-12).reverse().map(x => ({ h: hhmm(x.heure), t: x.libelle + (x.nb && !/wagon/.test(x.libelle) ? ` · ${x.nb} wagon${x.nb > 1 ? "s" : ""}` : ""), cle: x.groupe || x.ef })));
+    const n = P.mouvements.length;
+    resume = `${n} mouvement${pl(n, "")} appliqué${pl(n, "")}${ann ? ` · ${ann} départ${pl(ann, "")} annoncé${pl(ann, "")}, en attente de « Parti »` : ""}`;
+    etat(`À jour · lu à ${hm(lecture)} · ${resume}.`);
   }
   /* Classe le contenu lu et lance ce qui est nouveau. Rejouable sans relecture (après un classement manuel). */
   function traiter(modif) {
@@ -1856,7 +1897,7 @@ body[data-mode="simulation"] #fiche{display:none}
     if (S.modifies.length || S.retires.length || S.hlp.length) sauverMemo();
     if (!memo.decide && S.nouveaux.length) { decision = { liste: S.nouveaux, modif }; montrerDecision(); return; }
     if (!memo.decide) { memo.decide = true; sauverMemo(); }
-    if (!S.nouveaux.length) { memo.fichier = modif; sauverMemo(); etat(`À jour · lu à ${hm(lecture)} · dernière saisie à ${hm(modif)}.`); return; }
+    if (!S.nouveaux.length) { memo.fichier = modif; sauverMemo(); etat(`À jour · lu à ${hm(lecture)}${quand(modif)}.`); return; }
     lancerFile(S.nouveaux, modif, false);
   }
   /* Applique les lignes une à une, dans l'ordre. Chaque ligne n'est marquée appliquée qu'une fois jouée. */
@@ -1870,7 +1911,7 @@ body[data-mode="simulation"] #fiche{display:none}
     const suivant = () => {
       if (!actif || !pilote) { occupeFile = false; return; }
       const x = file.shift();
-      if (!x) { occupeFile = false; memo.fichier = modif; sauverMemo(); etat(`À jour · lu à ${hm(lecture)} · dernière saisie à ${hm(modif)}.`); return; }
+      if (!x) { occupeFile = false; memo.fichier = modif; sauverMemo(); etat(`À jour · lu à ${hm(lecture)}${quand(modif)}.`); return; }
       if (Tn.actif()) { file.unshift(x); etat("Un mouvement est en cours dans le pupitre : les nouvelles lignes attendent sa fin."); setTimeout(suivant, 2000); return; }
       const E = A.depuisSite(); if (!A.normalise()) A.reconstruire(E);
       A.jouer(E, x, { anime: anime(x), surFin: (y, comment) => {
@@ -1935,6 +1976,13 @@ body[data-mode="simulation"] #fiche{display:none}
     Tn.consigner("direct", "Suivi en direct arrêté sur ce poste" + (motif ? " : " + motif : ""));
     if (db) db.doc("site/pilote").update({ lecture: null }).catch(() => {});
   }
+  let relireApres = false;
+  function relire() {
+    if (!actif) return; if (cycleEnCours) { relireApres = true; return; }
+    clearTimeout(minuteur); minuteur = setTimeout(tour, 300);
+  }
+  try { const bc = new BroadcastChannel("suivi-plan"); bc.onmessage = e => { if (e.data && e.data.type === "relire") relire(); }; } catch (e) { /* navigateur ancien : lecture toutes les 15 s */ }
+  window.addEventListener("message", e => { if (e.data && e.data.type === "plan:relire") relire(); });
   $("d-marche").addEventListener("click", demarrer);
   $("d-arret").addEventListener("click", () => arreter());
   $("d-anime").checked = CONF.animer !== false;
@@ -1953,7 +2001,7 @@ body[data-mode="simulation"] #fiche{display:none}
   })();
   LHTE.direct = { pilote: () => actif && pilote, occupe: () => actif && pilote && (occupeFile || cycleEnCours), demarrer, disponible: () => !!(mcp || SRV),
     actif: () => actif, lecture: () => lecture, autrePoste: () => !!(bailPartage && bailPartage.lecture && Date.now() - new Date(bailPartage.lecture) < PERIODE * 3) && !(actif && pilote),
-    texte: () => $("d-etat").textContent, attente: () => enAttente,
+    texte: () => $("d-etat").textContent, attente: () => enAttente, relire,
     // Choix à faire au démarrage pour les lignes déjà saisies : proposé aussi dans le plan des voies et la simulation.
     decision: () => decision && memo ? { n: decision.liste.length, de: hhmm(decision.liste[0].heure), a: hhmm(decision.liste[decision.liste.length - 1].heure), defaut: $("d-existant").value } : null,
     decider: v => { if (!decision) return; $("d-existant").value = v; $("d-confirmer").click(); } };
@@ -1974,8 +2022,8 @@ body[data-mode="simulation"] #fiche{display:none}
   const COUL = Object.assign({ libre: "#2fbf5b", partielle: "#f39c12", occupee: "#e5383b", reservee: "#3b82f6", indisponible: "#6b7280", manoeuvre: "#a855f7" }, CV.couleurs || {});
   const LIBELLES = { libre: "Libre", partielle: "Partiellement occupée", occupee: "Pleine", reservee: "Réservée", indisponible: "Indisponible", manoeuvre: "Mouvement en cours" };
   const REL = Object.fromEntries(Object.entries(M.relations || {}).filter(([k, v]) => v && v.nom));
-  const nomQui = c => (REL[c] && REL[c].nom) || (M.entreprises[c] && M.entreprises[c].nom) || c || "Sans entreprise";
-  const couleurQui = c => (REL[c] && REL[c].couleur) || (M.entreprises[c] && M.entreprises[c].couleur) || "#8a97a3";
+  const nomQui = c => (c === "~HS" ? "Wagons HS" : "") || (REL[c] && REL[c].nom) || (M.entreprises[c] && M.entreprises[c].nom) || c || "Sans entreprise";
+  const couleurQui = c => (c === "~HS" ? "#9ca3af" : "") || (REL[c] && REL[c].couleur) || (M.entreprises[c] && M.entreprises[c].couleur) || "#8a97a3";
   const echap = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
   const hhmm = iso => (iso || "").slice(11, 16) || "--:--";
   const pl = n => (n > 1 ? "s" : "");
@@ -1984,7 +2032,7 @@ body[data-mode="simulation"] #fiche{display:none}
   // ---------------------------------------------------------------- mode d'affichage
   let mode = "3d";
   function choisir(m, depuisAdresse) {
-    m = m === "plan" || m === "simulation" ? m : "3d"; const avant = mode; mode = m;
+    m = window.LHTE_PLAN && window.LHTE_PLAN.seul ? "plan" : m === "plan" || m === "simulation" ? m : "3d"; const avant = mode; mode = m;
     document.body.dataset.mode = m; $("plan-vue").hidden = m !== "plan";
     document.querySelectorAll("[data-mode]").forEach(b => b.setAttribute("aria-pressed", b.dataset.mode === m));
     if (m !== "3d" && avant === "3d") { $("pupitre").hidden = true; $("bascule").setAttribute("aria-pressed", "false"); }
@@ -2040,8 +2088,8 @@ body[data-mode="simulation"] #fiche{display:none}
     const maintenant = Date.now(), totaux = {}; let wagons = 0; const nb = { libre: 0, partielle: 0, occupee: 0 };
     for (const v of VOIES) {
       const f = formes[v], e = Tn.etatVoie(v), c = compo(v), code = e.code, coul = COUL[code] || "#888";
-      c.parts.forEach(([k, n]) => { totaux[k] = (totaux[k] || 0) + n; }); wagons += e.wagons; if (code in nb) nb[code]++;
-      const signature = code + "|" + e.wagons;
+      c.parts.forEach(([k, n]) => { totaux[k] = (totaux[k] || 0) + n; }); if (e.hs) totaux["~HS"] = (totaux["~HS"] || 0) + e.hs; wagons += e.wagons; if (code in nb) nb[code]++;
+      const signature = code + "|" + e.wagons + "|" + e.type;
       if (clignoter && f.avant !== null && f.avant !== signature && code !== "manoeuvre") f.flash = maintenant + CV.clignotement_s * 1000;
       f.avant = signature;
       f.g.classList.toggle("clignote", f.flash > maintenant); f.g.classList.toggle("manoeuvre", code === "manoeuvre");
@@ -2051,21 +2099,23 @@ body[data-mode="simulation"] #fiche{display:none}
       f.rempl.setAttribute("stroke", coul); f.rempl.setAttribute("stroke-dasharray", code === "partielle" ? `${taux.toFixed(1)} 100` : "0 100");
       // pastille : nom, wagons / capacité, répartition
       const morceaux = [`<tspan class="nom">${echap(v)}</tspan>`];
+      if (e.type === 80) morceaux.push(`<tspan dx="4" class="faible">80'</tspan>`);
       if (!e.wagons && !c.engins) morceaux.push(`<tspan dx="5" fill="${coul}">${code === "libre" ? "libre" : LIBELLES[code].toLowerCase()}</tspan>`);
       else {
         if (e.wagons) morceaux.push(`<tspan dx="5" class="nb">${e.wagons}${e.capacite ? `<tspan class="faible">/${e.capacite}</tspan>` : " wg"}</tspan>`);
         const vus = c.parts.slice(0, 2); vus.forEach(([k, n]) => morceaux.push(`<tspan dx="6" fill="${couleurQui(k)}">●</tspan><tspan dx="2">${echap(nomQui(k))}${c.parts.length > 1 ? " " + n : ""}</tspan>`));
         if (c.parts.length > 2) morceaux.push(`<tspan dx="4" class="faible">+${c.parts.length - 2}</tspan>`);
+        if (e.hs) morceaux.push(`<tspan dx="6" fill="#d1d5db" font-weight="700">HS ${e.hs}</tspan>`);
         if (c.engins) morceaux.push(`<tspan dx="6" class="faible">${c.engins} engin${c.engins > 1 ? "s" : ""}</tspan>`);
       }
       f.texte.innerHTML = morceaux.join("");
       let l = 60; try { f.texte.setAttribute("x", 0); l = f.texte.getBBox().width || l; } catch (e) { /* plan masqué : mesuré au prochain affichage */ }
       f.texte.setAttribute("x", (-l / 2).toFixed(1)); f.fondP.setAttribute("x", (-l / 2 - 7).toFixed(1)); f.fondP.setAttribute("width", (l + 14).toFixed(1));
       f.fondP.setAttribute("stroke", coul);
-      f.pa.setAttribute("aria-label", `${v} : ${LIBELLES[code]}, ${e.wagons} wagon${pl(e.wagons)}`);
+      f.pa.setAttribute("aria-label", `${v} : ${LIBELLES[code]}, ${e.wagons} wagon${pl(e.wagons)}${e.hs ? ` dont ${e.hs} HS` : ""}${e.type === 80 ? ", wagons de 80 pieds" : ""}`);
     }
     $("plan-vide").hidden = wagons > 0;
-    $("plan-chiffres").innerHTML = `<div><b>${wagons}</b><span>wagons</span></div><div><b style="color:${COUL.libre}">${nb.libre}</b><span>voies libres</span></div><div><b style="color:${COUL.occupee}">${nb.occupee}</b><span>voies pleines</span></div>`;
+    $("plan-chiffres").innerHTML = `<div><b>${wagons}</b><span>wagons${totaux["~HS"] ? ` dont ${totaux["~HS"]} HS` : ""}</span></div><div><b style="color:${COUL.libre}">${nb.libre}</b><span>voies libres</span></div><div><b style="color:${COUL.occupee}">${nb.occupee}</b><span>voies pleines</span></div>`;
     const qui = Object.entries(totaux).sort((a, b) => b[1] - a[1]);
     $("plan-qui").innerHTML = qui.length ? qui.map(([k, n]) => `<li><i style="background:${couleurQui(k)}"></i><span>${echap(nomQui(k))}</span><b>${n}</b></li>`).join("") : '<li style="color:var(--p-encre2)">Aucun wagon sur le site.</li>';
     if (VOIES.some(v => formes[v].flash > maintenant)) { clearTimeout(dessinerEtats.t); dessinerEtats.t = setTimeout(() => dessinerEtats(false), 1000 + Math.min(...VOIES.map(v => formes[v].flash).filter(x => x > maintenant)) - maintenant); }
@@ -2097,11 +2147,14 @@ body[data-mode="simulation"] #fiche{display:none}
   setInterval(statut, 5000);
   const mvts = [];
   function noterMvt(h, t, cle, nouveau) {
-    mvts.unshift({ h, t, cle, nouveau }); mvts.length = Math.min(mvts.length, 12);
-    $("plan-mvts").innerHTML = mvts.map((m, i) => `<li class="${m.nouveau && i === 0 ? "nouveau" : ""}"><time>${echap(m.h)}</time><span>${m.cle ? `<span style="color:${couleurQui(m.cle)}">●</span> ` : ""}${echap(m.t)}</span></li>`).join("");
+    mvts.unshift({ h, t, cle, nouveau }); mvts.length = Math.min(mvts.length, 12); rendreMvts();
+  }
+  function remplacerMvts(l) { const avant = mvts[0] && mvts[0].t; mvts.length = 0; l.forEach(m => mvts.push(m)); if (mvts[0]) mvts[0].nouveau = mvts[0].t !== avant; rendreMvts(); }
+  function rendreMvts() {
+    $("plan-mvts").innerHTML = mvts.length ?  mvts.map((m, i) => `<li class="${m.nouveau && i === 0 ? "nouveau" : ""}"><time>${echap(m.h)}</time><span>${m.cle ? `<span style="color:${couleurQui(m.cle)}">●</span> ` : ""}${echap(m.t)}</span></li>`).join("") : '<li class="vide-liste">Aucun mouvement appliqué aujourd\'hui.</li>';
   }
   // Historique déjà enregistré : les dernières lignes du suivi en direct et du rejeu.
-  LHTE.stockage.historique().then(h => {
+  if (!(window.LHTE_PLAN && window.LHTE_PLAN.seul)) LHTE.stockage.historique().then(h => {
     h.filter(e => e.type === "direct" || e.type === "journee").map(e => /^(?:Suivi en direct : )?(\d\d:\d\d) (.+)$/.exec(e.texte)).filter(Boolean).slice(0, 12).reverse()
       .forEach(r => noterMvt(r[1], r[2].replace(/ – .*$/, ""), "", false));
   });
@@ -2116,15 +2169,35 @@ body[data-mode="simulation"] #fiche{display:none}
       + `<button type="button" aria-label="Retirer cette ligne">×</button>`;
     d.querySelector("button").addEventListener("click", () => d.remove()); $("pe-lignes").appendChild(d);
   }
+  const SEUL = !!(window.LHTE_PLAN && window.LHTE_PLAN.seul);
+  const capType = (v, type) => { const c = R.voies[v].capacite_wagons; return c ? (type === 80 ? Math.floor(c * 60 / 80) : c) : null; };
+  function majCap() { if (!edite) return; const ty = Number((document.querySelector('input[name="pe-type"]:checked') || {}).value) || 60, c = capType(edite, ty); $("pe-cap").textContent = c ? `${c} wagons de ${ty} pieds` : "non connue"; }
+  document.querySelectorAll('input[name="pe-type"]').forEach(r => r.addEventListener("change", majCap));
+  if (SEUL) { // textes de la vue seule : les wagons viennent de la saisie
+    const lg = [...document.querySelectorAll("#plan-cote p")].find(p => /Cliquez sur une voie/.test(p.textContent)); if (lg) lg.textContent = "Une voie qui change d'état clignote. Cliquez sur une voie pour régler ses wagons (60 ou 80 pieds) et ses wagons HS.";
+    $("plan-vide").textContent = "Aucun wagon sur le site d'après la saisie du jour.";
+  }
   function ouvrirEdition(v, ev) {
     edite = v; const e = Tn.etatVoie(v), t = R.voies[v].troncon, q = {};
+    $("pe-conf").hidden = !SEUL;
+    if (SEUL) { const cf = (window.LHTE_VOIES_CONF || {})[v] || {}; document.querySelectorAll('input[name="pe-type"]').forEach(r => { r.checked = Number(r.value) === (Number(cf.type) === 80 ? 80 : 60); }); $("pe-hs").value = cf.hs || 0; }
     Tn.liste().forEach(x => { if (x.troncon === t && x.nb) { const k = (x.ef || "") + "|" + x.charge; q[k] = (q[k] || 0) + x.nb; } });
     $("pe-titre").textContent = `Voie ${v}`; $("pe-note").textContent = `${LIBELLES[e.code]} · ${e.wagons} wagon${pl(e.wagons)}${e.capacite ? ` sur ${e.capacite}` : ""}. Saisissez ce qui s'y trouve réellement.`;
-    $("pe-lignes").innerHTML = ""; $("pe-msg").textContent = "";
+    $("pe-lignes").innerHTML = ""; $("pe-msg").textContent = ""; if (SEUL) { $("pe-note").textContent = `${LIBELLES[e.code]} · ${e.wagons} wagon${pl(e.wagons)}${e.capacite ? ` sur ${e.capacite}` : ""}${e.hs ? ` (dont ${e.hs} HS)` : ""}. Les wagons des trains viennent de la saisie ; réglez ici le type de wagons et les wagons HS.`; majCap(); }
     const l = Object.entries(q).map(([k, n]) => ({ cle: k.split("|")[0], charge: k.split("|")[1], nb: n })); (l.length ? l : [{ cle: "", nb: 0, charge: "chargés" }]).forEach(ligneEdition);
     const z = $("plan-zone").getBoundingClientRect(), b = $("plan-edition"), x = (ev && ev.clientX) || z.left + z.width / 2, y = (ev && ev.clientY) || z.top + z.height / 2;
     b.hidden = false; b.style.left = Math.max(12, Math.min(z.width - b.offsetWidth - 12, x - z.left - b.offsetWidth / 2)) + "px"; b.style.top = Math.max(12, Math.min(z.height - b.offsetHeight - 12, y - z.top + 14)) + "px";
-    b.querySelector("input,select").focus();
+    (SEUL ? $("pe-hs") : b.querySelector("input,select")).focus();
+  }
+  /* Réglages d'une voie enregistrés sur le serveur de la saisie (clé connue sur ce poste) : vus par toutes les fenêtres. */
+  async function enregistrerConf(v, type, hs) {
+    let cx = {}; try { cx = JSON.parse(localStorage.getItem("suivi:connexion") || "null") || {}; } catch (e) { /* stockage indisponible */ }
+    if (!cx.url || !cx.cle) throw new Error("Réglage possible seulement depuis le poste de saisie (connexion au serveur inconnue ici).");
+    const tout = Object.assign({}, window.LHTE_VOIES_CONF || {}); if (type === 60 && !hs) delete tout[v]; else tout[v] = { type, hs };
+    const r = await fetch(cx.url, { method: "POST", cache: "no-store", redirect: "follow", body: JSON.stringify({ cle: cx.cle, methode: "PUT", chemin: "/api/plan-voies", corps: JSON.stringify(tout) }) }).then(x => x.json());
+    if (!r || r.status !== 200) throw new Error((r && r.data && r.data.erreur) || "enregistrement refusé (serveur à redéployer ?)");
+    window.LHTE_VOIES_CONF = r.data.voies || {}; Tn.changer();
+    try { new BroadcastChannel("suivi-plan").postMessage({ type: "relire" }); } catch (e) { /* une seule fenêtre */ }
   }
   const fermer = () => { $("plan-edition").hidden = true; edite = null; };
   $("pe-annuler").addEventListener("click", fermer);
@@ -2132,7 +2205,14 @@ body[data-mode="simulation"] #fiche{display:none}
   $("pe-ajout").addEventListener("click", () => ligneEdition({ cle: "", nb: 0, charge: "chargés" }));
   $("pe-libre").addEventListener("click", () => { $("pe-lignes").innerHTML = ""; $("pe-msg").textContent = "La voie sera libre à l'enregistrement."; });
   $("pe-ok").addEventListener("click", () => {
-    if (!edite) return; if (Tn.actif()) { $("pe-msg").textContent = "Un mouvement est en cours : enregistrez à sa fin."; return; }
+    if (!edite) return;
+    if (SEUL) {
+      const v = edite, ty = Number((document.querySelector('input[name="pe-type"]:checked') || {}).value) === 80 ? 80 : 60, hs = Math.max(0, Math.min(80, parseInt($("pe-hs").value, 10) || 0));
+      $("pe-msg").textContent = "Enregistrement…"; $("pe-ok").disabled = true;
+      enregistrerConf(v, ty, hs).then(() => { $("pe-ok").disabled = false; fermer(); noterMvt(new Date().toTimeString().slice(0, 5), `${v} : wagons ${ty} pieds${hs ? `, ${hs} HS` : ""}`, "", true); },
+        e => { $("pe-ok").disabled = false; $("pe-msg").textContent = e.message; });
+      return;
+    } if (Tn.actif()) { $("pe-msg").textContent = "Un mouvement est en cours : enregistrez à sa fin."; return; }
     const parts = [...$("pe-lignes").querySelectorAll(".pe-ligne")].map(d => { const [s1, n, s2] = d.querySelectorAll("select,input"); return { cle: s1.value, nb: Math.max(0, Math.min(80, parseInt(n.value, 10) || 0)), charge: s2.value }; }).filter(p => p.nb > 0);
     const total = parts.reduce((k, p) => k + p.nb, 0), cap = R.voies[edite].capacite_wagons;
     if (cap && total > cap) { $("pe-msg").textContent = `${total} wagons dépassent la capacité de ${edite} (${cap} wagons au plan).`; return; }
@@ -2199,7 +2279,7 @@ body[data-mode="simulation"] #fiche{display:none}
   function entrerSimulation() { bandeau(null); $("sim-bandeau").hidden = false; if (!seq) S.vue("isometrique"); }
   function sortirSimulation() { if (seq) { clearTimeout(retour); finSequence(); } $("sim-bandeau").hidden = true; $("sim-carte").hidden = true; $("sim-attente").hidden = true; }
 
-  LHTE.vues = { mode: () => mode, choisir, prioritaire, statut };
+  LHTE.vues = { mode: () => mode, choisir, prioritaire, statut, mouvements: remplacerMvts };
   // Adresse de la page : #plan ou #simulation ouvrent directement la vue (écran mural, écran TV).
   const depart = () => { if (!Tn.pret()) { setTimeout(depart, 300); return; } choisir(location.hash.slice(1), true); dessinerEtats(false); };
   depart();

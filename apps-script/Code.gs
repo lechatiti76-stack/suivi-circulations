@@ -15,7 +15,7 @@
  */
 
 const CLE = 'CHANGER-CE-MOT-DE-PASSE';
-const VERSION = '2.7.1';
+const VERSION = '2.8.0';
 const FUSEAU = 'Europe/Paris';
 const NOM_DOSSIER = 'Suivi des circulations - données';
 
@@ -52,6 +52,7 @@ function router_(m, c, corps) {
   if (m === 'GET' && c === '/api/config') return ok_({ parametres: lireJson_('parametres.json', {}), planning: lireJson_('planning.json', { schema: 1, groupes: [], circulations: [] }), service: { version: VERSION, mode: 'google' } });
   if (m === 'PUT' && (c === '/api/parametres' || c === '/api/planning')) return ecrireConfig_(c === '/api/parametres' ? 'parametres.json' : 'planning.json', corps);
   if (m === 'GET' && c === '/api/journees') return ok_({ dates: listeJournees_() });
+  if (m === 'PUT' && c === '/api/plan-voies') return ecrirePlanVoies_(corps);
   if ((r = /^\/api\/journee\/(\d{4}-\d{2}-\d{2})$/.exec(c))) {
     if (m === 'GET') return lireJournee_(r[1]);
     if (m === 'PUT') return avecVerrou_(() => ecrireJournee_(r[1], corps));
@@ -349,18 +350,40 @@ function listeJournees_() {
  */
 function planPublic_(date) {
   const d = /^\d{4}-\d{2}-\d{2}$/.test(String(date || '')) ? String(date) : Utilities.formatDate(new Date(), FUSEAU, 'yyyy-MM-dd');
-  const cache = CacheService.getScriptCache(), cle = 'plan:' + d, vu = cache.get(cle);
+  // clé de cache liée à la version : une nouvelle saisie est visible tout de suite
+  const version = versionJournee_(d), vVoies = proprietes_().getProperty('version:planvoies') || '0';
+  const cache = CacheService.getScriptCache(), cle = 'plan:' + d + ':' + version + ':' + vVoies, vu = cache.get(cle);
   if (vu) return JSON.parse(vu);
+  const voies = lireJson_('plan-voies.json', {});
   const t = lireTexte_(d + '.json', 'journees');
-  if (!t) return { date: d, version: 0, journee: null };
+  if (!t) return { date: d, version: 0, voies: voies, journee: null };
   const j = JSON.parse(t);
-  const out = { date: d, version: versionJournee_(d), journee: {
+  const out = { date: d, version: version, voies: voies, journee: {
     date: j.date, version: j.version,
     mouvements: (j.mouvements || []).map(m => ({ n: m.n, id: m.id, num: m.num, ef: m.ef || '', voie: m.voie || '', compo: m.compo || '', cv: m.cv || '', sit: m.sit || '',
       annonce: m.annonce || '', reel: m.reel || '', vers: m.vers || '', lien: m.lien || '', supprime: !!m.supprime })),
     circulations: (j.circulations || []).map(c => ({ id: c.id, code: c.code, groupe: c.groupe, sens: c.sens, numero: c.numero || '', sillon: c.sillon || '' })) } };
-  cache.put(cle, JSON.stringify(out), 5);
+  cache.put(cle, JSON.stringify(out), 60);
   return out;
+}
+/**
+ * Réglages des voies du plan de voie : type de wagons (60 ou 80 pieds, qui fixe la capacité) et wagons HS stationnés.
+ * Corps : { "Vf1": { "type": 80, "hs": 2 }, … } (voies absentes : 60 pieds, aucun wagon HS).
+ */
+function ecrirePlanVoies_(corps) {
+  let o;
+  try { o = JSON.parse(corps || '{}'); } catch (err) { return { status: 400, data: { erreur: 'réglages des voies illisibles' } }; }
+  if (!o || typeof o !== 'object' || Array.isArray(o)) return { status: 400, data: { erreur: 'réglages des voies invalides' } };
+  const propre = {};
+  Object.keys(o).slice(0, 200).forEach(function (v) {
+    if (!/^[A-Za-z0-9_-]{1,20}$/.test(v) || !o[v] || typeof o[v] !== 'object') return;
+    const type = Number(o[v].type) === 80 ? 80 : 60, hs = Math.max(0, Math.min(80, Math.floor(Number(o[v].hs) || 0)));
+    if (type !== 60 || hs) propre[v] = { type: type, hs: hs };
+  });
+  ecrireTexte_('plan-voies.json', JSON.stringify(propre, null, 2));
+  const p = proprietes_();
+  p.setProperty('version:planvoies', String(Number(p.getProperty('version:planvoies') || 0) + 1));
+  return ok_({ voies: propre });
 }
 function lireJournee_(date) {
   const t = lireTexte_(date + '.json', 'journees');

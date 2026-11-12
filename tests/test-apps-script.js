@@ -222,6 +222,19 @@ test('lecture publique de la journée pour le plan de voie, sans commentaire', f
   var p = JSON.parse(g.doGet({ action: 'plan', date: '2026-01-05' }).getContent());
   assert.strictEqual(p.journee.mouvements[0].voie, 'VR5');
   assert.ok(!('comm' in p.journee.mouvements[0]) && !('mails' in p.journee.circulations[0]));
+  // une nouvelle saisie est visible tout de suite (cache lié à la version)
+  g.appel('PUT', '/api/journee/2026-01-05', '{"baseVersion":1}\n' + JSON.stringify({ date: '2026-01-05', version: 2, mouvements: [{ n: 1, id: 'm1', num: '50237', voie: 'VF1', compo: '27' }], circulations: [] }) + '\n');
+  assert.strictEqual(JSON.parse(g.doGet({ action: 'plan', date: '2026-01-05' }).getContent()).journee.mouvements[0].voie, 'VF1');
+});
+test('réglages des voies du plan (60/80 pieds, wagons HS)', function () {
+  var g = simulateur.charger('secret-essai');
+  var r = g.appel('PUT', '/api/plan-voies', JSON.stringify({ Vf1: { type: 80, hs: 2 }, Vr5: { type: 60, hs: 0 }, 'x<y': { type: 80 } }));
+  assert.strictEqual(r.status, 200); assert.deepStrictEqual(r.data.voies, { Vf1: { type: 80, hs: 2 } });
+  var p = JSON.parse(g.doGet({ action: 'plan', date: '2026-01-07' }).getContent());
+  assert.deepStrictEqual(p.voies, { Vf1: { type: 80, hs: 2 } });
+  g.appel('PUT', '/api/plan-voies', JSON.stringify({ Vf1: { type: 60, hs: 3 } }));
+  assert.deepStrictEqual(JSON.parse(g.doGet({ action: 'plan', date: '2026-01-07' }).getContent()).voies, { Vf1: { type: 60, hs: 3 } });
+  assert.strictEqual(g.appel('PUT', '/api/plan-voies', '[1]').status, 400);
 });
 
 console.log('Jours préparés (samedi / dimanche)');

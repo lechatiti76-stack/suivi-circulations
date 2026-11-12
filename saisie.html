@@ -149,12 +149,19 @@
 </dialog>
 
 <!-- Plan de voie (page du simulateur) -->
-<dialog id="d-plan" class="d-plan">
-  <div>
-    <div class="dlg-tete"><h2>Plan de voie</h2><span class="gauche note" id="pl-v-compte"></span><a class="bouton" id="pl-v-ouvrir" target="_blank" rel="noopener" style="margin-right:8px;text-decoration:none">↗ Ouvrir dans une fenêtre</a><button type="button" class="bouton" data-fermer>Fermer</button></div>
-    <div class="plan-cadre"><iframe id="plan-iframe" title="Plan de voie — occupation des voies en direct"></iframe></div>
+<!-- fenêtre flottante : se déplace (barre de titre), se redimensionne (coin bas droit), se réduit ; la saisie reste utilisable -->
+<section id="d-plan" class="plan-flottant" hidden aria-label="Plan de voie">
+  <div class="pf-tete" id="pf-tete" title="Glisser pour déplacer · double-clic pour réduire">
+    <span class="pf-poignee" aria-hidden="true">⠿</span><b>Plan de voie</b><span class="pf-compte" id="pl-v-compte"></span>
+    <span class="pf-boutons">
+      <button type="button" id="pf-reduire" title="Réduire" aria-label="Réduire">–</button>
+      <button type="button" id="pf-agrandir" title="Agrandir / taille normale" aria-label="Agrandir">□</button>
+      <button type="button" id="pl-v-ouvrir" title="Ouvrir dans une fenêtre séparée (autre écran)" aria-label="Ouvrir dans une fenêtre séparée">↗</button>
+      <button type="button" id="pf-fermer" title="Fermer" aria-label="Fermer">✕</button>
+    </span>
   </div>
-</dialog>
+  <div class="plan-cadre"><iframe id="plan-iframe" title="Plan de voie — occupation des voies en direct"></iframe></div>
+</section>
 
 <!-- Flash info -->
 <dialog id="d-flash">

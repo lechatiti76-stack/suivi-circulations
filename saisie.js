@@ -128,6 +128,7 @@
       if (r.status === 200) {
         app.version = r.data.version; app.journee.version = r.data.version;
         app.diffusion = r.data.diffusion || []; s.erreur = null; s.a = new Date(); app.serviceOk = true;
+        signalerPlan();
         secoursLocal(s.evenements.length > 0);
       } else if (r.status === 409) {
         conflit();
@@ -630,23 +631,85 @@
   // ------------------------------------------------- plan de voie (simulateur)
   // par défaut (adresse vide, y compris enregistrée vide par une version précédente) : la page plan-de-voie.html du dépôt
   function planVoie() { var pv = Object.assign({}, ((app.params || {}).visuel || {}).planVoie || {}); if (!pv.adresse) pv.adresse = 'plan-de-voie.html'; return pv; }
-  var planMinuteur = null;
-  /** Ouvre la page du plan de voie ; avec une durée, la referme seule après ce nombre de secondes. */
+  var planMinuteur = null, planAuto = false;
+  /* Fenêtre flottante du plan : position, taille et état (réduit) gardés sur ce poste. */
+  var PF = $('#d-plan'), pfEtat = lsLire('suivi:planFlottant') || {};
+  function pfAppliquer() {
+    var l = Math.max(320, Math.min(window.innerWidth, pfEtat.l || Math.min(860, window.innerWidth - 48)));
+    var h = Math.max(180, Math.min(window.innerHeight, pfEtat.h || Math.min(540, window.innerHeight - 120)));
+    var x = pfEtat.x == null ? window.innerWidth - l - 24 : pfEtat.x, y = pfEtat.y == null ? 84 : pfEtat.y;
+    x = Math.max(-l + 120, Math.min(window.innerWidth - 120, x)); y = Math.max(0, Math.min(window.innerHeight - 34, y));
+    PF.style.setProperty('--pf-x', x + 'px'); PF.style.setProperty('--pf-y', y + 'px');
+    PF.style.setProperty('--pf-l', l + 'px'); PF.style.setProperty('--pf-h', h + 'px');
+    PF.classList.toggle('reduit', !!pfEtat.reduit); PF.classList.toggle('grand', !!pfEtat.grand && !pfEtat.reduit);
+    $('#pf-reduire').textContent = pfEtat.reduit ? '▴' : '–'; $('#pf-reduire').title = pfEtat.reduit ? 'Déplier' : 'Réduire';
+  }
+  function pfGarder() { lsEcrire('suivi:planFlottant', pfEtat); }
+  function planOuvert() { return !PF.hidden; }
+  function fermerPlan() { clearInterval(planMinuteur); planAuto = false; $('#pl-v-compte').textContent = ''; PF.hidden = true; }
+  (function () { // déplacer par la barre de titre
+    var tete = $('#pf-tete'), dep = null;
+    tete.addEventListener('pointerdown', function (e) {
+      if (e.target.closest('button') || pfEtat.grand) return;
+      var r = PF.getBoundingClientRect(); dep = { dx: e.clientX - r.left, dy: e.clientY - r.top };
+      PF.classList.add('deplace'); tete.setPointerCapture(e.pointerId); e.preventDefault();
+    });
+    tete.addEventListener('pointermove', function (e) {
+      if (!dep) return; pfEtat.x = Math.round(e.clientX - dep.dx); pfEtat.y = Math.round(e.clientY - dep.dy); pfAppliquer();
+    });
+    var fin = function () { if (!dep) return; dep = null; PF.classList.remove('deplace'); pfGarder(); };
+    tete.addEventListener('pointerup', fin); tete.addEventListener('pointercancel', fin);
+    tete.addEventListener('dblclick', function (e) { if (!e.target.closest('button')) $('#pf-reduire').click(); });
+    // redimensionnement par le coin (resize CSS) : taille gardée
+    if (window.ResizeObserver) new ResizeObserver(function () {
+      if (PF.hidden || pfEtat.reduit || pfEtat.grand) return;
+      var l = Math.round(PF.offsetWidth), h = Math.round(PF.offsetHeight);
+      if (l > 0 && h > 0 && (l !== pfEtat.l || h !== pfEtat.h)) { pfEtat.l = l; pfEtat.h = h; PF.style.setProperty('--pf-l', l + 'px'); PF.style.setProperty('--pf-h', h + 'px'); clearTimeout(pfEtat._t); pfEtat._t = setTimeout(function () { delete pfEtat._t; pfGarder(); }, 400); }
+    }).observe(PF);
+    window.addEventListener('resize', function () { if (planOuvert()) pfAppliquer(); });
+  })();
+  $('#pf-reduire').addEventListener('click', function () { pfEtat.reduit = !pfEtat.reduit; planAuto = false; pfGarder(); pfAppliquer(); });
+  $('#pf-agrandir').addEventListener('click', function () { pfEtat.grand = !pfEtat.grand; pfEtat.reduit = false; pfGarder(); pfAppliquer(); });
+  $('#pf-fermer').addEventListener('click', function () { fermerPlan(); F.num.focus(); });
+  function urlPlan() { return new URL(planVoie().adresse, location.href).href; }
+  $('#pl-v-ouvrir').addEventListener('click', function () {
+    var u = urlPlan(), w = window.open(u.replace(/#.*$/, '') + '#plan', 'planDeVoie', 'popup=yes,width=1280,height=780');
+    if (w) { fermerPlan(); try { w.focus(); } catch (e) { /* fenêtre d'un autre écran */ } } else toast('Fenêtre bloquée par le navigateur : autorisez les fenêtres pour ce site.');
+  });
+  /** Demande aux plans ouverts (fenêtre flottante, fenêtres séparées) de relire la journée tout de suite. */
+  var canalPlan = null; try { canalPlan = new BroadcastChannel('suivi-plan'); } catch (e) { /* navigateur ancien */ }
+  function signalerPlan() {
+    try { if (canalPlan) canalPlan.postMessage({ type: 'relire' }); } catch (e) { /* rien */ }
+    try { var f = $('#plan-iframe'); if (f.contentWindow && f.getAttribute('src')) f.contentWindow.postMessage({ type: 'plan:relire' }, '*'); } catch (e) { /* rien */ }
+  }
+  /** Ouvre la fenêtre flottante du plan de voie ; avec une durée (après une arrivée ou un départ), la referme ou la
+   *  réduit seule ensuite — sauf si elle était déjà ouverte à la main. */
   function ouvrirPlanVoie(duree) {
     var pv = planVoie(); if (!pv.adresse) { toast('Plan de voie : indiquez son adresse dans Paramètres.'); return; }
-    var f = $('#plan-iframe'), url = new URL(pv.adresse, location.href).href;
+    var f = $('#plan-iframe'), url = urlPlan();
     if (f.getAttribute('src') !== url) f.setAttribute('src', url);
-    $('#pl-v-ouvrir').href = url.replace(/#.*$/, '') + (url.indexOf('#') < 0 ? '#plan' : url.slice(url.indexOf('#')));
-    clearInterval(planMinuteur); $('#pl-v-compte').textContent = '';
-    ouvrir('#d-plan');
     if (duree) {
+      if (planOuvert() && !pfEtat.reduit && !planAuto) return; // déjà affiché à la main : rien à faire
+      var etaitReduit = planOuvert() && pfEtat.reduit;
+      planAuto = true; clearInterval(planMinuteur);
+      if (etaitReduit) { pfEtat.reduit = false; pfAppliquer(); }
+      PF.hidden = false; pfAppliquer();
       var fin = Date.now() + duree * 1000;
       planMinuteur = setInterval(function () {
         var r = Math.ceil((fin - Date.now()) / 1000);
-        if (r <= 0 || !$('#d-plan').open) { clearInterval(planMinuteur); $('#pl-v-compte').textContent = ''; if ($('#d-plan').open) $('#d-plan').close(); F.num.focus(); return; }
-        $('#pl-v-compte').textContent = 'fermeture dans ' + r + ' s';
+        if (!planAuto || PF.hidden) { clearInterval(planMinuteur); $('#pl-v-compte').textContent = ''; return; }
+        if (r <= 0) {
+          clearInterval(planMinuteur); planAuto = false; $('#pl-v-compte').textContent = '';
+          if (etaitReduit) { pfEtat.reduit = true; pfAppliquer(); } else PF.hidden = true;
+          return;
+        }
+        $('#pl-v-compte').textContent = (etaitReduit ? 'réduction' : 'fermeture') + ' dans ' + r + ' s';
       }, 250);
+      return;
     }
+    clearInterval(planMinuteur); planAuto = false; $('#pl-v-compte').textContent = '';
+    if (planOuvert() && !pfEtat.reduit) { fermerPlan(); return; } // le bouton bascule
+    pfEtat.reduit = false; pfGarder(); PF.hidden = false; pfAppliquer();
   }
   $('#b-plan').addEventListener('click', function () { ouvrirPlanVoie(0); });
   function majBoutonPlan() { $('#b-plan').hidden = !planVoie().adresse; }
