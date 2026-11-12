@@ -628,13 +628,15 @@
     if (pv.adresse && (c.sens === 'D' ? pv.saisieDepart : pv.saisieArrivee)) setTimeout(function () { ouvrirPlanVoie(pv.duree); }, 1200);
   }
   // ------------------------------------------------- plan de voie (simulateur)
-  function planVoie() { return ((app.params || {}).visuel || {}).planVoie || {}; }
+  // par défaut : la page plan-de-voie.html déposée dans le dépôt (adresse vidée dans Paramètres = pas de plan de voie)
+  function planVoie() { var pv = Object.assign({}, ((app.params || {}).visuel || {}).planVoie || {}); if (pv.adresse == null) pv.adresse = 'plan-de-voie.html'; return pv; }
   var planMinuteur = null;
   /** Ouvre la page du plan de voie ; avec une durée, la referme seule après ce nombre de secondes. */
   function ouvrirPlanVoie(duree) {
     var pv = planVoie(); if (!pv.adresse) { toast('Plan de voie : indiquez son adresse dans Paramètres.'); return; }
     var f = $('#plan-iframe'), url = new URL(pv.adresse, location.href).href;
     if (f.getAttribute('src') !== url) f.setAttribute('src', url);
+    $('#pl-v-ouvrir').href = url.replace(/#.*$/, '') + (url.indexOf('#') < 0 ? '#plan' : url.slice(url.indexOf('#')));
     clearInterval(planMinuteur); $('#pl-v-compte').textContent = '';
     ouvrir('#d-plan');
     if (duree) {
@@ -1400,7 +1402,7 @@
     $('#pa-son-fin').checked = vis.sonFinTravaux !== false;
     var an = vis.animTrain || {}, pv = vis.planVoie || {};
     $('#pa-anim').checked = an.actif !== false; $('#pa-anim-url').value = an.adresse || '';
-    $('#pa-plan-url').value = pv.adresse || ''; $('#pa-plan-duree').value = pv.duree || 10;
+    $('#pa-plan-url').value = pv.adresse == null ? 'plan-de-voie.html' : pv.adresse; $('#pa-plan-duree').value = pv.duree || 10;
     $('#pa-plan-tv-arr').checked = !!pv.tvArrivee; $('#pa-plan-tv-dep').checked = !!pv.tvDepart;
     $('#pa-plan-sa-arr').checked = !!pv.saisieArrivee; $('#pa-plan-sa-dep').checked = !!pv.saisieDepart;
     $('#pa-vitesse-voix').value = vis.vitesseVoix == null ? 1 : vis.vitesseVoix; $('#pa-vitesse-voix-val').textContent = '× ' + (+$('#pa-vitesse-voix').value).toFixed(2);
@@ -1531,7 +1533,9 @@
     p.visuel.sonArrivees = $('#pa-son').checked; p.visuel.voixArrivees = $('#pa-voix').checked; p.visuel.volumeSon = +$('#pa-volume').value;
     p.visuel.animTrain = { actif: $('#pa-anim').checked, adresse: $('#pa-anim-url').value.trim() };
     var pdur = +$('#pa-plan-duree').value || 10; if (pdur < 3 || pdur > 120) err.push('Plan de voie : durée de 3 à 120 secondes.');
-    var purl = $('#pa-plan-url').value.trim(); if (purl && !/^https?:\/\/|^[\w.\-\/]+\.html?(\?.*)?$/i.test(purl)) err.push('Plan de voie : adresse invalide (https://… ou page.html).');
+    var purl = $('#pa-plan-url').value.trim();
+    if (/^file:/i.test(purl)) err.push('Plan de voie : une adresse file:/// n\'existe que sur ce PC (les écrans ne peuvent pas l\'ouvrir). Déposez le fichier dans le dépôt GitHub et indiquez son nom, ex. simulateur_3d.html#plan.');
+    else if (purl && !/^https?:\/\/|^[\w.\-\/]+\.html?(\?[^#]*)?(#.*)?$/i.test(purl)) err.push('Plan de voie : adresse invalide (https://… ou page.html#plan).');
     p.visuel.planVoie = { adresse: purl, duree: pdur, tvArrivee: $('#pa-plan-tv-arr').checked, tvDepart: $('#pa-plan-tv-dep').checked,
       saisieArrivee: $('#pa-plan-sa-arr').checked, saisieDepart: $('#pa-plan-sa-dep').checked };
     p.visuel.sonFinTravaux = $('#pa-son-fin').checked; p.visuel.nomVoix = $('#pa-nom-voix').value;

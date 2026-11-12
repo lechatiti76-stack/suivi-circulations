@@ -151,7 +151,7 @@
 <!-- Plan de voie (page du simulateur) -->
 <dialog id="d-plan" class="d-plan">
   <div>
-    <div class="dlg-tete"><h2>Plan de voie</h2><span class="gauche note" id="pl-v-compte"></span><button type="button" class="bouton" data-fermer>Fermer</button></div>
+    <div class="dlg-tete"><h2>Plan de voie</h2><span class="gauche note" id="pl-v-compte"></span><a class="bouton" id="pl-v-ouvrir" target="_blank" rel="noopener" style="margin-right:8px;text-decoration:none">↗ Ouvrir dans une fenêtre</a><button type="button" class="bouton" data-fermer>Fermer</button></div>
     <div class="plan-cadre"><iframe id="plan-iframe" title="Plan de voie — occupation des voies en direct"></iframe></div>
   </div>
 </dialog>
@@ -366,7 +366,7 @@
         <p class="note" style="margin-top:12px"><b>Plan de voie</b> (occupation des voies en direct, page du simulateur) : collez l'adresse de la page ; le bouton
           « Plan de voie » de la saisie l'ouvre, et elle peut s'afficher quelques secondes après une arrivée ou un départ.</p>
         <div class="formgrid">
-          <div class="champ large"><label for="pa-plan-url">Adresse du plan de voie</label><input id="pa-plan-url" class="mono" placeholder="https://…/plan-de-voie.html"></div>
+          <div class="champ large"><label for="pa-plan-url">Adresse du plan de voie (fichier déposé dans le dépôt, ex. simulateur_3d.html#plan)</label><input id="pa-plan-url" class="mono" placeholder="simulateur_3d.html#plan"></div>
           <div class="champ"><label for="pa-plan-duree">Durée d'affichage (s)</label><input id="pa-plan-duree" class="mono" inputmode="numeric"></div>
         </div>
         <div class="fl-coches">

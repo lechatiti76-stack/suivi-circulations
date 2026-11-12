@@ -213,6 +213,17 @@ test('avis par clé d\'envoi : format simple et webhook Notion, fin, clé refus�
   assert.strictEqual(g.appel('GET', '/api/travaux').data.liste.filter(function (t) { return t.code === 'RMG3'; })[0].cause, 'câble arraché');
 });
 
+console.log('Plan de voie');
+test('lecture publique de la journée pour le plan de voie, sans commentaire', function () {
+  var g = simulateur.charger('secret-essai');
+  var vide = JSON.parse(g.doGet({ action: 'plan', date: '2026-01-05' }).getContent());
+  assert.strictEqual(vide.journee, null);
+  g.appel('PUT', '/api/journee/2026-01-05', '{"baseVersion":0}\n' + JSON.stringify({ date: '2026-01-05', version: 1, mouvements: [{ n: 1, id: 'm1', num: '50237', voie: 'VR5', compo: '18', sit: 'occupée', comm: 'interne', annonce: '2026-01-05T08:00:00' }], circulations: [{ id: 'c1', code: 'VNX', groupe: 'NAV', sens: 'A', numero: '50237', mails: { x: 1 } }] }) + '\n');
+  var p = JSON.parse(g.doGet({ action: 'plan', date: '2026-01-05' }).getContent());
+  assert.strictEqual(p.journee.mouvements[0].voie, 'VR5');
+  assert.ok(!('comm' in p.journee.mouvements[0]) && !('mails' in p.journee.circulations[0]));
+});
+
 console.log('Jours préparés (samedi / dimanche)');
 test('le vendredi, Demain = lundi et Après-demain = mardi ; préparations reprises', function () {
   var SC = require('../commun.js');

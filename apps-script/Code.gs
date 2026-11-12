@@ -15,7 +15,7 @@
  */
 
 const CLE = 'CHANGER-CE-MOT-DE-PASSE';
-const VERSION = '2.7.0';
+const VERSION = '2.7.1';
 const FUSEAU = 'Europe/Paris';
 const NOM_DOSSIER = 'Suivi des circulations - données';
 
@@ -23,6 +23,8 @@ const NOM_DOSSIER = 'Suivi des circulations - données';
 function doGet(e) {
   const action = (e && e.parameter && e.parameter.action) || '';
   if (action === 'diffusion') { const d = lireDiffusion_(); try { d.travaux = listeTravaux_(); } catch (err) { d.travaux = []; } return json_(d); }
+  // plan de voie (page plan-de-voie.html) : mouvements du jour, sans les commentaires internes
+  if (action === 'plan') { try { return json_(planPublic_(e.parameter.date)); } catch (err) { return json_({ erreur: String(err && err.message || err) }); } }
   if (action === 'sante') return json_({ service: 'ok', version: VERSION, maintenant: maintenant_() });
   return ContentService.createTextOutput('Suivi des circulations : serveur en service (version ' + VERSION + ').');
 }
@@ -340,6 +342,25 @@ function listeJournees_() {
   const it = dossier_('journees').getFiles(), dates = [];
   while (it.hasNext()) { const n = it.next().getName(); if (/^\d{4}-\d{2}-\d{2}\.json$/.test(n)) dates.push(n.slice(0, 10)); }
   return dates.sort();
+}
+/**
+ * Journée vue par le plan de voie (lecture publique, comme les écrans) : seulement ce qu'il faut pour l'occupation des
+ * voies — numéro, EF, voie, wagons, situation, destination, heures, lien de circulation. Ni commentaire ni mail.
+ */
+function planPublic_(date) {
+  const d = /^\d{4}-\d{2}-\d{2}$/.test(String(date || '')) ? String(date) : Utilities.formatDate(new Date(), FUSEAU, 'yyyy-MM-dd');
+  const cache = CacheService.getScriptCache(), cle = 'plan:' + d, vu = cache.get(cle);
+  if (vu) return JSON.parse(vu);
+  const t = lireTexte_(d + '.json', 'journees');
+  if (!t) return { date: d, version: 0, journee: null };
+  const j = JSON.parse(t);
+  const out = { date: d, version: versionJournee_(d), journee: {
+    date: j.date, version: j.version,
+    mouvements: (j.mouvements || []).map(m => ({ n: m.n, id: m.id, num: m.num, ef: m.ef || '', voie: m.voie || '', compo: m.compo || '', cv: m.cv || '', sit: m.sit || '',
+      annonce: m.annonce || '', reel: m.reel || '', vers: m.vers || '', lien: m.lien || '', supprime: !!m.supprime })),
+    circulations: (j.circulations || []).map(c => ({ id: c.id, code: c.code, groupe: c.groupe, sens: c.sens, numero: c.numero || '', sillon: c.sillon || '' })) } };
+  cache.put(cle, JSON.stringify(out), 5);
+  return out;
 }
 function lireJournee_(date) {
   const t = lireTexte_(date + '.json', 'journees');

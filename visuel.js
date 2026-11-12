@@ -547,7 +547,8 @@
     if (anim.file.length && !anim.enCours) animDisponible(url, function (ok) { if (ok) lancerAnim(url); else anim.file = []; });
   }
   function paramsAnim(v) {
-    var l = v.l, min = v.ph.sec != null ? Math.max(0, Math.ceil(v.ph.sec / 60)) : 0;
+    // minutes avec décimales : le compte à rebours de l'animation tombe juste
+    var l = v.l, min = v.ph.sec != null ? Math.max(0, Math.round(v.ph.sec / 6) / 10) : 0;
     var couleur = v.g ? v.g.couleur : couleurEF(v.t.groupe);
     var p = { train: v.g ? l.code + (l.numero ? ' · ' + l.numero : '') : (l.numero || v.t.code), dest: 'En provenance de ' + (v.g ? v.g.libelle : (v.t.nom || v.t.code)),
       voie: l.voie || '', min: min, fret: l.wagons != null && l.wagons !== '' ? l.wagons + ' wagons' : '', couleur: couleur, fond: '0' };

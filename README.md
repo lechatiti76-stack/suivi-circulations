@@ -125,7 +125,8 @@ Copier chaque fichier sur le bureau du poste concerné. `Ecrans.bat` ouvre la pa
 ## Animation train, plan de voie, ordre chronologique, cause des travaux
 
 - **Animation « alerte train »** : à une arrivée imminente (navette ou train), le grand bandeau s'affiche 2 s, se réduit à la moitié haute pendant que l'animation passe dans la moitié basse (≈ 12,5 s), puis revient en grand jusqu'à l'arrivée. Déposer `alerte-train.html` et `alerte-train.config.js` dans le dépôt, à côté de `visuel.html`. Infos passées à l'animation : `train`, `dest` (« En provenance de … »), `voie`, `min`, `fret` (wagons), `couleur` (couleur du groupe), `fond=0`. Réglages : Paramètres › Animation train et plan de voie ; adresse de l'écran `&anim=0`, `&animDuree=12.5`, `&animAttente=2`.
-- **Plan de voie** (page du simulateur) : adresse dans Paramètres ; bouton « Plan de voie » dans la saisie ; affichage automatique quelques secondes après une arrivée et/ou un départ, sur les écrans et/ou dans la saisie.
+- **Plan de voie** : `plan-de-voie.html` (tirée du simulateur LHTE 3D) n'affiche que la vue « Occupation des voies » et lit la journée en direct sur le serveur (`?action=plan`, serveur 2.7.1, sans commentaires internes), toutes les 15 s ; `?seul=0` rend le simulateur complet. Adresse par défaut dans Paramètres : `plan-de-voie.html`.
+- **Plan de voie** (réglages) : adresse dans Paramètres ; bouton « Plan de voie » dans la saisie ; affichage automatique quelques secondes après une arrivée et/ou un départ, sur les écrans et/ou dans la saisie.
 - **Saisie** : bouton « 🕒 Chronologique » au-dessus du tableau de droite (toutes les circulations dans l'ordre des heures, gardé sur ce poste).
 - **Travaux** : le service peut envoyer une **cause** (`"cause"`, ou propriété Notion « Cause » / « Motif » / « Raison ») ; elle s'affiche dans les bandeaux et l'alerte en grand (serveur 2.7.0).
 

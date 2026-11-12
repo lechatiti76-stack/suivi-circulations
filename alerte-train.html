@@ -1,0 +1,669 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Alerte train</title>
+<style>
+  * { box-sizing:border-box; }
+  html, body { margin:0; height:100%; background:#000; overflow:hidden; }
+  /* Scène 1920x1080 mise à l'échelle de l'écran, bandes noires si le format n'est pas du 16:9 */
+  #scene { position:absolute; left:50%; top:50%; width:1920px; height:1080px; transform-origin:0 0; background:var(--fond); overflow:hidden; color:var(--texte); }
+  #fond { position:absolute; inset:0; width:1920px; height:1080px; border:0; pointer-events:none; }
+  #voile { position:absolute; inset:0; background:var(--voile); opacity:0; }
+  /* Bande pleine largeur : elle déborde de l'écran des deux côtés, elle ne se referme jamais */
+  #cadre { position:absolute; left:0; top:280px; width:1920px; height:520px; filter:drop-shadow(0 0 40px rgba(0,0,0,.55)); }
+  #bande { position:absolute; inset:0; overflow:hidden; background:var(--bande2); }
+  #bande::before, #bande::after { content:""; position:absolute; left:0; right:0; height:7px; z-index:5; background:linear-gradient(90deg, var(--accent), var(--accent2)); }
+  #bande::before { top:0; } #bande::after { bottom:0; }
+  #eclair { position:absolute; inset:0; background:#fff; z-index:4; }
+  #vue { position:absolute; left:0; top:0; width:1100px; height:520px; }
+  #vignette { position:absolute; left:0; top:0; width:1100px; height:520px; z-index:1; pointer-events:none;
+              background:radial-gradient(ellipse at 45% 60%, transparent 58%, rgba(0,0,0,.3) 100%); }
+  #panneau { position:absolute; left:1000px; top:0; width:920px; height:520px; z-index:2;
+             background:linear-gradient(160deg, var(--bande1), var(--bande2) 72%);
+             clip-path:polygon(78px 0, 100% 0, 100% 100%, 0 100%); }
+  #panneau::after { content:""; position:absolute; inset:0; background:linear-gradient(115deg, rgba(255,255,255,.07), transparent 38%); }
+  #liseré { position:absolute; left:990px; top:0; width:110px; height:520px; z-index:2; background:linear-gradient(180deg, var(--accent), var(--accent2));
+            clip-path:polygon(78px 0, 96px 0, 18px 100%, 0 100%); }
+  .texte { position:absolute; left:1100px; width:max-content; z-index:3; opacity:0; white-space:nowrap; }
+  #etiquette { top:50px; font-size:28px; font-weight:700; letter-spacing:.22em; color:var(--accent); display:flex; align-items:center; gap:18px; }
+  #etiquette::before { content:""; width:16px; height:16px; border-radius:50%; background:var(--accent); box-shadow:0 0 0 6px color-mix(in srgb, var(--accent) 30%, transparent), 0 0 22px var(--accent); }
+  #num { top:104px; font-size:92px; font-weight:800; line-height:1; letter-spacing:.01em; }
+  #voie { top:112px; right:72px; left:auto; padding:5px 28px 7px; border-radius:24px; color:var(--fond); font-size:46px; font-weight:800;
+          background:linear-gradient(135deg, var(--accent), var(--accent2)); box-shadow:0 8px 22px rgba(0,0,0,.35), inset 0 2px 0 rgba(255,255,255,.35); }
+  #dest { top:226px; font-size:46px; font-weight:500; }
+  #fret { top:302px; font-size:26px; color:var(--texteDoux); padding:5px 22px 7px; border-radius:99px; background:rgba(255,255,255,.07); box-shadow:inset 0 0 0 2px rgba(255,255,255,.1); }
+  #dans { top:414px; font-size:26px; letter-spacing:.14em; text-transform:uppercase; color:var(--texteDoux); }
+  #compte { top:378px; left:1390px; font-size:82px; font-weight:800; line-height:1; padding:6px 28px 9px; border-radius:30px; font-variant-numeric:tabular-nums;
+            background:rgba(255,255,255,.06); box-shadow:inset 0 0 0 3px color-mix(in srgb, var(--accent) 45%, transparent); }
+  #compte span { background:linear-gradient(180deg, var(--accent), var(--accent2)); -webkit-background-clip:text; background-clip:text; color:transparent; }
+</style>
+</head>
+<body>
+<div id="scene">
+  <iframe id="fond" title="" hidden></iframe>
+  <div id="voile"></div>
+  <div id="cadre"><div id="bande">
+    <canvas id="vue"></canvas>
+    <div id="vignette"></div>
+    <div id="panneau"></div><div id="liseré"></div>
+    <div class="texte" id="etiquette"></div>
+    <div class="texte" id="num"></div>
+    <div class="texte" id="voie"></div>
+    <div class="texte" id="dest"></div>
+    <div class="texte" id="fret"></div>
+    <div class="texte" id="dans"></div>
+    <div class="texte" id="compte"><span></span></div>
+    <div id="eclair"></div>
+  </div></div>
+</div>
+
+<!-- Réglages : voir alerte-train.config.js (absent = valeurs par défaut ci-dessous) -->
+<script src="alerte-train.config.js" onerror="void 0"></script>
+<script>
+/* ====================================================================
+   RÉGLAGES PAR DÉFAUT. Pour personnaliser, ne touche pas ce bloc :
+   crée ou modifie alerte-train.config.js (il écrase ces valeurs).
+   ==================================================================== */
+const THEMES = { bleu: '#2457b8', orange: '#e8761c', jaune: '#e9b80c', vert: '#1f9a62', rouge: '#c8372d', violet: '#6b4fc9', gris: '#66778c' };
+const DEFAUT = {
+  donnees: { train: 'FRET 48210', dest: 'Terminal conteneurs · Quai 2', voie: 'B', min: 3, fret: '18 wagons · 36 EVP' },
+  textes: { etiquette: 'ARRIVÉE IMMINENTE', dans: 'Arrivée dans', quai: 'À QUAI', voie: 'VOIE', marque: 'FRET' },
+  couleurs: { theme: 'vert' },       // + principale, secondaire et toute couleur individuelle (voir la config)
+  train: { wagons: 9, graine: 7, miroir: true },
+  decor: { grues: true, piles: true, flou: true },
+  animation: { ouverture: 0.8, approche: 2.2, sejour: 6, depart: 2.2, fermeture: 0.8, textes: 1.1, boucle: false, pause: 3, camera: 'recul', vent: 15 },
+  fond: '0',
+  police: 'Bahnschrift, "DIN Alternate", "Segoe UI", Roboto, system-ui, sans-serif',
+};
+
+/* ---------- Fusion des réglages : défauts, puis fichier de config, puis adresse ---------- */
+const estObjet = (x) => x && typeof x === 'object' && !Array.isArray(x);
+function fusion(base, ajout) {
+  const r = { ...base };
+  for (const k in ajout || {}) r[k] = estObjet(ajout[k]) && estObjet(base[k]) ? fusion(base[k], ajout[k]) : ajout[k];
+  return r;
+}
+const P = new URLSearchParams(location.search);
+let CFG = fusion(DEFAUT, window.ALERTE_CONFIG);
+try { if (P.get('config')) CFG = fusion(CFG, JSON.parse(P.get('config'))); } catch (e) { console.warn('config= illisible', e); }
+for (const k of ['train', 'dest', 'voie', 'fret']) if (P.has(k)) CFG.donnees[k] = P.get(k);
+if (P.has('min')) CFG.donnees.min = parseFloat(P.get('min'));
+for (const k of ['approche', 'depart', 'pause']) if (P.has(k)) CFG.animation[k] = parseFloat(P.get(k));
+if (P.has('sejour')) CFG.animation.sejour = P.get('sejour') === 'compte' ? 'compte' : parseFloat(P.get('sejour'));
+if (P.has('boucle')) CFG.animation.boucle = P.get('boucle') === '1';
+if (P.has('wagons')) CFG.train.wagons = parseInt(P.get('wagons'), 10);
+if (P.has('miroir')) CFG.train.miroir = P.get('miroir') === '1';
+if (P.has('theme')) CFG.couleurs.theme = P.get('theme');
+if (P.has('couleur')) CFG.couleurs.principale = P.get('couleur');
+if (P.has('camera')) CFG.animation.camera = P.get('camera');
+if (P.has('fond')) CFG.fond = P.get('fond');
+const TFIGE = P.has('t') ? parseFloat(P.get('t')) : null;     // ?t=5 : affiche une image figée (pour tester)
+
+/* ====================================================================
+   OUTILS COULEUR : une couleur principale suffit à construire toute la palette
+   ==================================================================== */
+const $ = (s) => document.querySelector(s);
+const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+const outCubic = (p) => 1 - Math.pow(1 - p, 3);
+const inOutCubic = (p) => (p < .5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2);
+const lerp = (a, b, t) => a + (b - a) * t;
+
+function hex2rgb(h) { h = h.replace('#', ''); if (h.length === 3) h = [...h].map((x) => x + x).join(''); const n = parseInt(h, 16); return [n >> 16 & 255, n >> 8 & 255, n & 255]; }
+const rgb2hex = (r, g, b) => '#' + [r, g, b].map((v) => Math.round(clamp(v, 0, 255)).toString(16).padStart(2, '0')).join('');
+const mix = (a, b, k) => { const A = hex2rgb(a), B = hex2rgb(b); return rgb2hex(...A.map((v, i) => lerp(v, B[i], k))); };
+function hex2hsl(hex) {
+  const [r, g, b] = hex2rgb(hex).map((v) => v / 255), mx = Math.max(r, g, b), mn = Math.min(r, g, b), l = (mx + mn) / 2, d = mx - mn;
+  let h = 0, s = 0;
+  if (d) { s = d / (1 - Math.abs(2 * l - 1)); h = mx === r ? ((g - b) / d) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4; h = (h * 60 + 360) % 360; }
+  return [h, s, l];
+}
+function hsl2hex(h, s, l) {
+  h = ((h % 360) + 360) % 360;
+  const a = s * Math.min(l, 1 - l), f = (n) => { const k = (n + h / 30) % 12; return l - a * Math.max(-1, Math.min(k - 3, 9 - k, 1)); };
+  return rgb2hex(f(0) * 255, f(8) * 255, f(4) * 255);
+}
+
+function paletteDepuis(principale, secondaire) {
+  const [h, s0, l0] = hex2hsl(principale), s = clamp(s0, .4, 1), vif = clamp(s0, .7, 1);
+  const loco = hsl2hex(h, s, clamp(l0, .3, .55));
+  const accent = hsl2hex(h, vif, .64), accent2 = secondaire || hsl2hex(h >= 40 && h <= 160 ? h - 28 : h + 30, vif, .6);
+  return {
+    fond: hsl2hex(h, .4, .06), voile: '#000000',
+    bande1: hsl2hex(h, s * .6, .17), bande2: hsl2hex(h, s * .65, .08),
+    accent, accent2, texte: '#f4f6fa', texteDoux: hsl2hex(h, .25, .72),
+    ciel1: hsl2hex(h, s * .32, .32), ciel2: hsl2hex(h + 10, s * .4, .62),
+    sol1: hsl2hex(h, .12, .34), sol2: hsl2hex(h, .16, .12), ballast: hsl2hex(h, .08, .42),
+    rails: hsl2hex(h, .08, .92), traverses: hsl2hex(h, .12, .22),
+    loco, locoBande: accent, locoBlanc: '#e9edf2', locoChassis: hsl2hex(h, .07, .5), locoToit: hsl2hex(h, .1, .2), wagon: hsl2hex(h, .2, .1),
+    phares: '#fff4cf', grues: hsl2hex(h, .5, .2),
+    conteneurs: [loco, hsl2hex(h, s, clamp(l0 + .2, .5, .8)), hsl2hex(h, s, clamp(l0 - .17, .16, .34)), hsl2hex(h - 14, s * .9, .52),
+                 hsl2hex(h + 14, s * .85, .4), hsl2hex(h, .1, .78), hsl2hex(h, .15, .3)],
+  };
+}
+let PAL;
+function calculerPalette() {
+  const { theme, principale, secondaire, ...surcharges } = CFG.couleurs;
+  PAL = { ...paletteDepuis(principale || THEMES[theme] || THEMES.bleu, secondaire), ...surcharges };
+}
+
+/* ====================================================================
+   TEXTES ET MISE EN PAGE
+   ==================================================================== */
+const sceneEl = $('#scene');
+function appliquerStyle() {
+  calculerPalette();
+  for (const k of ['fond', 'voile', 'bande1', 'bande2', 'accent', 'accent2', 'texte', 'texteDoux']) sceneEl.style.setProperty('--' + k, PAL[k]);
+  sceneEl.style.fontFamily = CFG.police;
+  $('#etiquette').textContent = CFG.textes.etiquette;
+  $('#dans').textContent = CFG.textes.dans;
+  const f = $('#fond'), avecFond = CFG.fond && CFG.fond !== '0';
+  sceneEl.style.background = avecFond ? '' : 'transparent';             // sans fond, seule la bande est dessinée (transparence si la page est superposée à une autre)
+  if (avecFond) { f.hidden = false; if (f.getAttribute('src') !== CFG.fond) f.src = CFG.fond; } else f.hidden = true;
+}
+function appliquerDonnees() {
+  const d = CFG.donnees;
+  $('#num').textContent = d.train;
+  $('#voie').textContent = (CFG.textes.voie + ' ' + d.voie).trim();
+  $('#dest').textContent = d.dest;
+  $('#fret').textContent = d.fret || '';
+  // Un texte trop long rapetisse pour rester dans sa zone, puis finit en "…" (taille de base, largeur max, taille min)
+  [['#num', 92, 520, 40], ['#dest', 46, 740, 26], ['#fret', 26, 520, 18]].forEach(([id, base, max, min]) => {
+    const el = $(id); let t = base;
+    el.style.maxWidth = max + 'px'; el.style.overflow = 'hidden'; el.style.textOverflow = 'ellipsis'; el.style.paddingBottom = el.id === 'num' ? '.12em' : '';
+    el.style.fontSize = t + 'px';
+    while (el.scrollWidth > el.clientWidth && t > min) { t -= 2; el.style.fontSize = t + 'px'; }
+  });
+}
+
+let RATIO = 1;
+function ajuster() {
+  const k = Math.min(innerWidth / 1920, innerHeight / 1080);
+  sceneEl.style.transform = `scale(${k}) translate(-50%, -50%)`;
+  RATIO = clamp(k * (window.devicePixelRatio || 1), 1, 2.5);
+  const cv = $('#vue'); cv.width = Math.round(LARG * RATIO); cv.height = Math.round(HAUT * RATIO);
+  fondStatique = null;
+}
+
+/* ====================================================================
+   MOTEUR 3D
+   Une vraie caméra à perspective : le train, le sol et le décor sont des objets en mètres.
+   Monde : x vers la droite, y vers le haut (0 = dessus du rail), z le long de la voie, vers l'horizon.
+   La caméra est à gauche de la voie, tournée vers elle : le nez du train suit le rail, il ne fait pas face à l'écran.
+   ==================================================================== */
+const LARG = 1100, HAUT = 520;
+const CAM = { psi: 33 * Math.PI / 180, F: 1040, vpx: 175, cy: 84, h: 4.9 };
+CAM.cs = Math.cos(CAM.psi); CAM.sn = Math.sin(CAM.psi); CAM.cx = CAM.vpx + CAM.F * Math.tan(CAM.psi);
+const X_T = 6.1, ZL = 9.4, ZFAR = 300, NEAR = 0.8;      // axe de la voie, distance finale du nez, distance de départ
+let SHX = 0, SHY = 0, ctx = null, fondStatique = null;
+
+const pr = (x, y, z) => { const xc = x * CAM.cs - z * CAM.sn, zc = x * CAM.sn + z * CAM.cs; return zc < NEAR ? null : [CAM.cx + SHX + CAM.F * xc / zc, CAM.cy + SHY + CAM.F * (CAM.h - y) / zc, zc]; };
+function projPoly(P3) {                                      // projette un polygone en le coupant au plan proche
+  const C = P3.map(([x, y, z]) => [x * CAM.cs - z * CAM.sn, y, x * CAM.sn + z * CAM.cs]), out = [];
+  for (let i = 0; i < C.length; i++) {
+    const a = C[i], b = C[(i + 1) % C.length], ia = a[2] >= NEAR, ib = b[2] >= NEAR;
+    if (ia) out.push(a);
+    if (ia !== ib) { const t = (NEAR - a[2]) / (b[2] - a[2]); out.push([a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, NEAR]); }
+  }
+  return out.map(([xc, y, zc]) => [CAM.cx + SHX + CAM.F * xc / zc, CAM.cy + SHY + CAM.F * (CAM.h - y) / zc, zc]);
+}
+
+// Lumière : soleil venant de la gauche, en hauteur, un peu de face
+const LUM = (() => { const L = [-0.55, 0.8, -0.25], n = Math.hypot(...L); return L.map((v) => v / n); })();
+const eclairage = (n) => 0.5 + 0.55 * Math.max(0, n[0] * LUM[0] + n[1] * LUM[1] + n[2] * LUM[2]) + 0.12 * Math.max(0, n[1]);
+const NF = [0, 0, -1], NL = [-1, 0, 0], NT = [0, 1, 0];
+let HZ = [90, 110, 140];                                     // couleur de l'horizon (brume)
+const brumeK = (z) => clamp((z - 35) / 330, 0, 1) * 0.82;
+const rgbs = (c, k) => `rgb(${Math.round(c[0] + (HZ[0] - c[0]) * k)},${Math.round(c[1] + (HZ[1] - c[1]) * k)},${Math.round(c[2] + (HZ[2] - c[2]) * k)})`;
+
+/* ---------- Modèles : listes de faces, de traits et de textes, regroupées par élément du train ---------- */
+let GROUPES = [], GR = null;
+function groupe(z0, z1) { GR = { z0, z1, f: [] }; GROUPES.push(GR); return GR; }
+const DEMI = (() => { const V = [-0.62, 0.3, -0.72], L = LUM, h = [V[0] + L[0], V[1] + L[1], V[2] + L[2]], m = Math.hypot(...h); return h.map((q) => q / m); })();
+function addFace(pts, hex, n, o = {}) {
+  const k = o.e ? 1 : eclairage(n) * (o.k || 1), spec = o.gloss ? Math.pow(Math.max(0, n[0] * DEMI[0] + n[1] * DEMI[1] + n[2] * DEMI[2]), 14) * 105 : 0;
+  const c = hex2rgb(hex).map((v) => clamp(v * k + spec, 0, 255));
+  GR.f.push({ p: pts, c, n, lod: o.lod || 0, grad: o.grad, al: o.al, noStroke: o.ns });
+}
+const qF = (x0, x1, y0, y1, z, hex, o) => addFace([[x0, y0, z], [x1, y0, z], [x1, y1, z], [x0, y1, z]], hex, NF, o);
+const qL = (x, y0, y1, z0, z1, hex, o) => addFace([[x, y0, z0], [x, y0, z1], [x, y1, z1], [x, y1, z0]], hex, NL, o);
+const qT = (y, x0, x1, z0, z1, hex, o) => addFace([[x0, y, z0], [x1, y, z0], [x1, y, z1], [x0, y, z1]], hex, NT, o);
+const box = (x0, x1, y0, y1, z0, z1, hex, o) => { qT(y1, x0, x1, z0, z1, hex, o); qL(x0, y0, y1, z0, z1, hex, o); qF(x0, x1, y0, y1, z0, hex, o); };
+function disque(plan, a, b, c, r, hex, o = {}, nb = 14) {  // plan 'L' : x=a, centre (y=b, z=c) · 'F' : z=a, centre (x=b, y=c) · 'T' : y=a, centre (x=b, z=c)
+  const pts = []; for (let i = 0; i < nb; i++) { const t = i / nb * Math.PI * 2, u = Math.cos(t) * r, v = Math.sin(t) * r;
+    pts.push(plan === 'L' ? [a, b + v, c + u] : plan === 'F' ? [b + u, c + v, a] : [b + u, a, c + v]); }
+  addFace(pts, hex, plan === 'L' ? NL : plan === 'F' ? NF : NT, { ns: true, ...o });
+}
+function ligne3(a, b, hex, w, al = 1, lod = 0) { GR.f.push({ l: true, a, b, c: hex2rgb(hex), w, al, lod }); }
+function texte3(a, b, c, txt, hex, lod = 2) { GR.f.push({ t: true, a, b, c, txt, col: hex, lod }); }   // a : haut gauche, b : haut droit, c : bas gauche
+
+/* ---------- Dessin d'une face, d'un trait ou d'un texte ---------- */
+function dessinerFace(f, Zf) {
+  const p0 = f.p[0];
+  if (f.n[0] * (-(X_T + p0[0])) + f.n[1] * (CAM.h - p0[1]) + f.n[2] * (-(Zf + p0[2])) <= 0) return;     // face tournée de dos
+  const pts = [];
+  for (const q of f.p) { const s = pr(X_T + q[0], q[1], Zf + q[2]); if (!s) return; pts.push(s); }
+  const col = rgbs(f.c, brumeK(pts[0][2]));
+  ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]); for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]); ctx.closePath();
+  if (f.al) ctx.globalAlpha = f.al;
+  ctx.fillStyle = col; ctx.fill();
+  if (!f.noStroke) { ctx.strokeStyle = col; ctx.lineWidth = 0.8; ctx.stroke(); }
+  if (f.grad) {
+    let y0 = 1e9, y1 = -1e9; for (const s of pts) { y0 = Math.min(y0, s[1]); y1 = Math.max(y1, s[1]); }
+    if (y1 - y0 > 2) {
+      const g = ctx.createLinearGradient(0, y0, 0, y1);
+      if (f.grad === 2) { g.addColorStop(0, 'rgba(190,215,255,.55)'); g.addColorStop(.45, 'rgba(120,150,210,.12)'); g.addColorStop(1, 'rgba(0,0,0,.35)'); }
+      else { g.addColorStop(0, 'rgba(255,255,255,.14)'); g.addColorStop(.4, 'rgba(255,255,255,0)'); g.addColorStop(1, 'rgba(0,0,0,.34)'); }
+      ctx.fillStyle = g; ctx.fill();
+    }
+  }
+  ctx.globalAlpha = 1;
+}
+function dessinerLigne(f, Zf) {
+  const a = pr(X_T + f.a[0], f.a[1], Zf + f.a[2]), b = pr(X_T + f.b[0], f.b[1], Zf + f.b[2]);
+  if (!a || !b) return;
+  ctx.strokeStyle = rgbs(f.c, brumeK(a[2])); ctx.globalAlpha = f.al; ctx.lineWidth = clamp(f.w * CAM.F / a[2], 0.6, 9); ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke(); ctx.globalAlpha = 1;
+}
+function dessinerTexte(f, Zf) {
+  const A = pr(X_T + f.a[0], f.a[1], Zf + f.a[2]), B = pr(X_T + f.b[0], f.b[1], Zf + f.b[2]), C = pr(X_T + f.c[0], f.c[1], Zf + f.c[2]);
+  if (!A || !B || !C) return;
+  let ux = B[0] - A[0], uy = B[1] - A[1], ox = A[0], oy = A[1];
+  const vx = C[0] - A[0], vy = C[1] - A[1];
+  if ((ux * vy - uy * vx < 0) !== !!CFG.train.miroir) { ox = B[0]; oy = B[1]; ux = -ux; uy = -uy; }          // le texte reste lisible, y compris quand la scène est en miroir
+  ctx.save(); ctx.transform(ux / 100, uy / 100, vx / 30, vy / 30, ox, oy);
+  ctx.font = `700 25px ${CFG.police}`; ctx.textBaseline = 'middle'; ctx.textAlign = 'center'; ctx.fillStyle = f.col; ctx.fillText(f.txt, 50, 16, 92);
+  ctx.restore();
+}
+// Nervures et boulons de roue : ils tournent comme une vraie roue qui roule sur le rail (la distance parcourue par rapport au sol fait tourner la roue).
+// À très grande vitesse (départ) ils s'estompent, comme un flou de rotation.
+let ROT = { s: 0, v: 0 };
+function dessinerRoue(f, Zf) {
+  const th = ROT.s / f.r, om = ROT.v / f.r, al = clamp(1 - (Math.abs(om) - 18) / 34, .1, 1);
+  const c0 = pr(X_T + f.x, .5, Zf + f.z); if (!c0) return;
+  const pt = (rr, a) => pr(X_T + f.x, .5 + Math.sin(a) * rr, Zf + f.z + Math.cos(a) * rr);
+  ctx.lineCap = 'round'; ctx.globalAlpha = al * .85; ctx.strokeStyle = rgbs([126, 138, 162], brumeK(c0[2])); ctx.lineWidth = clamp(.075 * CAM.F / c0[2], .8, 7);
+  ctx.beginPath();
+  for (let i = 0; i < 6; i++) { const a = th + i * Math.PI / 3, p1 = pt(f.r * .3, a), p2 = pt(f.r * .58, a); if (p1 && p2) { ctx.moveTo(p1[0], p1[1]); ctx.lineTo(p2[0], p2[1]); } }
+  ctx.stroke();
+  ctx.fillStyle = rgbs([204, 211, 226], brumeK(c0[2])); ctx.globalAlpha = al;
+  for (let i = 0; i < 6; i++) { const p = pt(f.r * .21, th + .26 + i * Math.PI / 3); if (p) { ctx.beginPath(); ctx.arc(p[0], p[1], clamp(.032 * CAM.F / c0[2], .5, 3.2), 0, 6.3); ctx.fill(); } }
+  ctx.globalAlpha = 1;
+}
+function dessinerGroupe(g, Zf) {
+  const sc = CAM.F / Math.max(Zf + g.z0 + 8, 1), lod = sc > 36 ? 2 : sc > 14 ? 1 : 0;
+  for (const f of g.f) { if (f.lod > lod) continue; if (f.roue) dessinerRoue(f, Zf); else if (f.t) dessinerTexte(f, Zf); else if (f.l) dessinerLigne(f, Zf); else dessinerFace(f, Zf); }
+}
+
+/* ====================================================================
+   LE TRAIN : une locomotive diesel de manœuvre (capot court, cabine haute, long capot, châssis gris, rambardes),
+   suivie de wagons plats chargés de conteneurs
+   ==================================================================== */
+const L_LOCO = 14.8;                                         // longueur de la locomotive en mètres
+function construireTrain(c) {
+  GROUPES = [];
+  const R = graine(CFG.train.graine), DK = '#10141f';
+  const VERT = c.loco, BLANC = c.locoBlanc, GRIS = c.locoChassis, TOIT = c.locoToit, LL = L_LOCO;
+  const clair = (h, k) => mix(h, '#fff', k), sombre = (h, k) => mix(h, '#000', k);
+  // Roue : épaisseur (face arrière plus sombre), bandage de roulement, bord poli, voile, flasque, moyeu. Les nervures et les boulons tournent (voir dessinerRoue).
+  const roue = (x, z, r) => {
+    disque('L', x + .09, .5, z, r * .985, '#080a10', { lod: 0 }, 22);
+    disque('L', x, .5, z, r, '#363f52', { lod: 0 }, 22);
+    disque('L', x - .01, .5, z, r * .94, '#6d7993', { lod: 1 }, 22); disque('L', x - .015, .5, z, r * .88, '#2a3246', { lod: 1 }, 22);
+    disque('L', x - .02, .5, z, r * .66, '#37405a', { lod: 1 }, 18); disque('L', x - .025, .5, z, r * .6, '#1b2030', { lod: 1 }, 18);
+    disque('L', x - .03, .5, z, r * .28, '#9aa5bd', { lod: 1 }, 14); disque('L', x - .035, .5, z, r * .17, '#4a546b', { lod: 1 }, 10);
+    ligne3([x - .01, .5 + r * .86, z - r * .5], [x - .01, .5 + r * .86, z + r * .1], '#d8deea', .03, .55, 1);        // reflet sur le haut du bandage
+    GR.f.push({ roue: true, x: x - .045, z, r, lod: 1 });
+  };
+  // un volume dont l'arête avant est biseautée (angles adoucis, pas de coins « en papier »)
+  const corps = (x0, x1, y0, y1, z0, z1, hex, o = {}, ch = .3) => {
+    qF(x0 + ch, x1 - ch, y0, y1, z0, hex, o);
+    addFace([[x0 + ch, y0, z0], [x0, y0, z0 + ch], [x0, y1, z0 + ch], [x0 + ch, y1, z0]], hex, [-.707, 0, -.707], o);
+    addFace([[x1 - ch, y0, z0], [x1, y0, z0 + ch], [x1, y1, z0 + ch], [x1 - ch, y1, z0]], hex, [.707, 0, -.707], o);
+    qL(x0, y0, y1, z0 + ch, z1, hex, { grad: 1, ...o });
+    addFace([[x0 + ch, y1, z0], [x1 - ch, y1, z0], [x1, y1, z0 + ch], [x1, y1, z1], [x0, y1, z1], [x0, y1, z0 + ch]], clair(hex, .1), NT, o);
+  };
+  const chiffres = String(CFG.donnees.train).replace(/\D/g, '').slice(-6) || '466717', marque = CFG.textes.marque || 'FRET';
+
+  /* ===== Locomotive ===== */
+  groupe(-1.0, LL + 1.4);
+  // bogies : deux bogies à deux essieux
+  [[1.4, 5.6, [2.5, 4.5]], [9.2, 13.4, [10.3, 12.3]]].forEach(([a, b, axes]) => {
+    box(-1.0, 1.0, .25, .74, a, b, '#161b29'); qL(-1.001, .66, .74, a, b, '#fff', { al: .1, ns: true, lod: 1 });       // cadre de bogie
+    axes.forEach((z) => {
+      roue(-1.2, z, .52);
+      box(-1.32, -1.2, .4, .62, z - .17, z + .17, '#0d1018', { lod: 1 });                                    // boîte d'essieu
+      for (let k = 0; k < 4; k++) ligne3([-1.27, .64, z - .2 + k * .13], [-1.27, .76, z - .14 + k * .13], '#b08a2e', .035, .95, 1);   // ressort
+      box(-1.12, -1.0, .36, .6, z + .44, z + .56, '#10141c', { lod: 1 });                                    // sabot de frein
+    });
+  });
+  box(-1.15, 1.15, .3, .72, 5.9, 8.8, '#1b2030');                                                            // réservoir
+  // châssis gris et passerelle
+  box(-1.5, 1.5, .74, 1.12, 0, LL, GRIS);
+  qT(1.125, -1.5, 1.5, 0, LL, '#fff', { al: .06, ns: true, lod: 1 });
+  qL(-1.505, .9, .96, 0, LL, c.locoBande, { lod: 1 });                                                       // liseré de couleur sur le châssis
+  qL(-1.506, .74, .8, 0, LL, '#000', { al: .25, ns: true, lod: 1 });
+  for (let z = .6; z < LL - .2; z += .55) ligne3([-1.5, 1.13, z], [-.5, 1.13, z], '#000', .03, .16, 2);     // antidérapant de la passerelle
+  box(-.8, .8, .46, .74, .6, LL - .6, '#171c2b');
+  // long capot : blanc, bandes vertes en haut et en bas
+  box(-1.45, 1.45, 1.12, 3.85, 6.35, LL, BLANC);
+  qT(3.855, -1.45, 1.45, 6.35, LL, '#fff', { al: .0, ns: true });
+  qL(-1.456, 1.12, 1.5, 6.35, LL, VERT, { lod: 0 }); qL(-1.456, 3.5, 3.85, 6.35, LL, VERT, { lod: 0 });
+  qL(-1.457, 1.5, 1.54, 6.35, LL, '#fff', { al: .5, ns: true, lod: 1 }); qL(-1.457, 3.46, 3.5, 6.35, LL, '#000', { al: .22, ns: true, lod: 1 });
+  [[6.7, 8.5], [8.8, 9.2]].slice(0, 1).forEach(([a, b]) => {                                                // fenêtres grillagées du compartiment moteur
+    for (let k = 0; k < 2; k++) { const z0 = a + k * .95; qL(-1.46, 1.95, 3.15, z0, z0 + .8, '#1a2029', { lod: 0 }); for (let y = 2.05; y < 3.1; y += .16) ligne3([-1.47, y, z0 + .03], [-1.47, y, z0 + .77], '#5b6573', .03, .8, 1); }
+  });
+  qL(-1.46, 1.7, 3.3, 9.3, 13.6, '#f5f7fa', { lod: 0 });                                                      // grande grille de radiateur
+  for (let z = 9.4; z < 13.6; z += .14) ligne3([-1.47, 1.78, z], [-1.47, 3.22, z], '#8e97a5', .035, .85, 1);
+  [[9.3, 1.7, 3.3], [13.6, 1.7, 3.3]].forEach(([z]) => ligne3([-1.47, 1.7, z], [-1.47, 3.3, z], '#6a7482', .05, .8, 1));
+  [8.95, 14.0].forEach((z) => ligne3([-1.465, 1.5, z], [-1.465, 3.5, z], '#000', .035, .28, 1));
+  [[10.2], [11.9], [13.0]].forEach(([z]) => { disque('T', 3.86, 0, z, .52, '#252a33', { ns: true, lod: 1 }, 16); disque('T', 3.87, 0, z, .36, '#10141f', { ns: true, lod: 1 }, 14); for (let i = 0; i < 4; i++) { const t = i / 4 * Math.PI; ligne3([Math.cos(t) * .36, 3.88, z + Math.sin(t) * .36], [-Math.cos(t) * .36, 3.88, z - Math.sin(t) * .36], '#667082', .035, 1, 2); } });
+  box(-.45, .45, 3.85, 4.02, 7.0, LL - .4, mix(GRIS, '#fff', .35), { lod: 1 });                              // rehausse de toit
+  box(-.16, .16, 3.85, 4.3, 7.6, 7.95, '#10141f', { lod: 1 });                                                // échappement
+  // cabine : verte en bas, panneau blanc, grandes vitres, toit sombre
+  corps(-1.5, 1.5, 1.12, 3.8, 3.45, 6.35, VERT, { gloss: false }, .28);
+  qL(-1.508, 1.28, 2.42, 3.7, 6.2, BLANC, { lod: 0 });                                                       // panneau blanc du poste de conduite
+  qL(-1.509, 1.28, 1.34, 3.7, 6.2, '#000', { al: .12, ns: true, lod: 1 });
+  texte3([-1.52, 2.4, 6.1], [-1.52, 2.4, 3.8], [-1.52, 2.15, 6.1], chiffres, '#1b2230', 2);
+  texte3([-1.52, 2.05, 6.1], [-1.52, 2.05, 3.8], [-1.52, 1.55, 6.1], marque, VERT, 2);
+  qL(-1.507, 2.52, 3.72, 3.85, 6.1, sombre(VERT, .5), { lod: 0 });                                          // encadrement des vitres
+  qL(-1.512, 2.58, 3.66, 3.92, 4.86, '#0a1226', { lod: 0, grad: 2 }); qL(-1.512, 2.58, 3.66, 4.94, 6.04, '#0a1226', { lod: 0, grad: 2 });
+  ligne3([-1.52, 3.6, 3.95], [-1.52, 3.6, 4.8], '#fff', .03, .35, 1);
+  qF(-1.3, -.08, 2.85, 3.72, 3.435, sombre(VERT, .5), { lod: 0 }); qF(.08, 1.3, 2.85, 3.72, 3.435, sombre(VERT, .5), { lod: 0 });          // pare-brise (en partie caché par le capot)
+  qF(-1.22, -.14, 2.92, 3.66, 3.43, '#0a1226', { grad: 2 }); qF(.14, 1.22, 2.92, 3.66, 3.43, '#0a1226', { grad: 2 });
+  ligne3([-1.1, 2.96, 3.42], [-.5, 3.6, 3.42], '#0a0d16', .04, 1, 1); ligne3([.2, 2.96, 3.42], [.8, 3.6, 3.42], '#0a0d16', .04, 1, 1);          // essuie-glaces
+  corps(-1.56, 1.56, 3.8, 4.2, 3.2, 6.5, TOIT, { gloss: false }, .22);                                      // toit de cabine, avec visière
+  qL(-1.566, 3.84, 3.88, 3.2, 6.5, '#fff', { al: .25, ns: true, lod: 1 });
+  box(-.55, .55, 4.2, 4.42, 4.3, 5.6, BLANC, { lod: 1 }); ligne3([0, 4.2, 3.75], [0, 4.95, 3.75], '#10141f', .035, 1, 1);   // climatiseur et antenne
+  box(-.4, .4, 4.2, 4.3, 3.4, 3.9, '#10141f', { lod: 1 });
+  // capot court : vert, grilles, numéro
+  corps(-1.3, 1.3, 1.12, 3.3, 0.25, 3.45, VERT, { gloss: false }, .32);
+  [[.75, 1.25], [1.5, 2.0], [2.25, 2.75]].forEach(([a, b]) => { qL(-1.305, 1.55, 2.6, a, b, '#10141f', { lod: 0 }); for (let y = 1.62; y < 2.55; y += .15) ligne3([-1.31, y, a + .04], [-1.31, y, b - .04], '#4d5664', .03, .85, 1); qL(-1.306, 2.6, 2.64, a, b, '#fff', { al: .25, ns: true, lod: 1 }); });
+  qL(-1.306, 2.95, 3.0, .25, 3.45, '#fff', { al: .3, ns: true, lod: 1 }); qL(-1.306, 1.12, 1.2, .25, 3.45, '#000', { al: .18, ns: true, lod: 1 });
+  texte3([-1.32, 3.24, 3.0], [-1.32, 3.24, .7], [-1.32, 2.78, 3.0], chiffres, '#ffffff', 2);
+  box(-.55, .55, 3.3, 3.4, 1.0, 2.6, clair(VERT, .12), { lod: 1 }); box(-.12, .12, 3.4, 3.52, 2.9, 3.2, '#10141f', { lod: 1 }); disque('T', 3.41, .25, 1.4, .11, '#fff3c4', { e: true, ns: true, lod: 1 }, 10);   // détails du toit
+  // face avant du capot : feux, tampons, attelage, rambardes
+  [-.78, .78].forEach((x) => {
+    disque('F', .22, x, 2.45, .2, '#10141f', { ns: true }, 14); disque('F', .21, x, 2.45, .14, '#fff7da', { e: true, ns: true }, 14); disque('F', .2, x, 2.45, .06, '#fff', { e: true, ns: true, lod: 1 }, 10);
+    disque('F', .22, x, 1.95, .13, '#10141f', { ns: true }, 12); disque('F', .21, x, 1.95, .09, '#d23a30', { e: true, ns: true }, 12);
+  });
+  qF(-.28, .28, 1.5, 1.78, .24, '#e9edf2', { lod: 1 }); qF(-.255, .255, 1.52, 1.76, .235, '#10141f', { lod: 1 });   // plaque d'immatriculation
+  qF(-1.0, 1.0, 2.9, 2.96, .24, '#fff', { al: .22, ns: true, lod: 1 });
+  [-.95, .95].forEach((x) => {                                                                              // tampons : gros blocs noirs à plateau
+    box(x - .22, x + .22, .8, 1.2, -.55, -.05, '#14171d'); disque('F', -.57, x, 1.0, .2, '#c9cdd5', { ns: true }, 16); disque('F', -.58, x, 1.0, .12, '#8a8f99', { ns: true, lod: 1 }, 12);
+  });
+  box(-.12, .12, .82, 1.0, -.95, -.05, '#101319', { lod: 1 });                                                  // crochet d'attelage
+  ligne3([-.5, 1.0, -.1], [-.58, .55, -.2], '#d23a30', .08, 1, 1); ligne3([.5, 1.0, -.1], [.58, .55, -.2], '#e8c230', .08, 1, 1);          // tuyaux d'air
+  // rambardes vertes tout autour de la passerelle, marchepieds, mains courantes
+  const RAMB = '#dfe5ec';
+  ligne3([-1.58, 2.1, .1], [-1.58, 2.1, LL - .15], VERT, .05, 1, 0); ligne3([-1.58, 1.45, .1], [-1.58, 1.45, LL - .15], VERT, .04, 1, 0);
+  for (let z = .1; z < LL - .1; z += 1.3) ligne3([-1.58, 1.12, z], [-1.58, 2.1, z], VERT, .04, 1, 1);
+  ligne3([-1.58, 2.1, .1], [-1.58, 2.1, -.12], VERT, .05, 1, 1); ligne3([-1.58, 2.1, -.12], [1.58, 2.1, -.12], VERT, .05, 1, 0); ligne3([1.58, 2.1, -.12], [1.58, 2.1, .1], VERT, .05, 1, 1);
+  [-1.58, -.9, 0, .9, 1.58].forEach((x) => ligne3([x, 1.12, -.12], [x, 2.1, -.12], VERT, .04, 1, 1));
+  ligne3([-1.58, 1.45, -.12], [1.58, 1.45, -.12], VERT, .035, 1, 1);
+  box(-1.74, -1.5, .3, .36, 4.0, 5.3, '#cdd3dc', { lod: 1 }); box(-1.74, -1.5, .7, .76, 4.0, 5.3, '#cdd3dc', { lod: 1 });   // marchepieds de la cabine
+  ligne3([-1.7, .3, 4.0], [-1.7, 1.12, 4.0], RAMB, .05, 1, 1); ligne3([-1.7, .3, 5.3], [-1.7, 1.12, 5.3], RAMB, .05, 1, 1);
+  ligne3([-1.52, 1.4, 3.62], [-1.52, 3.6, 3.62], RAMB, .06, 1, 1); ligne3([-1.52, 1.4, 6.25], [-1.52, 3.6, 6.25], RAMB, .06, 1, 1);        // mains courantes de cabine
+  box(-.12, .12, .82, 1.0, LL, LL + 1.4, '#555d70', { lod: 1 });                                              // attelage vers le premier wagon
+
+  /* ===== Wagons ===== */
+  const nb = clamp(Math.round(CFG.train.wagons), 0, 14), PAS = 15.8;
+  const lettres = 'ABCDEFGHJKLMNPQRSTVWXYZ';
+  for (let w = 0; w < nb; w++) {
+    const d0 = L_LOCO + 1.2 + w * PAS;
+    groupe(d0 - 1, d0 + 15);
+    [[1.0, 3.6], [11.2, 13.8]].forEach(([a, b]) => {                                                         // bogies
+      box(-.95, .95, .28, .82, d0 + a, d0 + b, '#161b29');
+      [d0 + a + .55, d0 + b - .55].forEach((z) => { roue(-1.15, z, .46); box(-1.27, -1.15, .36, .58, z - .15, z + .15, '#0d1018', { lod: 1 }); });
+    });
+    box(-1.4, 1.4, .8, 1.1, d0 - .2, d0 + 15.0, '#171c28');                                                  // plateau
+    qT(1.1, -1.4, 1.4, d0 - .2, d0 + 15.0, '#fff', { al: .08, ns: true, lod: 1 });
+    box(-1.35, 1.35, .75, 1.05, d0 - .6, d0 - .2, '#2a3042', { lod: 1 }); box(-1.35, 1.35, .75, 1.05, d0 + 15.0, d0 + 15.4, '#2a3042', { lod: 1 });
+    box(-.12, .12, .82, .95, d0 + 15.4, d0 + 16.4, '#555d70', { lod: 1 });                                  // attelage vers le wagon suivant
+    const un40 = R() < 0.5;
+    const caisses = un40 ? [[d0 + 1.4, d0 + 13.59]] : [[d0 + .9, d0 + 6.96], [d0 + 7.8, d0 + 13.86]];
+    caisses.forEach(([a, b]) => {
+      const base = c.conteneurs[Math.floor(R() * c.conteneurs.length)], long = b - a, y0 = 1.1, y1 = 3.7, x0 = -1.22, x1 = 1.22;
+      const cl = R() < .22 ? '#e9edf5' : base;                                                               // quelques conteneurs frigorifiques blancs
+      box(x0 - .02, x1 + .02, y0 - .05, y0 + .1, a + .1, b - .1, '#0e121c', { lod: 1 });                         // verrous
+      qT(y1, x0, x1, a, b, cl, { k: 1.0 });                                                                  // toit
+      qL(x0, y0, y1, a, b, cl, { grad: 1 });                                                                 // flanc
+      qF(x0, x1, y0, y1, a, cl);                                                                             // face (côté des portes)
+      // ondulations : flanc et toit
+      for (let z = a + .3; z < b - .15; z += .3) { ligne3([x0 - .01, y0 + .22, z], [x0 - .01, y1 - .22, z], '#000', .035, .2, 1); ligne3([x0 - .01, y0 + .22, z + .07], [x0 - .01, y1 - .22, z + .07], '#fff', .03, .1, 1); }
+      for (let z = a + .4; z < b - .3; z += .45) ligne3([x0 + .1, y1 + .005, z], [x1 - .1, y1 + .005, z], '#000', .035, .16, 1);
+      qT(y1 + .004, -.25, .25, a + .2, b - .2, '#fff', { al: .09, ns: true, lod: 1 });
+      // rails hauts et bas, coins de conteneur, bande de couleur
+      qL(x0 - .012, y1 - .17, y1, a, b, '#000', { al: .22, ns: true, lod: 1 }); qL(x0 - .012, y0, y0 + .17, a, b, '#000', { al: .3, ns: true, lod: 1 });
+      [[a, a + .22], [b - .22, b]].forEach(([c0, c1]) => { qL(x0 - .03, y0, y0 + .22, c0, c1, '#0e121c', { lod: 1 }); qL(x0 - .03, y1 - .22, y1, c0, c1, '#0e121c', { lod: 1 }); qT(y1 + .02, x0, x0 + .22, c0, c1, '#0e121c', { lod: 1 }); });
+      if (R() < .4) qL(x0 - .014, 1.85, 2.3, a, b, clair(base, .3), { lod: 1 });
+      // face portes : battants, barres de verrouillage, poignées, joint central
+      qF(-1.12, 1.12, y0 + .14, y1 - .14, a - .01, sombre(cl, .1), { lod: 1 });
+      [-.85, -.38, .38, .85].forEach((x) => { ligne3([x, y0 + .3, a - .03], [x, y1 - .3, a - .03], '#aab2c4', .06, .9, 1); qF(x - .08, x + .08, 1.95, 2.15, a - .03, '#10141f', { lod: 1 }); });
+      ligne3([0, y0 + .14, a - .02], [0, y1 - .14, a - .02], '#000', .05, .45, 1);
+      // numéro de conteneur sur le flanc
+      let id = ''; for (let k = 0; k < 3; k++) id += lettres[Math.floor(R() * lettres.length)]; id += 'U ' + String(Math.floor(100000 + R() * 899999));
+      qL(x0 - .02, 3.0, 3.38, a + .6, a + 4.4, '#fff', { al: .78, ns: true, lod: 1 });
+      texte3([x0 - .03, 3.38, a + 4.4], [x0 - .03, 3.38, a + .6], [x0 - .03, 3.0, a + 4.4], id, '#1b2030', 2);
+    });
+  }
+  GROUPES.forEach((g) => { g.zc = (g.z0 + g.z1) / 2; });
+}
+function graine(a) { return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+
+/* ====================================================================
+   DÉCOR : ciel, port, sol, voie, ombres, flou de vitesse
+   ==================================================================== */
+function fondPrepare() {
+  const c = PAL, cv = document.createElement('canvas'); cv.width = Math.round(LARG * RATIO); cv.height = Math.round(HAUT * RATIO);
+  const g = cv.getContext('2d'); g.scale(RATIO, RATIO);
+  const R = graine(CFG.train.graine + 101), hy = CAM.cy;
+  let gr = g.createLinearGradient(0, 0, 0, hy); gr.addColorStop(0, c.ciel1); gr.addColorStop(1, c.ciel2); g.fillStyle = gr; g.fillRect(0, 0, LARG, hy + 1);
+  const halo = g.createRadialGradient(CAM.vpx + 60, hy - 10, 10, CAM.vpx + 60, hy - 10, 520); halo.addColorStop(0, 'rgba(255,240,210,.28)'); halo.addColorStop(1, 'rgba(255,240,210,0)'); g.fillStyle = halo; g.fillRect(0, 0, LARG, hy + 1);
+  // port : piles de conteneurs et portiques, fondus dans la brume
+  const brume = (col, k) => mix(col, c.ciel2, k);
+  if (CFG.decor.piles) for (let x = 0; x < LARG; x += 24) { const n = 1 + Math.floor(R() * 3); for (let k = 0; k < n; k++) { g.fillStyle = brume(c.conteneurs[Math.floor(R() * c.conteneurs.length)], .55); g.globalAlpha = .85; g.beginPath(); g.roundRect(x, hy - 10 * (k + 1), 21, 9.4, 1.5); g.fill(); } }
+  g.globalAlpha = 1;
+  if (CFG.decor.grues) [[330, 92, 84], [530, 116, 104], [760, 80, 76], [930, 98, 70]].forEach(([x, h, w]) => {
+    const y = hy - h; g.fillStyle = g.strokeStyle = brume(c.grues, .35);
+    g.fillRect(x, y, 4, h); g.fillRect(x + w, y, 4, h); g.fillRect(x - 46, y - 4, w + 160, 7); g.fillRect(x + w * .3, y - 15, 24, 13);
+    g.lineWidth = 2; g.beginPath(); g.moveTo(x, hy); g.lineTo(x + w + 4, y + 20); g.moveTo(x + w + 4, hy); g.lineTo(x, y + 20); g.moveTo(x + w * .3 + 12, y - 15); g.lineTo(x + w + 112, y - 4); g.moveTo(x + w + 86, y + 3); g.lineTo(x + w + 86, y + 38); g.stroke();
+    g.fillStyle = brume(c.conteneurs[0], .35); g.fillRect(x + w + 76, y + 38, 20, 10); g.fillStyle = c.accent; g.beginPath(); g.arc(x - 42, y - 4, 2.6, 0, 7); g.fill();
+  });
+  // sol
+  gr = g.createLinearGradient(0, hy, 0, HAUT); gr.addColorStop(0, brume(c.sol1, .45)); gr.addColorStop(.25, c.sol1); gr.addColorStop(1, c.sol2); g.fillStyle = gr; g.fillRect(0, hy, LARG, HAUT - hy);
+  gr = g.createLinearGradient(0, hy - 30, 0, hy + 36); gr.addColorStop(0, 'rgba(0,0,0,0)'); gr.addColorStop(.5, c.ciel2 + 'aa'); gr.addColorStop(1, 'rgba(0,0,0,0)'); g.fillStyle = gr; g.fillRect(0, hy - 30, LARG, 66);
+  return cv;
+}
+
+const poly2 = (pts, fill, al = 1) => { if (pts.length < 3) return; ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]); for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]); ctx.closePath(); ctx.globalAlpha = al; ctx.fillStyle = fill; ctx.fill(); ctx.globalAlpha = 1; };
+const sol3 = (x0, x1, y, z0, z1) => projPoly([[x0, y, z0], [x1, y, z0], [x1, y, z1], [x0, y, z1]]);
+const frac = (x) => ((x % 1) + 1) % 1;
+const VG = 12;                                               // vitesse du décor par rapport à la caméra (m/s) : traverses, bornes, rotation des roues
+
+function unVoie(xc, t, sens, complet) {
+  const c = PAL;
+  poly2(sol3(xc - 3.2, xc + 3.2, -0.02, -10, 800), mix(c.ballast, '#000', .2));                          // talus
+  poly2(sol3(xc - 2.2, xc + 2.2, 0.05, -10, 800), c.ballast);                                            // lit de ballast
+  for (let k = 0; k < 90; k++) {                                                                       // traverses qui défilent vers l'horizon
+    const z = frac((k * 1.5 - sens * VG * t) / 135) * 135 - 8;
+    const q = sol3(xc - 1.35, xc + 1.35, 0.08, z, z + .24); if (q.length) poly2(q, mix(c.ballast, c.traverses, .35), .55);
+  }
+  [-.7175, .7175].forEach((dx) => {                                                                    // rails : face supérieure, flanc, reflet
+    poly2(sol3(xc + dx - .06, xc + dx + .06, .17, -10, 800), c.rails);
+    poly2(projPoly([[xc + dx - .06, .17, -10], [xc + dx - .06, .17, 800], [xc + dx - .06, .06, 800], [xc + dx - .06, .06, -10]]), mix(c.rails, '#000', .45));
+    poly2(sol3(xc + dx - .02, xc + dx + .02, .175, -10, 800), '#fff', .55);
+  });
+}
+function dessinerVoie(t, sens) {
+  const c = PAL;
+  poly2(sol3(X_T - 14, X_T - 3.2, -0.03, -10, 800), mix(c.sol1, c.ciel2, .08)); poly2(sol3(X_T - 9, X_T - 6.4, -0.025, -10, 800), mix(c.sol1, '#fff', .07));
+  poly2(sol3(X_T + 3.2, X_T + 22, -0.03, -10, 800), mix(c.sol1, c.ciel2, .04));
+  unVoie(X_T + 4.9, t, sens);                                                                          // voie parallèle, côté opposé
+  unVoie(X_T, t, sens);                                                                                // la voie du train
+}
+
+function dessinerOmbreEtLumiere(Zf, ta) {
+  const o = projPoly([[X_T - 1.6, .02, Zf - .4], [X_T + 2.6, .02, Zf - .4], [X_T + 2.6, .02, Zf + 22 + 16 * CFG.train.wagons], [X_T - 1.6, .02, Zf + 22 + 16 * CFG.train.wagons]]);
+  poly2(o, '#000', .24);
+  if (ta < .15) return;
+  const f = projPoly([[X_T - 1.0, .03, Zf - .3], [X_T + 1.0, .03, Zf - .3], [X_T + 3.7, .03, Zf - 16], [X_T - 3.7, .03, Zf - 16]]);
+  if (f.length > 2) { let y0 = 1e9, y1 = -1e9; f.forEach((s) => { y0 = Math.min(y0, s[1]); y1 = Math.max(y1, s[1]); }); const g = ctx.createLinearGradient(0, y0, 0, y1); g.addColorStop(0, 'rgba(255,244,207,.3)'); g.addColorStop(1, 'rgba(255,244,207,0)'); poly2(f, g, Math.min(1, ta)); }
+}
+
+// Flou de vitesse : traînées de végétation et de structures, étirées le long de la voie, de part et d'autre
+const FLOU = [...Array(20)].map((_, i) => { const R = graine(500 + i); return { x: i % 3 === 0 ? -(6 + R() * 6) : 9 + R() * 9, h: 1.4 + R() * 3.2, l: 8 + R() * 14, z: R() * 220, devant: i % 3 === 0 }; });
+function traineeFlou(b, t, sens, avant) {
+  const z0 = frac(b.z / 220 + (-sens * 14 * t) / 220) * 220 - 6;                                     // les traînées filent vers l'horizon
+  const A = pr(X_T + b.x, b.h * .5, z0), B = pr(X_T + b.x, b.h * .5, z0 + b.l);
+  if (!A || !B) return;
+  const ep = clamp(b.h * CAM.F / ((A[2] + B[2]) / 2), 3, 70);                                         // épaisseur = hauteur de l'objet à l'écran
+  const col = mix(PAL.grues, PAL.ciel2, clamp(brumeK(A[2]) * 1.1)), [r, gg, bb] = hex2rgb(col), a = (avant ? .3 : .5) * clamp(1 - A[2] / 380);
+  const g = ctx.createLinearGradient(A[0], A[1], B[0], B[1]);
+  g.addColorStop(0, `rgba(${r},${gg},${bb},0)`); g.addColorStop(.3, `rgba(${r},${gg},${bb},${a})`); g.addColorStop(.75, `rgba(${r},${gg},${bb},${a * .8})`); g.addColorStop(1, `rgba(${r},${gg},${bb},0)`);
+  ctx.strokeStyle = g; ctx.lineWidth = ep; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(A[0], A[1]); ctx.lineTo(B[0], B[1]); ctx.stroke();
+}
+function dessinerBornes(t, sens, Zf) {                                                               // petits poteaux de bord de voie : ils filent aussi vers l'horizon
+  const out = [];
+  for (const dx of [-3.9]) for (let k = 0; k < 14; k++) {
+    const z = frac((k * 16 - sens * 12 * t) / 224) * 224 - 6;
+    out.push({ z, f: () => { const a = pr(X_T + dx, 0, z), b = pr(X_T + dx, 1.0, z); if (!a || !b) return;
+      ctx.strokeStyle = rgbs([226, 230, 240], brumeK(a[2])); ctx.lineWidth = clamp(.16 * CAM.F / a[2], .8, 12); ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke();
+      ctx.strokeStyle = rgbs([220, 60, 50], brumeK(a[2])); ctx.lineWidth = clamp(.18 * CAM.F / a[2], .8, 13); ctx.beginPath(); ctx.moveTo(b[0], b[1]); ctx.lineTo(b[0], b[1] + (a[1] - b[1]) * .22); ctx.stroke(); } });
+  }
+  return out;
+}
+
+const VENT = [...Array(24)].map((_, i) => { const R = graine(900 + i); return { x: (R() - .5) * 18, y: .4 + R() * 6.6, z: R() * 260, l: 7 + R() * 9 }; });
+function ventDessine(v, t, sens, intensite) {
+  const z0 = frac(v.z / 260 + (-sens * 38 * t) / 260) * 260 - 6;
+  const a = pr(X_T + v.x, v.y, z0), b = pr(X_T + v.x, v.y, z0 + v.l);
+  if (!a || !b) return;
+  const al = intensite * Math.sin(clamp((z0 + 6) / 260) * Math.PI) * 0.7;
+  ctx.strokeStyle = '#fff'; ctx.globalAlpha = al; ctx.lineWidth = clamp(CAM.F * .045 / a[2], 0.8, 3.8); ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke(); ctx.globalAlpha = 1;
+}
+
+/* ====================================================================
+   CHRONOLOGIE : ouverture de la bande, arrivée du train, séjour à nos côtés, départ, fermeture de la bande
+   Tous les temps sont en secondes et se règlent dans animation (voir alerte-train.config.js).
+   ==================================================================== */
+let ARRIVEE = 0, departDemande = null;      // departDemande : instant où le train doit repartir, fixé par AlerteTrain.fermer()
+function compteur() {
+  const s = Math.max(0, Math.round((ARRIVEE - Date.now()) / 1000));
+  return s === 0 ? CFG.textes.quai : String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0');
+}
+const longueurTrain = () => L_LOCO + 1.2 + clamp(Math.round(CFG.train.wagons), 0, 14) * 15.8 + 3;
+function chrono() {
+  const A = CFG.animation;
+  const tA0 = Math.min(0.3, A.ouverture * 0.4);                         // le train apparaît dès que la bande s'ouvre
+  const tArr = tA0 + A.approche;                                        // le train est à notre niveau
+  let tL = tArr + (A.sejour === 'compte' ? Math.max(1, CFG.donnees.min * 60 + 2 - tArr) : Math.max(0, parseFloat(A.sejour) || 0));   // il repart
+  if (departDemande !== null) tL = Math.min(tL, Math.max(departDemande, tArr));
+  const tF = tL + A.depart + 0.1;                                       // il est parti : la bande se ferme
+  return { tA0, tArr, tL, tF, tFin: tF + A.fermeture };
+}
+function reveler(el, t, tEntree, tSortie) {                             // entrée par la droite ; sortie en fondu vers le haut (aucun glissement latéral : un texte ne recouvre jamais son voisin)
+  const pe = clamp((t - tEntree) / 0.45), ps = clamp((t - tSortie) / 0.35);
+  el.style.opacity = pe * (1 - outCubic(ps)); el.style.transform = `translate(${(1 - outCubic(pe)) * 70}px, ${-outCubic(ps) * 16}px)`;
+}
+
+function image(t) {
+  const A = CFG.animation, sens = A.camera === 'avance' ? 1 : -1, C = chrono();
+  // Bande : un trait qui s'étire, puis qui s'épaissit. Elle se ferme une fois que le train est parti.
+  const ouv = Math.max(0.2, A.ouverture), ligne = ouv * 0.4, fer = Math.max(0.2, A.fermeture), epais = fer * 0.65;
+  let sx = outCubic(clamp(t / ligne)), o = outCubic(clamp((t - ligne) / (ouv - ligne)));
+  if (t > C.tF) { o = 1 - inOutCubic(clamp((t - C.tF) / epais)); sx = 1 - inOutCubic(clamp((t - C.tF - epais) / (fer - epais))); }
+  const v = (1 - o) * 257, h = (1 - sx) * 960;
+  $('#bande').style.clipPath = `inset(${v}px ${h}px ${v}px ${h}px)`;
+  $('#eclair').style.opacity = clamp(1 - o * 2.2);
+  $('#voile').style.opacity = 0.6 * o;
+
+  // Le train nous rattrape : il part du fond de la voie, accélère, puis se cale à notre vitesse et arrive à notre niveau.
+  // Après le séjour il accélère de plus belle, nous dépasse et continue sa route.
+  const Zarrivee = (tt) => ZL + (ZFAR - ZL) * Math.pow(1 - clamp((tt - C.tA0) / A.approche), 2.3);
+  const ta = clamp((t - C.tA0) / A.approche);
+  const distance = (tt) => {
+    if (tt <= C.tL) return Zarrivee(tt);
+    const Z0 = Zarrivee(C.tL), uu = clamp((tt - C.tL) / Math.max(0.3, A.depart));
+    return Z0 - (Z0 + longueurTrain() + 30) * Math.pow(uu, 2.1);
+  };
+  const Zf = distance(t), u = t > C.tL ? clamp((t - C.tL) / Math.max(0.3, A.depart)) : 0;
+  const chemin = (tt) => VG * tt - (distance(tt) - ZFAR);                // distance parcourue par le train par rapport au sol
+  ROT = { s: chemin(t), v: (chemin(t + 0.01) - chemin(t)) / 0.01 };
+  const tremble = (ta > 0.7 && ta < 1 ? (ta - 0.7) / 0.3 : 0) + u * 1.2;
+  SHX = (tremble * 1.6 + 0.35) * Math.sin(t * 57); SHY = (tremble * 2.2 + 0.5) * Math.sin(t * 43 + 1) + (ta >= 1 && u === 0 ? Math.sin(t * 1.9) * 1.1 : 0);
+
+  // ----- Dessin de la scène 3D -----
+  const cv = $('#vue'); ctx = cv.getContext('2d');
+  ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, cv.width, cv.height);
+  if (CFG.train.miroir) ctx.setTransform(-RATIO, 0, 0, RATIO, LARG * RATIO, 0); else ctx.setTransform(RATIO, 0, 0, RATIO, 0, 0);
+  if (!fondStatique) fondStatique = fondPrepare();
+  ctx.save(); ctx.setTransform(CFG.train.miroir ? -1 : 1, 0, 0, 1, CFG.train.miroir ? cv.width : 0, 0); ctx.drawImage(fondStatique, 0, 0); ctx.restore();
+
+  const vit = clamp(0.5 + 0.5 * ta, 0, 1) + 0.5 * u;                    // le vent se renforce quand le train repart
+  if (CFG.decor.flou) FLOU.filter((b) => !b.devant).forEach((b) => traineeFlou(b, t, sens, false));
+  dessinerVoie(t, sens);
+  dessinerOmbreEtLumiere(Zf, ta * (1 - u));
+
+  // Éléments à dessiner du plus lointain au plus proche : wagons, locomotive, traits de vent, bornes
+  const elements = GROUPES.map((g) => ({ z: Zf + g.zc, f: () => dessinerGroupe(g, Zf) }));
+  const nbVent = clamp(Math.round(A.vent), 0, 24);
+  for (let i = 0; i < nbVent; i++) { const v2 = VENT[i]; const z0 = frac(v2.z / 260 + (-sens * 38 * t) / 260) * 260 - 6; elements.push({ z: z0 + v2.l / 2, f: () => ventDessine(v2, t, sens, vit) }); }
+  dessinerBornes(t, sens, Zf).forEach((e) => elements.push(e));
+  elements.sort((a, b) => b.z - a.z);
+  elements.forEach((e) => { if (e.z - 20 < 400) e.f(); });
+
+  // Phares : halo lumineux
+  if (ta > .05 && u < .9) {
+    ctx.globalCompositeOperation = 'lighter'; const pulse = ta * (1 - u) * (0.75 + 0.25 * Math.sin(t * 7));
+    [-.78, .78].forEach((dx) => { const q = pr(X_T + dx, 2.45, Zf + .15); if (!q) return;
+      const r = CAM.F * 1.3 / q[2], g = ctx.createRadialGradient(q[0], q[1], 0, q[0], q[1], r); g.addColorStop(0, `rgba(255,244,207,${.85 * pulse})`); g.addColorStop(.35, `rgba(255,224,150,${.3 * pulse})`); g.addColorStop(1, 'rgba(255,200,100,0)'); ctx.fillStyle = g; ctx.fillRect(q[0] - r, q[1] - r, 2 * r, 2 * r); });
+    ctx.globalCompositeOperation = 'source-over';
+  }
+  if (CFG.decor.flou) FLOU.filter((b) => b.devant).slice(0, 4).forEach((b) => traineeFlou(b, t, sens, true));
+
+  // ----- Textes : ils arrivent avec le train et repartent quand il repart -----
+  ['#etiquette', '#num', '#voie', '#dest', '#fret', '#dans', '#compte'].forEach((id, i) => reveler($(id), t, A.textes + i * 0.12, C.tL + 0.15 + i * 0.06));
+  $('#compte span').textContent = compteur();
+  if (!CFG.donnees.fret) $('#fret').style.opacity = 0;
+  if (ta >= 1 && u === 0) $('#etiquette').style.opacity = 0.7 + 0.3 * Math.sin(t * 5) ** 2;
+}
+
+/* ---------- Démarrage et petite API pour piloter l'animation ---------- */
+let debut = performance.now(), enCours = null;
+function relancerSequence() { debut = performance.now(); ARRIVEE = Date.now() + CFG.donnees.min * 60000; departDemande = null; }
+function demarrer() {
+  appliquerStyle(); ajuster();
+  HZ = hex2rgb(PAL.ciel2);
+  construireTrain(PAL); fondStatique = null;
+  appliquerDonnees();
+  relancerSequence();
+  if (TFIGE !== null) { image(TFIGE); return; }
+  if (!enCours) (function boucle(now) {
+    let t = (now - debut) / 1000; const C = chrono();
+    if (t > C.tFin + 0.2 && !CFG.animation.boucle) { image(C.tFin + 0.2); enCours = null; return; }      // séquence finie : on s'arrête
+    if (CFG.animation.boucle && t > C.tFin + CFG.animation.pause) { relancerSequence(); t = 0; }
+    image(t); enCours = requestAnimationFrame(boucle);
+  })(debut);
+}
+
+// AlerteTrain.jouer({ train, dest, voie, min, fret }) : relance toute la séquence avec de nouvelles infos
+// AlerteTrain.configurer({ couleurs: { theme: 'orange' }, animation: { sejour: 10 }, ... }) : change les réglages et relance
+// AlerteTrain.fermer() : le train repart tout de suite, puis la bande se ferme
+window.AlerteTrain = {
+  jouer(infos) { CFG.donnees = { ...CFG.donnees, ...infos }; demarrer(); },
+  configurer(r) { CFG = fusion(CFG, r); demarrer(); },
+  fermer() { departDemande = (performance.now() - debut) / 1000; },
+  get config() { return CFG; },
+  get palette() { return PAL; },
+};
+// Utilisable aussi depuis une page parente qui l'affiche en iframe : iframe.contentWindow.postMessage({ type: 'alerte-train', infos: { train: '...', ... } }, '*')
+addEventListener('message', (e) => { if (e.data && e.data.type === 'alerte-train') window.AlerteTrain.jouer(e.data.infos || {}); });
+addEventListener('resize', ajuster);
+
+demarrer();
+</script>
+</body>
+</html>
