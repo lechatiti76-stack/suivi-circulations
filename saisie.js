@@ -628,8 +628,8 @@
     if (pv.adresse && (c.sens === 'D' ? pv.saisieDepart : pv.saisieArrivee)) setTimeout(function () { ouvrirPlanVoie(pv.duree); }, 1200);
   }
   // ------------------------------------------------- plan de voie (simulateur)
-  // par défaut : la page plan-de-voie.html déposée dans le dépôt (adresse vidée dans Paramètres = pas de plan de voie)
-  function planVoie() { var pv = Object.assign({}, ((app.params || {}).visuel || {}).planVoie || {}); if (pv.adresse == null) pv.adresse = 'plan-de-voie.html'; return pv; }
+  // par défaut (adresse vide, y compris enregistrée vide par une version précédente) : la page plan-de-voie.html du dépôt
+  function planVoie() { var pv = Object.assign({}, ((app.params || {}).visuel || {}).planVoie || {}); if (!pv.adresse) pv.adresse = 'plan-de-voie.html'; return pv; }
   var planMinuteur = null;
   /** Ouvre la page du plan de voie ; avec une durée, la referme seule après ce nombre de secondes. */
   function ouvrirPlanVoie(duree) {
@@ -1402,7 +1402,7 @@
     $('#pa-son-fin').checked = vis.sonFinTravaux !== false;
     var an = vis.animTrain || {}, pv = vis.planVoie || {};
     $('#pa-anim').checked = an.actif !== false; $('#pa-anim-url').value = an.adresse || '';
-    $('#pa-plan-url').value = pv.adresse == null ? 'plan-de-voie.html' : pv.adresse; $('#pa-plan-duree').value = pv.duree || 10;
+    $('#pa-plan-url').value = pv.adresse || 'plan-de-voie.html'; $('#pa-plan-duree').value = pv.duree || 10;
     $('#pa-plan-tv-arr').checked = !!pv.tvArrivee; $('#pa-plan-tv-dep').checked = !!pv.tvDepart;
     $('#pa-plan-sa-arr').checked = !!pv.saisieArrivee; $('#pa-plan-sa-dep').checked = !!pv.saisieDepart;
     $('#pa-vitesse-voix').value = vis.vitesseVoix == null ? 1 : vis.vitesseVoix; $('#pa-vitesse-voix-val').textContent = '× ' + (+$('#pa-vitesse-voix').value).toFixed(2);
