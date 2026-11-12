@@ -15,7 +15,7 @@
  */
 
 const CLE = 'CHANGER-CE-MOT-DE-PASSE';
-const VERSION = '2.8.0';
+const VERSION = '2.9.0';
 const FUSEAU = 'Europe/Paris';
 const NOM_DOSSIER = 'Suivi des circulations - données';
 
@@ -53,6 +53,7 @@ function router_(m, c, corps) {
   if (m === 'PUT' && (c === '/api/parametres' || c === '/api/planning')) return ecrireConfig_(c === '/api/parametres' ? 'parametres.json' : 'planning.json', corps);
   if (m === 'GET' && c === '/api/journees') return ok_({ dates: listeJournees_() });
   if (m === 'PUT' && c === '/api/plan-voies') return ecrirePlanVoies_(corps);
+  if (m === 'PUT' && c === '/api/plan-saisie') return avecVerrou_(() => ecrirePlanSaisie_(corps));
   if ((r = /^\/api\/journee\/(\d{4}-\d{2}-\d{2})$/.exec(c))) {
     if (m === 'GET') return lireJournee_(r[1]);
     if (m === 'PUT') return avecVerrou_(() => ecrireJournee_(r[1], corps));
@@ -350,21 +351,91 @@ function listeJournees_() {
  */
 function planPublic_(date) {
   const d = /^\d{4}-\d{2}-\d{2}$/.test(String(date || '')) ? String(date) : Utilities.formatDate(new Date(), FUSEAU, 'yyyy-MM-dd');
-  // clé de cache liée à la version : une nouvelle saisie est visible tout de suite
+  // clé de cache liée aux versions (journée du jour, réglages et saisies du plan) : une nouvelle saisie est visible tout de suite
   const version = versionJournee_(d), vVoies = proprietes_().getProperty('version:planvoies') || '0';
   const cache = CacheService.getScriptCache(), cle = 'plan:' + d + ':' + version + ':' + vVoies, vu = cache.get(cle);
   if (vu) return JSON.parse(vu);
-  const voies = lireJson_('plan-voies.json', {});
-  const t = lireTexte_(d + '.json', 'journees');
-  if (!t) return { date: d, version: 0, voies: voies, journee: null };
-  const j = JSON.parse(t);
-  const out = { date: d, version: version, voies: voies, journee: {
-    date: j.date, version: j.version,
-    mouvements: (j.mouvements || []).map(m => ({ n: m.n, id: m.id, num: m.num, ef: m.ef || '', voie: m.voie || '', compo: m.compo || '', cv: m.cv || '', sit: m.sit || '',
-      annonce: m.annonce || '', reel: m.reel || '', vers: m.vers || '', lien: m.lien || '', supprime: !!m.supprime })),
-    circulations: (j.circulations || []).map(c => ({ id: c.id, code: c.code, groupe: c.groupe, sens: c.sens, numero: c.numero || '', sillon: c.sillon || '' })) } };
+  const voies = lireJson_('plan-voies.json', {}), saisies = lireSaisiesPlan_();
+  // jours relus : depuis la plus ancienne saisie manuelle d'une voie (14 jours au plus), pour rejouer tout ce qui a suivi
+  let debut = d;
+  Object.keys(saisies.contenus).map(v => saisies.contenus[v]).concat(saisies.anciens).forEach(c => { const t = String(c.t || '').slice(0, 10); if (/^\d{4}-\d{2}-\d{2}$/.test(t) && t < debut) debut = t; });
+  const jours = [];
+  for (let k = 0; k < 14; k++) {
+    const x = new Date(Date.parse(d + 'T12:00:00Z') - k * 864e5).toISOString().slice(0, 10);
+    if (x < debut) break; jours.unshift(x);
+  }
+  const lire = x => { const t = lireTexte_(x + '.json', 'journees') || lireTexte_(x + '_journee.json', 'archives/' + x.slice(0, 4)); try { return t ? JSON.parse(t) : null; } catch (err) { return null; } };
+  const fusion = { date: d, version: version, mouvements: [], circulations: [] };
+  let jour = null;
+  jours.forEach(x => {
+    const j = x === d ? (jour = lire(x)) : lire(x); if (!j) return;
+    const pre = x === d ? '' : x + ':';
+    (j.mouvements || []).forEach(m => fusion.mouvements.push({ n: m.n, id: m.id, num: m.num, ef: m.ef || '', voie: m.voie || '', compo: m.compo || '', cv: m.cv || '', sit: m.sit || '',
+      annonce: m.annonce || '', reel: m.reel || '', vers: m.vers || '', lien: m.lien ? pre + m.lien : '', supprime: !!m.supprime }));
+    (j.circulations || []).forEach(c => fusion.circulations.push({ id: pre + c.id, code: c.code, groupe: c.groupe, sens: c.sens, numero: c.numero || '', sillon: c.sillon || '' }));
+  });
+  const out = { date: d, version: version, versionPlan: vVoies, jours: jours, voies: voies, saisies: saisies,
+    previsions: jour ? previsionsPlan_(jour) : [], journee: jour || fusion.mouvements.length ? fusion : null };
   cache.put(cle, JSON.stringify(out), 60);
   return out;
+}
+/** Circulations encore à venir (jour en cours, Demain, Après-demain) avec leur voie et leurs wagons prévus. */
+function previsionsPlan_(j) {
+  const out = [], mv = (j.mouvements || []).filter(m => !m.supprime);
+  const ajouter = (date, c, voie, wagons) => {
+    if (!c || c.etat === 'supprime' || c.reel) return;
+    voie = voie || c.voiePrevue || ''; wagons = wagons != null ? wagons : (c.wagonsDemandes == null || c.wagonsDemandes === '' ? null : Number(c.wagonsDemandes));
+    if (!voie && wagons == null) return;
+    out.push({ date: date, code: c.code || '', groupe: c.groupe || '', sens: c.sens || '', heure: c.theo || '', numero: c.numero || c.sillon || '', voie: voie, wagons: wagons });
+  };
+  (j.circulations || []).forEach(c => {
+    const lies = mv.filter(m => m.lien === c.id); if (lies.some(m => m.reel)) return;
+    const der = lies[lies.length - 1]; ajouter(j.date, c, der && der.voie, der && /^\d+$/.test(String(der.compo || '')) ? Number(der.compo) : null);
+  });
+  [j.demain, j.surlendemain].forEach(p => { if (p && p.date) (p.circulations || []).forEach(c => ajouter(p.date, c)); });
+  return out;
+}
+function lireSaisiesPlan_() {
+  const s = lireJson_('plan-saisies.json', {}) || {};
+  return { contenus: s.contenus || {}, anciens: s.anciens || [], choix: s.choix || {} };
+}
+const partsPlan_ = l => (Array.isArray(l) ? l : []).slice(0, 20).map(p => ({
+  cle: String((p && p.cle) || '').replace(/[^A-Za-z0-9 _.()-]/g, '').slice(0, 40), nb: Math.max(0, Math.min(120, Math.floor(Number(p && p.nb) || 0))),
+  charge: p && p.charge === 'vides' ? 'vides' : 'chargés' })).filter(p => p.nb > 0);
+/**
+ * Saisie dans le plan de voie (poste de saisie) :
+ *   { voie, type?, hs?, parts?, t? } — wagons réellement sur la voie à l'instant t (parts null : retour au calcul), type 60/80, wagons HS ;
+ *   { choix: { id, parts } }       — wagons retirés par un mouvement quand la voie contenait plusieurs entreprises.
+ */
+function ecrirePlanSaisie_(corps) {
+  let o;
+  try { o = JSON.parse(corps || '{}'); } catch (err) { return { status: 400, data: { erreur: 'saisie du plan illisible' } }; }
+  if (!o || typeof o !== 'object' || Array.isArray(o)) return { status: 400, data: { erreur: 'saisie du plan invalide' } };
+  const s = lireSaisiesPlan_(), voies = lireJson_('plan-voies.json', {});
+  if (o.voie != null) {
+    const v = String(o.voie);
+    if (!/^[A-Za-z0-9_-]{1,20}$/.test(v)) return { status: 400, data: { erreur: 'voie invalide' } };
+    // la saisie précédente de la voie reste valable pour les mouvements d'avant la nouvelle (14 jours, 150 au plus)
+    if (o.parts !== undefined && s.contenus[v]) s.anciens.push(Object.assign({ v: v }, s.contenus[v]));
+    const limite = Utilities.formatDate(new Date(Date.now() - 14 * 864e5), FUSEAU, "yyyy-MM-dd'T'HH:mm:ss");
+    s.anciens = s.anciens.filter(a => a.t >= limite).slice(-150);
+    if (o.parts === null) { delete s.contenus[v]; s.anciens = s.anciens.filter(a => a.v !== v); }
+    else if (o.parts !== undefined) s.contenus[v] = { t: /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?$/.test(String(o.t || '')) ? String(o.t) : maintenant_(), parts: partsPlan_(o.parts) };
+    if (o.type !== undefined || o.hs !== undefined) {
+      const avant = voies[v] || {}, type = Number(o.type !== undefined ? o.type : avant.type) === 80 ? 80 : 60;
+      const hs = Math.max(0, Math.min(80, Math.floor(Number(o.hs !== undefined ? o.hs : avant.hs) || 0)));
+      if (type !== 60 || hs) voies[v] = { type: type, hs: hs }; else delete voies[v];
+      ecrireTexte_('plan-voies.json', JSON.stringify(voies, null, 2));
+    }
+  }
+  if (o.choix && o.choix.id) {
+    const id = String(o.choix.id).slice(0, 60);
+    if (o.choix.parts === null) delete s.choix[id]; else s.choix[id] = partsPlan_(o.choix.parts);
+    const cles = Object.keys(s.choix); if (cles.length > 400) cles.slice(0, cles.length - 400).forEach(k => delete s.choix[k]);
+  }
+  ecrireTexte_('plan-saisies.json', JSON.stringify(s));
+  const p = proprietes_(); p.setProperty('version:planvoies', String(Number(p.getProperty('version:planvoies') || 0) + 1));
+  return ok_({ voies: voies, saisies: s });
 }
 /**
  * Réglages des voies du plan de voie : type de wagons (60 ou 80 pieds, qui fixe la capacité) et wagons HS stationnés.

@@ -237,6 +237,29 @@ test('réglages des voies du plan (60/80 pieds, wagons HS)', function () {
   assert.strictEqual(g.appel('PUT', '/api/plan-voies', '[1]').status, 400);
 });
 
+test('saisie du contenu d\'une voie, choix de retrait, jours relus, prévisions', function () {
+  var g = simulateur.charger('secret-essai');
+  var j1 = { date: '2026-01-05', version: 1, mouvements: [{ n: 1, id: 'm1', num: 'locom', voie: 'VR5', vers: 'VF1', compo: '9', sit: 'occupée', annonce: '2026-01-05T15:00:00', reel: '2026-01-05T15:00:00' }], circulations: [{ id: 'p1', code: 'LF1', groupe: 'TDF', sens: 'D' }] };
+  var j2 = { date: '2026-01-06', version: 1, mouvements: [{ n: 1, id: 'm2', num: 'nrs1', voie: 'VF1', vers: 'VF2', compo: '2', lien: 'p1', annonce: '2026-01-06T08:00:00' }],
+    circulations: [{ id: 'p1', code: 'LF1', groupe: 'TDF', sens: 'D', voiePrevue: 'VF1', wagonsDemandes: 27, theo: '2026-01-06T18:00:00' }, { id: 'p2', code: 'FL1', groupe: 'TDF', sens: 'A', reel: '2026-01-06T07:00:00', voiePrevue: 'VR2' }],
+    demain: { date: '2026-01-07', circulations: [{ id: 'p1', code: 'LF1', groupe: 'TDF', sens: 'D', voiePrevue: 'VF1', wagonsDemandes: 27, theo: '2026-01-07T18:00:00' }, { id: 'p9', code: 'X', etat: 'supprime', voiePrevue: 'VF3' }] } };
+  g.appel('PUT', '/api/journee/2026-01-05', '{"baseVersion":0}\n' + JSON.stringify(j1) + '\n');
+  g.appel('PUT', '/api/journee/2026-01-06', '{"baseVersion":0}\n' + JSON.stringify(j2) + '\n');
+  var r = g.appel('PUT', '/api/plan-saisie', JSON.stringify({ voie: 'Vr5', type: 80, hs: 1, parts: [{ cle: 'TDF', nb: 27 }, { cle: '<x>', nb: 0 }], t: '2026-01-05T10:00:00' }));
+  assert.strictEqual(r.status, 200); assert.deepStrictEqual(r.data.voies.Vr5, { type: 80, hs: 1 });
+  assert.deepStrictEqual(r.data.saisies.contenus.Vr5, { t: '2026-01-05T10:00:00', parts: [{ cle: 'TDF', nb: 27, charge: 'chargés' }] });
+  g.appel('PUT', '/api/plan-saisie', JSON.stringify({ choix: { id: 'm1', parts: [{ cle: 'TDF', nb: 9 }] } }));
+  var p = JSON.parse(g.doGet({ action: 'plan', date: '2026-01-06' }).getContent());
+  assert.deepStrictEqual(p.jours, ['2026-01-05', '2026-01-06']);
+  assert.strictEqual(p.journee.mouvements.length, 2); assert.strictEqual(p.journee.mouvements[1].lien, 'p1');
+  assert.ok(p.journee.circulations.some(function (c) { return c.id === '2026-01-05:p1'; }));
+  assert.deepStrictEqual(p.saisies.choix.m1, [{ cle: 'TDF', nb: 9, charge: 'chargés' }]);
+  assert.deepStrictEqual(p.previsions.map(function (x) { return x.date + ' ' + x.code + ' ' + x.voie + ' ' + x.wagons; }), ['2026-01-06 LF1 VF1 2', '2026-01-07 LF1 VF1 27']);
+  g.appel('PUT', '/api/plan-saisie', JSON.stringify({ voie: 'Vr5', parts: null, type: 60, hs: 0 }));
+  p = JSON.parse(g.doGet({ action: 'plan', date: '2026-01-06' }).getContent());
+  assert.deepStrictEqual(p.jours, ['2026-01-06']); assert.deepStrictEqual(p.voies, {});
+});
+
 console.log('Jours préparés (samedi / dimanche)');
 test('le vendredi, Demain = lundi et Après-demain = mardi ; préparations reprises', function () {
   var SC = require('../commun.js');

@@ -32,7 +32,17 @@ html.plan-seul #plan-vue[hidden] { display: grid !important; }
 #pe-conf[hidden] { display: none; }
 #pe-conf .seg { display: flex; gap: 6px; } #pe-conf .seg label { display: flex; gap: 4px; align-items: center; border: 1px solid var(--p-trait); border-radius: 5px; padding: 3px 8px; cursor: pointer; }
 #pe-conf .seg label:has(input:checked) { border-color: #93c5fd; background: #1e3a5f; }
-html.plan-seul #plan-edition .boutons.saisie-wg, html.plan-seul #pe-lignes { display: none; }
+#plan-verif .pv-item { border: 1px solid #b45309; background: #2a1d0b; border-radius: 6px; padding: 7px 8px; margin-bottom: 6px; display: flex; flex-direction: column; gap: 5px; }
+#plan-verif .pv-item b { color: #fbbf24; }
+#plan-verif .pv-parts { display: flex; flex-wrap: wrap; gap: 4px 8px; }
+#plan-verif label { display: flex; gap: 4px; align-items: center; font-size: 12.5px; }
+#plan-verif input { width: 3.6em; font: inherit; color: inherit; background: #0c1217; border: 1px solid #24323d; border-radius: 4px; padding: 2px 4px; }
+#plan-verif button, #pe-calcul { align-self: flex-start; color: #e8eef3; background: #1e3a5f; border: 1px solid #3b82f6; border-radius: 5px; padding: 3px 9px; font: inherit; font-size: 12.5px; cursor: pointer; }
+#plan-verif small { color: #fca5a5; }
+#plan-prev .pp-jour { font-size: 11.5px; text-transform: uppercase; letter-spacing: .06em; color: #93a4b2; margin: 8px 0 3px; }
+#plan-prev .pp { display: grid; grid-template-columns: 3.2em 1fr auto; gap: 6px; padding: 4px 0; border-top: 1px solid #24323d; font-size: 12.5px; align-items: baseline; }
+#plan-prev .pp time { font-family: var(--mono); color: #93a4b2; }
+#plan-prev .pp .ok { color: #4ade80; } #plan-prev .pp .manque { color: #fbbf24; }
 </style>
 <title>Plan de voie — LHTE</title>
 <meta name="claude:viewport-fit-sides" content="cover">
@@ -339,6 +349,7 @@ body[data-mode="simulation"] #fiche{display:none}
      <span>Wagons</span><div class="seg" role="radiogroup" aria-label="Type de wagons"><label><input type="radio" name="pe-type" value="60" checked> 60 pieds</label><label><input type="radio" name="pe-type" value="80"> 80 pieds</label></div>
      <span>Capacité</span><b id="pe-cap"></b>
      <label for="pe-hs">Wagons HS</label><input type="number" id="pe-hs" min="0" max="80" step="1" value="0" style="width:6em">
+     <span>Contenu</span><button type="button" id="pe-calcul" hidden title="Oublier le contenu saisi : la voie suit de nouveau la journée">Revenir au calcul</button>
     </div>
     <div id="pe-lignes"></div>
     <div class="boutons saisie-wg"><button type="button" id="pe-ajout">+ Entreprise</button><button type="button" id="pe-libre">Voie libre</button></div>
@@ -349,8 +360,10 @@ body[data-mode="simulation"] #fiche{display:none}
   <aside id="plan-cote">
    <section><h3>Sur le site</h3><div class="p-chiffres" id="plan-chiffres"></div>
     <p id="plan-vide" class="p-conseil" hidden>Aucun wagon connu sur le site. Le simulateur ne sait que ce qui est saisi : cliquez une fois sur chaque voie occupée pour indiquer ses wagons, puis les mouvements la tiennent à jour.</p></section>
+   <section id="plan-verif-s" hidden><h3>À vérifier</h3><div id="plan-verif"></div></section>
    <section><h3>Wagons par entreprise</h3><ul class="p-qui" id="plan-qui"></ul></section>
    <section><h3>Derniers mouvements</h3><ol id="plan-mvts"><li class="vide-liste">Aucun mouvement depuis l'ouverture.</li></ol></section>
+   <section id="plan-prev-s" hidden><h3>Prévisions</h3><div id="plan-prev"></div></section>
    <section><h3>Légende</h3><div class="p-legende" id="plan-legende"></div><p class="note" style="color:var(--p-encre2);margin:10px 0 0;font-size:12px">Une voie qui change d'état clignote. Cliquez sur une voie pour saisir ses wagons.</p></section>
   </aside>
  </section>
@@ -1401,6 +1414,13 @@ body[data-mode="simulation"] #fiche{display:none}
       for (const i of ordre) { if (!reste) break; const p = l[i], k = Math.min(p.nb, reste); if (!k) continue; p.nb -= k; reste -= k; out.push({ cle: p.cle, nb: k, charge: p.charge }); }
       etat.compo[t] = l.filter(p => p.nb > 0); return out;
     }
+    /* Retrait indiqué par l'utilisateur : [{cle, nb}] pris d'abord, le reste comme d'habitude. */
+    function prendreChoix(etat, t, need, ch, pref) {
+      const l = etat.compo[t] || [], out = []; let reste = need;
+      ch.forEach(c => { let k = Math.min(c.nb, reste); for (const p of l) { if (!k) break; if (p.cle !== c.cle || !p.nb) continue; const q = Math.min(p.nb, k); p.nb -= q; k -= q; reste -= q; out.push({ cle: p.cle, nb: q, charge: p.charge }); } });
+      etat.compo[t] = l.filter(p => p.nb > 0);
+      return reste > 0 ? out.concat(prendre(etat, t, reste, pref)) : out;
+    }
     function deposer(etat, t, parts) {
       const l = etat.compo[t] || (etat.compo[t] = []);
       parts.forEach(q => { if (!q.nb) return; const p = l.find(r => r.cle === q.cle && r.charge === q.charge); if (p) p.nb += q.nb; else l.push({ cle: q.cle, nb: q.nb, charge: q.charge }); });
@@ -1441,7 +1461,17 @@ body[data-mode="simulation"] #fiche{display:none}
         const voie = R.troncons[x.de].voie, s = total(x.de); let r = Math.max(0, s - x.nb);
         if (s < x.nb) ecarts.push(`${voie} ne contenait que ${s} wagon${pl(s)} pour ${x.nb} demandé${pl(x.nb)}.`);
         // Les wagons d'un train partent en priorité parmi ceux de sa relation ou de son EF ; une manœuvre interne les prend tels quels.
-        parts = prendre(etat, x.de, Math.min(s, x.nb), x.interne ? [] : [x.groupe, x.ef]);
+        const need = Math.min(s, x.nb), pref = x.interne ? [] : [x.groupe, x.ef], ch = etat.choix && x.ligne && etat.choix[x.ligne.id];
+        x.ambigu = null; x.choisi = !!ch;
+        if (ch) parts = prendreChoix(etat, x.de, need, ch, pref);
+        else {
+          // Plusieurs entreprises sur la voie et rien ne dit lesquelles partent : choix supposé, à vérifier dans le plan.
+          const l = (etat.compo[x.de] || []).filter(p => p.nb > 0), ok = l.filter(p => correspond(p, pref)).reduce((n, p) => n + p.nb, 0);
+          const autres = new Set(l.filter(p => !correspond(p, pref)).map(p => p.cle));
+          if (need > ok && need < s && autres.size > 1) x.ambigu = { voie, nb: need, dispo: l.map(p => ({ cle: p.cle, nb: p.nb, charge: p.charge })) };
+          parts = prendre(etat, x.de, need, pref);
+          if (x.ambigu) { x.ambigu.suppose = parts.map(p => ({ cle: p.cle, nb: p.nb })); ecarts.push(`${voie} : ${need} wagon${pl(need)} retiré${pl(need)} parmi plusieurs entreprises, choix supposé.`); }
+        }
         // « Situation voie » : la saisie fait foi sur ce qui reste sur la voie d'origine.
         if (x.sit === "libre" && r > 0) { ecarts.push(`Saisie : ${voie} libre après le mouvement ; ${r} wagon${pl(r)} en trop retiré${pl(r)}.`); etat.compo[x.de] = []; r = 0; }
         if (x.sit === "occupee" && r === 0) ecarts.push(`Saisie : ${voie} encore occupée après le mouvement, mais aucun wagon connu n'y reste (nombre à saisir).`);
@@ -1818,16 +1848,18 @@ body[data-mode="simulation"] #fiche{display:none}
   const BLOQUANTS = ["server_not_connected", "needs_reauth", "selection_required", "not_in_manifest", "approval_required", "blocked_by_policy", "not_granted", "capability_disabled", "capability_removed"];
   const charge = r => { let x = r && r.payload !== undefined ? r.payload : r; if (typeof x === "string") { try { x = JSON.parse(x); } catch (e) { /* texte brut */ } } return x; };
   function base64Texte(b) { const s = atob(String(b).replace(/\s/g, "")), o = new Uint8Array(s.length); for (let k = 0; k < s.length; k++) o[k] = s.charCodeAt(k); return new TextDecoder("utf-8").decode(o); }
-  let texteServeur = null, confVue = "{}", resume = "";
+  let texteServeur = null, confVue = "{}", resume = "", donnees = { saisies: { contenus: {}, choix: {} }, previsions: [] };
   async function chercher(d) {
     if (!mcp && SRV) {
       const r = await fetch(SRV + (SRV.indexOf("?") < 0 ? "?" : "&") + "action=plan&date=" + d + "&t=" + Date.now(), { cache: "no-store", redirect: "follow" }).then(x => x.json()).catch(() => { throw { code: "server_unavailable" }; });
       // réglages des voies (60/80 pieds, wagons HS) : redessin immédiat s'ils changent
       const conf = JSON.stringify((r && r.voies) || {});
       if (r && !r.erreur && conf !== confVue) { confVue = conf; window.LHTE_VOIES_CONF = r.voies || {}; Tn.changer(); }
-      if (!r || !r.journee) return null;
-      texteServeur = JSON.stringify(r.journee);
-      return { title: d + ".json", id: "serveur", modifiedTime: String(r.version || r.journee.version || 0) + "·" + texteServeur.length };
+      if (!r || r.erreur) throw { code: "server_unavailable" };
+      donnees = { saisies: r.saisies || { contenus: {}, choix: {} }, previsions: r.previsions || [], date: r.date };
+      if (!r.journee && !(SEUL && Object.keys(donnees.saisies.contenus || {}).length)) return null;
+      texteServeur = JSON.stringify(r.journee || { date: d, mouvements: [], circulations: [] });
+      return { title: d + ".json", id: "serveur", modifiedTime: String(r.version || 0) + "·" + (r.versionPlan || 0) + "·" + texteServeur.length };
     }
     const r = charge(await mcp.callTool(DRIVE, "search_files", { query: `title = '${d}.json' and trashed = false`, excludeContentSnippets: true, pageSize: 5, orderBy: "modifiedTime desc" }, { cache: false }));
     return ((r && r.files) || []).find(f => f.title === d + ".json") || null;
@@ -1877,12 +1909,23 @@ body[data-mode="simulation"] #fiche{display:none}
    * déduit de la journée, puis tous les mouvements appliqués sans animation. Toutes les fenêtres montrent donc la même
    * chose, sans mémoire locale qui pourrait diverger. */
   function recalculer(modif) {
-    const P = J.preparer(J.lire(texte), {}), E = A.initial(P);
-    P.mouvements.forEach(x => { try { A.appliquer(E, x); } catch (e) { console.error(e); } });
+    const RS = window.LHTE_RESEAU, P = J.preparer(J.lire(texte), {}), E = A.initial(P), SA = donnees.saisies || {}, cont = SA.contenus || {}, aVerifier = [];
+    E.choix = SA.choix || {};
+    // saisies manuelles d'une voie : son contenu réel à l'instant t, puis les mouvements suivants le font évoluer
+    const evts = P.mouvements.map(x => ({ h: x.heure || "", x }));
+    for (const v in cont) if (RS.voies[v]) evts.push({ h: cont[v].t || "", v, parts: cont[v].parts || [] });
+    (SA.anciens || []).forEach(c => { if (RS.voies[c.v]) evts.push({ h: c.t || "", v: c.v, parts: c.parts || [] }); });
+    evts.sort((a, b) => (a.h < b.h ? -1 : a.h > b.h ? 1 : 0));
+    evts.forEach(e => {
+      if (e.x) { try { A.appliquer(E, e.x); if (e.x.ambigu) aVerifier.push(e.x); } catch (er) { console.error(er); } return; }
+      const t = RS.voies[e.v].troncon; E.compo[t] = e.parts.map(p => Object.assign({}, p)); E.stocks[t] = e.parts.reduce((n, p) => n + p.nb, 0);
+      for (let i = aVerifier.length - 1; i >= 0; i--) if (aVerifier[i].ambigu.voie === e.v) aVerifier.splice(i, 1); // corrigé par la saisie
+    });
     A.reconstruire(E);
     memo.fichier = modif; memo.decide = true;
-    const ann = P.autres.filter(x => x.statut === "annonce").length;
-    if (LHTE.vues && LHTE.vues.mouvements) LHTE.vues.mouvements(P.mouvements.slice(-12).reverse().map(x => ({ h: hhmm(x.heure), t: x.libelle + (x.nb && !/wagon/.test(x.libelle) ? ` · ${x.nb} wagon${x.nb > 1 ? "s" : ""}` : ""), cle: x.groupe || x.ef })));
+    const ann = P.autres.filter(x => x.statut === "annonce").length, jour = aujourdhui();
+    if (LHTE.vues && LHTE.vues.donnees) LHTE.vues.donnees({ aVerifier, previsions: donnees.previsions || [], contenus: cont, date: donnees.date || jour });
+    if (LHTE.vues && LHTE.vues.mouvements) LHTE.vues.mouvements(P.mouvements.filter(x => (x.heure || "").slice(0, 10) === jour).slice(-12).reverse().map(x => ({ h: hhmm(x.heure), t: x.libelle + (x.nb && !/wagon/.test(x.libelle) ? ` · ${x.nb} wagon${x.nb > 1 ? "s" : ""}` : ""), cle: x.groupe || x.ef })));
     const n = P.mouvements.length;
     resume = `${n} mouvement${pl(n, "")} appliqué${pl(n, "")}${ann ? ` · ${ann} départ${pl(ann, "")} annoncé${pl(ann, "")}, en attente de « Parti »` : ""}`;
     etat(`À jour · lu à ${hm(lecture)} · ${resume}.`);
@@ -2031,6 +2074,7 @@ body[data-mode="simulation"] #fiche{display:none}
 
   // ---------------------------------------------------------------- mode d'affichage
   let mode = "3d";
+  const pDonnees = { aVerifier: [], previsions: [], contenus: {}, date: "", sale: false };
   function choisir(m, depuisAdresse) {
     m = window.LHTE_PLAN && window.LHTE_PLAN.seul ? "plan" : m === "plan" || m === "simulation" ? m : "3d"; const avant = mode; mode = m;
     document.body.dataset.mode = m; $("plan-vue").hidden = m !== "plan";
@@ -2085,7 +2129,7 @@ body[data-mode="simulation"] #fiche{display:none}
     return { parts: Object.entries(q).sort((a, b) => b[1] - a[1]), engins };
   }
   function dessinerEtats(clignoter) {
-    const maintenant = Date.now(), totaux = {}; let wagons = 0; const nb = { libre: 0, partielle: 0, occupee: 0 };
+    const maintenant = Date.now(), totaux = {}, prevs = previsionsVoie(); let wagons = 0; const nb = { libre: 0, partielle: 0, occupee: 0 };
     for (const v of VOIES) {
       const f = formes[v], e = Tn.etatVoie(v), c = compo(v), code = e.code, coul = COUL[code] || "#888";
       c.parts.forEach(([k, n]) => { totaux[k] = (totaux[k] || 0) + n; }); if (e.hs) totaux["~HS"] = (totaux["~HS"] || 0) + e.hs; wagons += e.wagons; if (code in nb) nb[code]++;
@@ -2100,14 +2144,17 @@ body[data-mode="simulation"] #fiche{display:none}
       // pastille : nom, wagons / capacité, répartition
       const morceaux = [`<tspan class="nom">${echap(v)}</tspan>`];
       if (e.type === 80) morceaux.push(`<tspan dx="4" class="faible">80'</tspan>`);
+      const pv = prevs[v];
       if (!e.wagons && !c.engins) morceaux.push(`<tspan dx="5" fill="${coul}">${code === "libre" ? "libre" : LIBELLES[code].toLowerCase()}</tspan>`);
       else {
         if (e.wagons) morceaux.push(`<tspan dx="5" class="nb">${e.wagons}${e.capacite ? `<tspan class="faible">/${e.capacite}</tspan>` : " wg"}</tspan>`);
-        const vus = c.parts.slice(0, 2); vus.forEach(([k, n]) => morceaux.push(`<tspan dx="6" fill="${couleurQui(k)}">●</tspan><tspan dx="2">${echap(nomQui(k))}${c.parts.length > 1 ? " " + n : ""}</tspan>`));
-        if (c.parts.length > 2) morceaux.push(`<tspan dx="4" class="faible">+${c.parts.length - 2}</tspan>`);
+        const vus = c.parts.slice(0, 3); vus.forEach(([k, n]) => morceaux.push(`<tspan dx="6" fill="${couleurQui(k)}">●</tspan><tspan dx="2">${echap(nomQui(k))}${c.parts.length > 1 ? " " + n : ""}</tspan>`));
+        if (c.parts.length > 3) morceaux.push(`<tspan dx="4" class="faible">+${c.parts.length - 3}</tspan>`);
         if (e.hs) morceaux.push(`<tspan dx="6" fill="#d1d5db" font-weight="700">HS ${e.hs}</tspan>`);
         if (c.engins) morceaux.push(`<tspan dx="6" class="faible">${c.engins} engin${c.engins > 1 ? "s" : ""}</tspan>`);
       }
+      if (pv) morceaux.push(`<tspan dx="7" fill="#60a5fa">⏵ ${echap(pv.date === pDonnees.date ? (pv.heure || "").slice(11, 16) : jourCourt(pv.date).split(" ")[0])} ${echap(pv.groupe || pv.code)}${pv.wagons != null ? " " + pv.wagons : ""}</tspan>`);
+      if (pDonnees.aVerifier.some(x => x.ambigu.voie === v)) morceaux.push(`<tspan dx="6" fill="#fbbf24" font-weight="700">?</tspan>`);
       f.texte.innerHTML = morceaux.join("");
       let l = 60; try { f.texte.setAttribute("x", 0); l = f.texte.getBBox().width || l; } catch (e) { /* plan masqué : mesuré au prochain affichage */ }
       f.texte.setAttribute("x", (-l / 2).toFixed(1)); f.fondP.setAttribute("x", (-l / 2 - 7).toFixed(1)); f.fondP.setAttribute("width", (l + 14).toFixed(1));
@@ -2164,7 +2211,8 @@ body[data-mode="simulation"] #fiche{display:none}
   const CHOIX = [["", "Sans entreprise"]].concat(Object.keys(REL).map(k => [k, REL[k].nom + " (relation)"]), Object.keys(M.entreprises).map(k => [k, M.entreprises[k].nom]));
   function ligneEdition(p) {
     const d = document.createElement("div"); d.className = "pe-ligne";
-    d.innerHTML = `<select aria-label="Entreprise">${CHOIX.map(([k, n]) => `<option value="${echap(k)}"${k === p.cle ? " selected" : ""}>${echap(n)}</option>`).join("")}</select>`
+    const choix = p.cle && !CHOIX.some(([k]) => k === p.cle) ? CHOIX.concat([[p.cle, nomQui(p.cle)]]) : CHOIX;
+    d.innerHTML = `<select aria-label="Entreprise">${choix.map(([k, n]) => `<option value="${echap(k)}"${k === p.cle ? " selected" : ""}>${echap(n)}</option>`).join("")}</select>`
       + `<input type="number" min="0" max="80" step="1" value="${p.nb}" aria-label="Nombre de wagons"><select aria-label="Charge"><option${p.charge !== "vides" ? " selected" : ""}>chargés</option><option${p.charge === "vides" ? " selected" : ""}>vides</option></select>`
       + `<button type="button" aria-label="Retirer cette ligne">×</button>`;
     d.querySelector("button").addEventListener("click", () => d.remove()); $("pe-lignes").appendChild(d);
@@ -2174,30 +2222,77 @@ body[data-mode="simulation"] #fiche{display:none}
   function majCap() { if (!edite) return; const ty = Number((document.querySelector('input[name="pe-type"]:checked') || {}).value) || 60, c = capType(edite, ty); $("pe-cap").textContent = c ? `${c} wagons de ${ty} pieds` : "non connue"; }
   document.querySelectorAll('input[name="pe-type"]').forEach(r => r.addEventListener("change", majCap));
   if (SEUL) { // textes de la vue seule : les wagons viennent de la saisie
-    const lg = [...document.querySelectorAll("#plan-cote p")].find(p => /Cliquez sur une voie/.test(p.textContent)); if (lg) lg.textContent = "Une voie qui change d'état clignote. Cliquez sur une voie pour régler ses wagons (60 ou 80 pieds) et ses wagons HS.";
-    $("plan-vide").textContent = "Aucun wagon sur le site d'après la saisie du jour.";
+    const lg = [...document.querySelectorAll("#plan-cote p")].find(p => /Cliquez sur une voie/.test(p.textContent)); if (lg) lg.textContent = "Une voie qui change d'état clignote. Cliquez sur une voie pour saisir ses wagons (entreprise, 60 ou 80 pieds, HS).";
+    $("plan-vide").textContent = "Aucun wagon connu sur le site : cliquez sur chaque voie occupée pour saisir ses wagons et leur entreprise ; les mouvements de la saisie (entrées, départs, manœuvres) les tiennent ensuite à jour.";
   }
   function ouvrirEdition(v, ev) {
     edite = v; const e = Tn.etatVoie(v), t = R.voies[v].troncon, q = {};
-    $("pe-conf").hidden = !SEUL;
+    $("pe-conf").hidden = !SEUL; pDonnees.sale = false; $("pe-calcul").hidden = !(SEUL && pDonnees.contenus[v]);
     if (SEUL) { const cf = (window.LHTE_VOIES_CONF || {})[v] || {}; document.querySelectorAll('input[name="pe-type"]').forEach(r => { r.checked = Number(r.value) === (Number(cf.type) === 80 ? 80 : 60); }); $("pe-hs").value = cf.hs || 0; }
     Tn.liste().forEach(x => { if (x.troncon === t && x.nb) { const k = (x.ef || "") + "|" + x.charge; q[k] = (q[k] || 0) + x.nb; } });
     $("pe-titre").textContent = `Voie ${v}`; $("pe-note").textContent = `${LIBELLES[e.code]} · ${e.wagons} wagon${pl(e.wagons)}${e.capacite ? ` sur ${e.capacite}` : ""}. Saisissez ce qui s'y trouve réellement.`;
-    $("pe-lignes").innerHTML = ""; $("pe-msg").textContent = ""; if (SEUL) { $("pe-note").textContent = `${LIBELLES[e.code]} · ${e.wagons} wagon${pl(e.wagons)}${e.capacite ? ` sur ${e.capacite}` : ""}${e.hs ? ` (dont ${e.hs} HS)` : ""}. Les wagons des trains viennent de la saisie ; réglez ici le type de wagons et les wagons HS.`; majCap(); }
+    $("pe-lignes").innerHTML = ""; $("pe-msg").textContent = ""; if (SEUL) { $("pe-note").textContent = `${LIBELLES[e.code]} · ${e.wagons} wagon${pl(e.wagons)}${e.capacite ? ` sur ${e.capacite}` : ""}${e.hs ? ` (dont ${e.hs} HS)` : ""}. Indiquez ce qui s'y trouve réellement (entreprise, nombre) : les mouvements de la saisie partiront de là.${pDonnees.contenus[v] ? ` Contenu saisi le ${pDonnees.contenus[v].t.slice(8, 10)}/${pDonnees.contenus[v].t.slice(5, 7)} à ${pDonnees.contenus[v].t.slice(11, 16)}.` : ""}`; majCap(); }
     const l = Object.entries(q).map(([k, n]) => ({ cle: k.split("|")[0], charge: k.split("|")[1], nb: n })); (l.length ? l : [{ cle: "", nb: 0, charge: "chargés" }]).forEach(ligneEdition);
     const z = $("plan-zone").getBoundingClientRect(), b = $("plan-edition"), x = (ev && ev.clientX) || z.left + z.width / 2, y = (ev && ev.clientY) || z.top + z.height / 2;
     b.hidden = false; b.style.left = Math.max(12, Math.min(z.width - b.offsetWidth - 12, x - z.left - b.offsetWidth / 2)) + "px"; b.style.top = Math.max(12, Math.min(z.height - b.offsetHeight - 12, y - z.top + 14)) + "px";
-    (SEUL ? $("pe-hs") : b.querySelector("input,select")).focus();
+    b.querySelector("input,select").focus();
   }
-  /* Réglages d'une voie enregistrés sur le serveur de la saisie (clé connue sur ce poste) : vus par toutes les fenêtres. */
-  async function enregistrerConf(v, type, hs) {
+  // saisie du contenu modifiée ? (sinon seuls le type et les HS sont enregistrés)
+  $("pe-lignes").addEventListener("input", () => { pDonnees.sale = true; }); $("pe-lignes").addEventListener("change", () => { pDonnees.sale = true; });
+  $("pe-lignes").addEventListener("click", e => { if (e.target.closest("button")) pDonnees.sale = true; });
+  const isoLocal = () => { const d = new Date(); return new Date(d - d.getTimezoneOffset() * 60000).toISOString().slice(0, 19); };
+  async function envoyerPlan(corps) {
     let cx = {}; try { cx = JSON.parse(localStorage.getItem("suivi:connexion") || "null") || {}; } catch (e) { /* stockage indisponible */ }
-    if (!cx.url || !cx.cle) throw new Error("Réglage possible seulement depuis le poste de saisie (connexion au serveur inconnue ici).");
-    const tout = Object.assign({}, window.LHTE_VOIES_CONF || {}); if (type === 60 && !hs) delete tout[v]; else tout[v] = { type, hs };
-    const r = await fetch(cx.url, { method: "POST", cache: "no-store", redirect: "follow", body: JSON.stringify({ cle: cx.cle, methode: "PUT", chemin: "/api/plan-voies", corps: JSON.stringify(tout) }) }).then(x => x.json());
+    if (!cx.url || !cx.cle) throw new Error("Saisie possible seulement depuis le poste de saisie (connexion au serveur inconnue ici).");
+    const r = await fetch(cx.url, { method: "POST", cache: "no-store", redirect: "follow", body: JSON.stringify({ cle: cx.cle, methode: "PUT", chemin: "/api/plan-saisie", corps: JSON.stringify(corps) }) }).then(x => x.json());
     if (!r || r.status !== 200) throw new Error((r && r.data && r.data.erreur) || "enregistrement refusé (serveur à redéployer ?)");
     window.LHTE_VOIES_CONF = r.data.voies || {}; Tn.changer();
     try { new BroadcastChannel("suivi-plan").postMessage({ type: "relire" }); } catch (e) { /* une seule fenêtre */ }
+    if (LHTE.direct && LHTE.direct.relire) LHTE.direct.relire();
+    return r.data;
+  }
+  const peutSaisir = () => { try { const c = JSON.parse(localStorage.getItem("suivi:connexion") || "null") || {}; return !!(c.url && c.cle); } catch (e) { return false; } };
+  $("pe-calcul").addEventListener("click", () => {
+    const v = edite; if (!v) return; $("pe-msg").textContent = "Enregistrement…";
+    envoyerPlan({ voie: v, parts: null }).then(() => { fermer(); noterMvt(new Date().toTimeString().slice(0, 5), `${v} : contenu recalculé depuis la saisie`, "", true); }, e => { $("pe-msg").textContent = e.message; });
+  });
+
+  // ---------------------------------------------------------------- plan : retraits à vérifier, prévisions
+  const JOURS = ["dim.", "lun.", "mar.", "mer.", "jeu.", "ven.", "sam."];
+  const jourCourt = d => JOURS[new Date(d + "T12:00:00").getDay()] + " " + d.slice(8, 10);
+  const voieDe = brut => { const r = A.J.lireVoie(brut); return r && r.voie; };
+  function donnees(o) { Object.assign(pDonnees, o); rendreVerif(); rendrePrev(); dessinerEtats(false); }
+  function rendreVerif() {
+    const l = pDonnees.aVerifier, saisir = peutSaisir(); $("plan-verif-s").hidden = !l.length;
+    $("plan-verif").innerHTML = l.map((x, i) => {
+      const a = x.ambigu, dest = x.destination || (x.type === "depart" ? "départ" : x.type === "sortie" ? "sortie" : "");
+      const vus = {}; a.dispo.forEach(p => { vus[p.cle] = (vus[p.cle] || 0) + p.nb; });
+      const sup = {}; (a.suppose || []).forEach(p => { sup[p.cle] = (sup[p.cle] || 0) + p.nb; });
+      return `<div class="pv-item" data-i="${i}"><span>${hhmm(x.heure)} · <b>${a.nb} wagon${pl(a.nb)}</b> retiré${pl(a.nb)} de ${echap(a.voie)}${dest ? " → " + echap(dest) : ""} (${echap(x.num || x.train)}) : lesquels ?</span>`
+        + `<div class="pv-parts">${Object.keys(vus).map(k => `<label><span style="color:${couleurQui(k)}">●</span>${echap(nomQui(k))} <small>(${vus[k]})</small><input type="number" min="0" max="${vus[k]}" value="${sup[k] || 0}" data-cle="${echap(k)}"${saisir ? "" : " disabled"}></label>`).join("")}</div>`
+        + (saisir ? `<button type="button">Valider</button><small></small>` : "<small>Choix supposé : à corriger depuis le poste de saisie.</small>") + "</div>";
+    }).join("");
+    $("plan-verif").querySelectorAll(".pv-item button").forEach(b => b.addEventListener("click", () => {
+      const it = b.closest(".pv-item"), x = l[+it.dataset.i], parts = [...it.querySelectorAll("input")].map(i => ({ cle: i.dataset.cle, nb: parseInt(i.value, 10) || 0 })).filter(p => p.nb > 0);
+      const tot = parts.reduce((n, p) => n + p.nb, 0); if (tot !== x.ambigu.nb) { it.querySelector("small").textContent = `Total ${tot} : il en faut ${x.ambigu.nb}.`; return; }
+      b.disabled = true; envoyerPlan({ choix: { id: x.ligne.id, parts } }).catch(e => { b.disabled = false; it.querySelector("small").textContent = e.message; });
+    }));
+  }
+  function previsionsVoie() { // première prévision à venir de chaque voie
+    const m = {}; pDonnees.previsions.slice().sort((a, b) => (a.date + a.heure < b.date + b.heure ? -1 : 1)).forEach(p => { const v = voieDe(p.voie); if (v && !m[v]) m[v] = p; });
+    return m;
+  }
+  function surPlace(v, groupe) { const c = compo(v); return c.parts.filter(([k]) => k === groupe || nomQui(k) === groupe).reduce((n, [, q]) => n + q, 0); }
+  function rendrePrev() {
+    const l = pDonnees.previsions.slice().sort((a, b) => (a.date + a.heure < b.date + b.heure ? -1 : 1)); $("plan-prev-s").hidden = !l.length;
+    let jour = "", h = "";
+    l.forEach(p => {
+      if (p.date !== jour) { jour = p.date; h += `<div class="pp-jour">${p.date === pDonnees.date ? "Aujourd'hui" : jourCourt(p.date)}</div>`; }
+      const v = voieDe(p.voie), dep = p.sens === "D", n = v && dep && p.wagons ? surPlace(v, p.groupe) : null;
+      h += `<div class="pp"><time>${echap((p.heure || "").slice(11, 16) || "--:--")}</time><span><span style="color:${couleurQui(p.groupe)}">●</span> ${echap(p.code)} <small class="faible">${dep ? "départ" : "arrivée"}</small> · ${echap(v || p.voie || "voie ?")}${p.wagons != null ? " · " + p.wagons + " wg" : ""}</span>`
+        + (n != null ? `<span class="${n >= p.wagons ? "ok" : "manque"}" title="wagons ${echap(p.groupe)} déjà sur la voie">${n}/${p.wagons}</span>` : "<span></span>") + "</div>";
+    });
+    $("plan-prev").innerHTML = h;
   }
   const fermer = () => { $("plan-edition").hidden = true; edite = null; };
   $("pe-annuler").addEventListener("click", fermer);
@@ -2208,8 +2303,16 @@ body[data-mode="simulation"] #fiche{display:none}
     if (!edite) return;
     if (SEUL) {
       const v = edite, ty = Number((document.querySelector('input[name="pe-type"]:checked') || {}).value) === 80 ? 80 : 60, hs = Math.max(0, Math.min(80, parseInt($("pe-hs").value, 10) || 0));
+      const corps = { voie: v, type: ty, hs };
+      if (pDonnees.sale) {
+        const parts = [...$("pe-lignes").querySelectorAll(".pe-ligne")].map(d => { const [s1, n, s2] = d.querySelectorAll("select,input"); return { cle: s1.value, nb: Math.max(0, Math.min(120, parseInt(n.value, 10) || 0)), charge: s2.value }; }).filter(p => p.nb > 0);
+        const tot = parts.reduce((k, p) => k + p.nb, 0) + hs, cap = capType(v, ty);
+        if (cap && tot > cap) { $("pe-msg").textContent = `${tot} wagons (HS compris) dépassent la capacité de ${v} : ${cap} wagons de ${ty} pieds.`; return; }
+        corps.parts = parts; corps.t = isoLocal();
+      }
       $("pe-msg").textContent = "Enregistrement…"; $("pe-ok").disabled = true;
-      enregistrerConf(v, ty, hs).then(() => { $("pe-ok").disabled = false; fermer(); noterMvt(new Date().toTimeString().slice(0, 5), `${v} : wagons ${ty} pieds${hs ? `, ${hs} HS` : ""}`, "", true); },
+      envoyerPlan(corps).then(() => { $("pe-ok").disabled = false; fermer();
+        const l = corps.parts ? corps.parts.map(p => `${p.nb} ${nomQui(p.cle)}`).join(", ") || "libre" : ""; noterMvt(new Date().toTimeString().slice(0, 5), `${v} saisie : ${l ? l + " · " : ""}${ty} pieds${hs ? `, ${hs} HS` : ""}`, corps.parts && corps.parts[0] && corps.parts[0].cle, true); },
         e => { $("pe-ok").disabled = false; $("pe-msg").textContent = e.message; });
       return;
     } if (Tn.actif()) { $("pe-msg").textContent = "Un mouvement est en cours : enregistrez à sa fin."; return; }
@@ -2279,7 +2382,7 @@ body[data-mode="simulation"] #fiche{display:none}
   function entrerSimulation() { bandeau(null); $("sim-bandeau").hidden = false; if (!seq) S.vue("isometrique"); }
   function sortirSimulation() { if (seq) { clearTimeout(retour); finSequence(); } $("sim-bandeau").hidden = true; $("sim-carte").hidden = true; $("sim-attente").hidden = true; }
 
-  LHTE.vues = { mode: () => mode, choisir, prioritaire, statut, mouvements: remplacerMvts };
+  LHTE.vues = { mode: () => mode, choisir, prioritaire, statut, mouvements: remplacerMvts, donnees };
   // Adresse de la page : #plan ou #simulation ouvrent directement la vue (écran mural, écran TV).
   const depart = () => { if (!Tn.pret()) { setTimeout(depart, 300); return; } choisir(location.hash.slice(1), true); dessinerEtats(false); };
   depart();
