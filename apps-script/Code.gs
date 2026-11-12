@@ -15,7 +15,7 @@
  */
 
 const CLE = 'CHANGER-CE-MOT-DE-PASSE';
-const VERSION = '2.6.0';
+const VERSION = '2.7.0';
 const FUSEAU = 'Europe/Paris';
 const NOM_DOSSIER = 'Suivi des circulations - données';
 
@@ -117,6 +117,7 @@ function lignesDuJour_(feuille, date) {
  *   ou le corps envoyé tel quel par Notion (propriétés de la page : un titre ou texte « Appareil », un select ou
  *   statut dont la couleur Notion dit l'état : orange / jaune = maintenance, rouge = hors service, vert / gris = fini).
  * Couleurs : orange → « en cours de maintenance », rouge → « hors service », vert (ou « fin », « ok ») → l'avis disparaît.
+ * Cause facultative ("cause" ou propriété Notion « Cause » / « Motif » / « Raison ») : texte affiché avec l'avis.
  * Créneau facultatif ("creneau" ou propriété Notion « Créneau » / « Durée » / « Période ») : « Journée », « Demi-journée »,
  * « 8h-12h », « 13h30 à 17h »… affiché après la phrase ; avec une heure de fin (ou « Journée »), l'avis disparaît seul.
  * La clé d'envoi (Paramètres › Travaux de la saisie) est différente de la CLE de la saisie : elle ne permet que ça.
@@ -157,20 +158,22 @@ function lireAvisTravaux_(corps) {
   const props = (corps && corps.data && corps.data.properties) || (corps && corps.properties) || null;
   if (!props) {
     return { appareil: corps.appareil || corps.equipement || corps.engin || corps.nom || corps.name || '', couleur: corps.couleur || corps.color || corps.etat || corps.statut || '', message: corps.message || corps.texte || corps.text || '',
-      creneau: corps.creneau || corps['créneau'] || corps.duree || corps['durée'] || corps.periode || corps['période'] || corps.horaire || corps.horaires || '' };
+      creneau: corps.creneau || corps['créneau'] || corps.duree || corps['durée'] || corps.periode || corps['période'] || corps.horaire || corps.horaires || '',
+      cause: corps.cause || corps.motif || corps.raison || corps.panne || '' };
   }
-  let appareil = '', couleur = '', message = '', creneau = '';
+  let appareil = '', couleur = '', message = '', creneau = '', cause = '';
   Object.keys(props).forEach(nom => {
     const p = props[nom], n = cleTravaux_(nom);
     if (/appareil|engin|equipement|portique|machine/.test(n) && !appareil) appareil = texteNotion_(p);
     else if (/couleur|color/.test(n)) couleur = texteNotion_(p) || couleur;
+    else if (/cause|motif|raison|panne/.test(n)) cause = texteNotion_(p) || cause;
     else if (/message|commentaire|detail|description|texte/.test(n)) message = texteNotion_(p);
     else if (/creneau|duree|periode|horaire|plage|quand/.test(n)) creneau = texteNotion_(p) || (p && p.date && p.date.start ? creneauDate_(p.date) : '');
     const choix = p && (p.select || p.status);
     if (choix && choix.color && !couleur && /etat|statut|status|state|niveau|couleur/.test(n)) couleur = choix.color;
   });
   if (!appareil) Object.keys(props).forEach(nom => { if (!appareil && props[nom] && props[nom].type === 'title') appareil = texteNotion_(props[nom]); });
-  return { appareil: appareil, couleur: couleur, message: message, creneau: creneau };
+  return { appareil: appareil, couleur: couleur, message: message, creneau: creneau, cause: cause };
 }
 /** Propriété Notion « Date » avec début et fin → « 8h00-12h00 ». */
 function creneauDate_(d) {
@@ -214,7 +217,7 @@ function listeTravaux_() {
   const maint = maintenant_();
   return Object.keys(etat).filter(k => !etat[k].fin || etat[k].fin > maint).map(k => {
     const a = etat[k], phrase = String(cfg.phrases[a.couleur] || PHRASES_TRAVAUX[a.couleur] || '{appareil}').replace(/\{appareil\}/g, a.libelle || a.code);
-    return { code: a.code, libelle: a.libelle, couleur: a.couleur, texte: phrase.charAt(0).toUpperCase() + phrase.slice(1), message: a.message || '', creneau: a.creneau || '', fin: a.fin || '', depuis: a.depuis, a: a.a };
+    return { code: a.code, libelle: a.libelle, couleur: a.couleur, texte: phrase.charAt(0).toUpperCase() + phrase.slice(1), message: a.message || '', cause: a.cause || '', creneau: a.creneau || '', fin: a.fin || '', depuis: a.depuis, a: a.a };
   }).sort((x, y) => (x.couleur === y.couleur ? String(x.code).localeCompare(String(y.code)) : (x.couleur === 'rouge' ? -1 : 1)));
 }
 /** Applique un avis : { appareil, couleur, message }. Renvoie { ok, … }. */
@@ -233,12 +236,14 @@ function appliquerAvisTravaux_(avis, source) {
     const prec = etat[code] && (!etat[code].fin || etat[code].fin > maintenant_()) ? etat[code] : null;
     if (couleur === 'fin') delete etat[code];
     else etat[code] = { code: code, libelle: app ? app.libelle : nom, couleur: couleur, message: String(avis.message || '').slice(0, 200),
+      // cause : gardée si un nouvel envoi du même appareil n'en donne pas
+      cause: String(avis.cause || (prec && prec.cause) || '').slice(0, 200),
       creneau: cr.texte, fin: cr.fin,
       depuis: (prec && prec.couleur === couleur && prec.depuis) || maintenant_(), a: maintenant_(), source: source || '' };
     // ménage : avis échus
     Object.keys(etat).forEach(k => { if (etat[k].fin && etat[k].fin <= maintenant_()) delete etat[k]; });
     ecrireTravaux_(etat);
-    try { feuille_('Travaux', ['Horodatage', 'Appareil', 'État', 'Message', 'Source', 'Créneau']).appendRow([maintenant_(), code, couleur, String(avis.message || ''), source || '', String(avis.creneau || '')]); } catch (e) { /* registre facultatif */ }
+    try { feuille_('Travaux', ['Horodatage', 'Appareil', 'État', 'Message', 'Source', 'Créneau', 'Cause']).appendRow([maintenant_(), code, couleur, String(avis.message || ''), source || '', String(avis.creneau || ''), String(avis.cause || '')]); } catch (e) { /* registre facultatif */ }
     return { status: 200, data: { ok: true, appareil: code, etat: couleur, connu: !!app } };
   }).data;
 }
@@ -249,7 +254,7 @@ function recevoirTravaux_(e) {
   let corps = {};
   try { corps = JSON.parse((e.postData && e.postData.contents) || '{}'); } catch (err) { corps = {}; }
   if (!corps || typeof corps !== 'object') corps = {};
-  ['appareil', 'couleur', 'message', 'creneau'].forEach(k => { if (e.parameter[k] && !corps[k]) corps[k] = e.parameter[k]; });
+  ['appareil', 'couleur', 'message', 'creneau', 'cause'].forEach(k => { if (e.parameter[k] && !corps[k]) corps[k] = e.parameter[k]; });
   return appliquerAvisTravaux_(lireAvisTravaux_(corps), corps.data ? 'notion' : 'externe');
 }
 

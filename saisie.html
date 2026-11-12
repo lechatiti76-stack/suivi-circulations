@@ -23,6 +23,7 @@
     <button type="button" id="b-connexion" hidden>Connexion</button>
     <button type="button" id="b-installer" hidden>⬇ Installer l'application</button>
     <button type="button" id="b-raccourcis" hidden>Raccourcis ⬇</button>
+    <button type="button" id="b-plan" hidden>Plan de voie</button>
     <button type="button" id="b-flash">Flash info</button>
     <button type="button" id="b-mails">Mails<span class="compteur" id="c-mails" hidden>0</span></button>
     <button type="button" id="b-coupons" class="b-coupons" title="Coupons navettes saisis dans le Suivi trains (onglet Coupons)">🎫 Coupons<span class="compteur" id="c-coupons" hidden>0</span></button>
@@ -92,7 +93,7 @@
         <button type="button" class="onglet" role="tab" aria-selected="false" data-onglet="demain" id="o-demain">Demain</button>
         <button type="button" class="onglet" role="tab" aria-selected="false" data-onglet="surlendemain" id="o-surlendemain">Après-demain</button>
       </div>
-      <div class="outils"><button type="button" class="bouton petit" id="b-ajout">+ Ajouter</button></div>
+      <div class="outils"><button type="button" class="bouton petit" id="b-chrono" aria-pressed="false" title="Toutes les navettes et tous les trains dans l'ordre des heures (sans regrouper par terminal)">🕒 Chronologique</button><button type="button" class="bouton petit" id="b-ajout">+ Ajouter</button></div>
     </div>
     <div class="filtres" id="p-filtres" hidden></div>
     <div class="defile" id="p-liste"></div>
@@ -145,6 +146,14 @@
     </div>
     <div class="dlg-pied"><span class="gauche">La clé reste dans ce navigateur. Elle n'est jamais publiée.</span><button type="submit" class="bouton primaire">Enregistrer et recharger</button></div>
   </form>
+</dialog>
+
+<!-- Plan de voie (page du simulateur) -->
+<dialog id="d-plan" class="d-plan">
+  <div>
+    <div class="dlg-tete"><h2>Plan de voie</h2><span class="gauche note" id="pl-v-compte"></span><button type="button" class="bouton" data-fermer>Fermer</button></div>
+    <div class="plan-cadre"><iframe id="plan-iframe" title="Plan de voie — occupation des voies en direct"></iframe></div>
+  </div>
 </dialog>
 
 <!-- Flash info -->
@@ -281,7 +290,9 @@
         <p class="note">Un autre service (par exemple une automatisation Notion « Envoyer un webhook ») peut afficher un bandeau « Travaux » sur les écrans
           et ici : il envoie le nom de l'appareil et une couleur (orange = en maintenance, rouge = hors service, vert = remis en service, l'avis disparaît).
           Donnez-lui <b>l'adresse d'envoi ci-dessous</b> : elle contient une clé d'envoi propre à cet usage (ce n'est pas la clé de la saisie).
-          Générer une nouvelle clé coupe l'ancienne adresse.</p>
+          Générer une nouvelle clé coupe l'ancienne adresse.<br>
+          Le service peut aussi envoyer une <b>cause</b> (texte, ex. « panne du spreader ») : champ <span class="mono">"cause"</span>, ou dans Notion une propriété
+          <b>Cause</b> (ou Motif / Raison). Elle s'affiche dans le bandeau Travaux de la saisie et des écrans, et dans l'alerte en grand.</p>
         <div class="formgrid">
           <div class="champ"><label for="pa-tx-jeton">Clé d'envoi</label><input id="pa-tx-jeton" class="mono" readonly placeholder="aucune : réception désactivée"></div>
           <div class="champ"><label>&nbsp;</label><button type="button" class="bouton" id="pa-tx-generer">Générer une nouvelle clé</button></div>
@@ -297,6 +308,7 @@
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px">
           <span class="note">Essai (après Enregistrer) :</span><select id="pa-tx-essai-app"></select>
           <input id="pa-tx-essai-cr" placeholder="créneau : 8h-12h, journée…" style="width:190px">
+          <input id="pa-tx-essai-cause" placeholder="cause : panne spreader…" style="width:190px">
           <button type="button" class="bouton petit" data-tx-essai="orange">Orange</button>
           <button type="button" class="bouton petit" data-tx-essai="rouge">Rouge</button>
           <button type="button" class="bouton petit" data-tx-essai="vert">Fin (vert)</button>
@@ -341,6 +353,27 @@
           <label class="retrait">Vitesse de la voix <span id="pa-vitesse-voix-val" class="mono"></span></label><input type="range" id="pa-vitesse-voix" min="0.8" max="1.2" step="0.05"><span></span>
           <label class="retrait">Mots dits autrement</label><input id="pa-prononciation" placeholder="ATL=Atlantique, TN=Terminal Nord"><span></span>
           <label>Volume <input type="range" id="pa-volume" min="0" max="100" step="5" style="width:180px"> <span id="pa-volume-val" class="mono"></span></label><span></span><span></span>
+        </div>
+      </div>
+      <div class="section"><h4>Animation train et plan de voie</h4>
+        <p class="note">Arrivée imminente : le grand bandeau s'affiche 2 s, se réduit de moitié pendant que l'animation « alerte train » passe dans la moitié basse,
+          puis revient en grand jusqu'à l'arrivée. L'animation est la page <span class="mono">alerte-train.html</span> (et son fichier <span class="mono">alerte-train.config.js</span>)
+          à déposer dans le dépôt GitHub, à côté de <span class="mono">visuel.html</span> ; sans elle, rien ne change.</p>
+        <div class="fl-coches">
+          <label><input type="checkbox" id="pa-anim"> Animation train aux arrivées imminentes</label>
+          <label>Adresse <input id="pa-anim-url" class="mono" placeholder="alerte-train.html" style="width:260px"></label>
+        </div>
+        <p class="note" style="margin-top:12px"><b>Plan de voie</b> (occupation des voies en direct, page du simulateur) : collez l'adresse de la page ; le bouton
+          « Plan de voie » de la saisie l'ouvre, et elle peut s'afficher quelques secondes après une arrivée ou un départ.</p>
+        <div class="formgrid">
+          <div class="champ large"><label for="pa-plan-url">Adresse du plan de voie</label><input id="pa-plan-url" class="mono" placeholder="https://…/plan-de-voie.html"></div>
+          <div class="champ"><label for="pa-plan-duree">Durée d'affichage (s)</label><input id="pa-plan-duree" class="mono" inputmode="numeric"></div>
+        </div>
+        <div class="fl-coches">
+          <label><input type="checkbox" id="pa-plan-tv-arr"> Écrans TV : après une arrivée</label>
+          <label><input type="checkbox" id="pa-plan-tv-dep"> Écrans TV : après un départ</label>
+          <label><input type="checkbox" id="pa-plan-sa-arr"> Saisie : après une arrivée</label>
+          <label><input type="checkbox" id="pa-plan-sa-dep"> Saisie : après un départ</label>
         </div>
       </div>
     </div>

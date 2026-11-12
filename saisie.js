@@ -598,7 +598,7 @@
   function enregistrerParametres(p, message) {
     return api('PUT', '/api/parametres', JSON.stringify(p, null, 2)).then(function (r) {
       if (r.status !== 200) throw new Error((r.data && r.data.erreur) || 'enregistrement refusé');
-      app.params = p; reglerJours(); remplirListes();
+      app.params = p; reglerJours(); remplirListes(); majBoutonPlan();
       // les écrans prennent les nouveaux réglages (sons…) tout de suite, même si une publication était en cours
       setTimeout(publier, 2500);
       if (app.journee && !app.lectureSeule && SC.recalerPreps(SC.copie(app.journee), app.planning)) {
@@ -624,7 +624,30 @@
       var m = SC.journaliserCirculation(j, cc, t, app.planning, app.params, uid('m'));
       if (m) app.nouvelle = m.id;
     });
+    var pv = planVoie();
+    if (pv.adresse && (c.sens === 'D' ? pv.saisieDepart : pv.saisieArrivee)) setTimeout(function () { ouvrirPlanVoie(pv.duree); }, 1200);
   }
+  // ------------------------------------------------- plan de voie (simulateur)
+  function planVoie() { return ((app.params || {}).visuel || {}).planVoie || {}; }
+  var planMinuteur = null;
+  /** Ouvre la page du plan de voie ; avec une durée, la referme seule après ce nombre de secondes. */
+  function ouvrirPlanVoie(duree) {
+    var pv = planVoie(); if (!pv.adresse) { toast('Plan de voie : indiquez son adresse dans Paramètres.'); return; }
+    var f = $('#plan-iframe'), url = new URL(pv.adresse, location.href).href;
+    if (f.getAttribute('src') !== url) f.setAttribute('src', url);
+    clearInterval(planMinuteur); $('#pl-v-compte').textContent = '';
+    ouvrir('#d-plan');
+    if (duree) {
+      var fin = Date.now() + duree * 1000;
+      planMinuteur = setInterval(function () {
+        var r = Math.ceil((fin - Date.now()) / 1000);
+        if (r <= 0 || !$('#d-plan').open) { clearInterval(planMinuteur); $('#pl-v-compte').textContent = ''; if ($('#d-plan').open) $('#d-plan').close(); F.num.focus(); return; }
+        $('#pl-v-compte').textContent = 'fermeture dans ' + r + ' s';
+      }, 250);
+    }
+  }
+  $('#b-plan').addEventListener('click', function () { ouvrirPlanVoie(0); });
+  function majBoutonPlan() { $('#b-plan').hidden = !planVoie().adresse; }
   function annulerReel(id) {
     var c = circDe(app.journee, id); if (!c) return;
     modifier('Heure réelle de ' + c.code + ' retirée', 'circulation.reel.annulation', function (j) {
@@ -796,8 +819,8 @@
         var k = sel.getAttribute('data-son-choix'); return sel.value !== (sons[k] || { arrivee: 'arrivee', flash: 'flash', orange: 's6_important', rouge: 's2_urgent', fin: 's12_finJoyeux' }[k]);
       });
       if (change) toast('Sons modifiés mais pas encore enregistrés : les écrans jouent encore l\'ancien son. Cliquez « Enregistrer » puis refaites l\'essai.', 'crit');
-      api('POST', '/api/travaux', JSON.stringify({ appareil: $('#pa-tx-essai-app').value, couleur: b.getAttribute('data-tx-essai'), message: 'essai depuis la saisie', creneau: $('#pa-tx-essai-cr').value.trim() })).then(function (r) {
-        if (r.status !== 200) { toast('Essai refusé : ' + ((r.data && r.data.erreur) || r.status) + ' (serveur 2.6.0 ?)', 'crit'); return; }
+      api('POST', '/api/travaux', JSON.stringify({ appareil: $('#pa-tx-essai-app').value, couleur: b.getAttribute('data-tx-essai'), message: 'essai depuis la saisie', creneau: $('#pa-tx-essai-cr').value.trim(), cause: $('#pa-tx-essai-cause').value.trim() })).then(function (r) {
+        if (r.status !== 200) { toast('Essai refusé : ' + ((r.data && r.data.erreur) || r.status) + ' (serveur 2.7.0 ?)', 'crit'); return; }
         majTravauxSaisie(r.data.liste || []);
         toast('Essai envoyé : ' + r.data.appareil + ' ' + r.data.etat + '.');
       }, function () { toast('Serveur injoignable.', 'crit'); });
@@ -808,7 +831,8 @@
     var el = $('#travaux-saisie');
     el.hidden = !liste.length;
     el.innerHTML = liste.length ? '<b>⚠ Travaux</b>' + liste.map(function (x) {
-      return '<span class="tx-s ' + esc(x.couleur) + '"><i></i>' + esc(x.texte) + (x.creneau ? ' <b class="tx-cr">' + esc(x.creneau) + '</b>' : '') + (x.message ? ' <em>(' + esc(x.message) + ')</em>' : '') +
+      return '<span class="tx-s ' + esc(x.couleur) + '"><i></i>' + esc(x.texte) + (x.creneau ? ' <b class="tx-cr">' + esc(x.creneau) + '</b>' : '') +
+        (x.cause ? ' <span class="tx-cause">Cause : ' + esc(x.cause) + '</span>' : '') + (x.message ? ' <em>(' + esc(x.message) + ')</em>' : '') +
         ' <small>depuis ' + esc(hm(x.depuis)) + '</small> <button type="button" class="bouton petit" data-tx-fin="' + esc(x.code) + '" title="Retirer cet avis des écrans">Retirer</button></span>';
     }).join('') : '';
   }
@@ -1026,7 +1050,13 @@
       (app.lectureSeule ? '' : '<button type="button" class="bouton petit" data-act="memoriser" title="Ces wagons et voies seront repris automatiquement les prochains ' + nomJour + 's">Garder pour tous les ' + nomJour + 's</button>' +
         (demain ? ' <button type="button" class="bouton petit" data-act="regenerer">Régénérer depuis le planning</button>' : '')) + '</div>' +
       '<div class="circ entete"><span>Code</span><span class="sens">Sens</span><span>N°</span><span>Heure</span><span class="c-hlr">HLR</span><span>Wagons</span><span>Voie</span><span>État</span><span></span></div>';
-    (app.planning.groupes || []).forEach(function (g) {
+    // ordre chronologique : une seule liste triée par heure, tous groupes et sens confondus (couleur du groupe en marge)
+    if (app.chrono && liste.length) {
+      html += '<div class="groupe chrono">Ordre chronologique</div>' + liste.slice().sort(function (a, b) {
+        var ha = a.theo || '9', hb = b.theo || '9'; return ha < hb ? -1 : (ha > hb ? 1 : (a.code < b.code ? -1 : 1));
+      }).map(function (c) { return ligneCirculation(c, prep); }).join('');
+    }
+    if (!app.chrono) (app.planning.groupes || []).forEach(function (g) {
       var circs = liste.filter(function (c) { return c.groupe === g.id; });
       if (!circs.length) return;
       circs.sort(function (a, b) { return (a.theo || '9') < (b.theo || '9') ? -1 : 1; });
@@ -1050,6 +1080,10 @@
       if (el) el.focus();
     }
   }
+  app.chrono = !!lsLire('suivi:chrono');
+  function majBoutonChrono() { var b = $('#b-chrono'); if (b) { b.setAttribute('aria-pressed', String(app.chrono)); b.classList.toggle('actif', app.chrono); } }
+  majBoutonChrono();
+  $('#b-chrono').addEventListener('click', function () { app.chrono = !app.chrono; lsEcrire('suivi:chrono', app.chrono); majBoutonChrono(); rendreCirculations(); });
   function placerEtat(id, classe, texte) {
     var el = $(id); el.className = 'etat ' + classe; el.querySelector('span').textContent = texte;
   }
@@ -1364,6 +1398,11 @@
     $('#pa-son').checked = vis.sonArrivees !== false; $('#pa-voix').checked = vis.voixArrivees !== false;
     var choix = Object.assign({ arrivee: 'arrivee', flash: 'flash', orange: 's6_important', rouge: 's2_urgent', fin: 's12_finJoyeux' }, vis.sons || {});
     $('#pa-son-fin').checked = vis.sonFinTravaux !== false;
+    var an = vis.animTrain || {}, pv = vis.planVoie || {};
+    $('#pa-anim').checked = an.actif !== false; $('#pa-anim-url').value = an.adresse || '';
+    $('#pa-plan-url').value = pv.adresse || ''; $('#pa-plan-duree').value = pv.duree || 10;
+    $('#pa-plan-tv-arr').checked = !!pv.tvArrivee; $('#pa-plan-tv-dep').checked = !!pv.tvDepart;
+    $('#pa-plan-sa-arr').checked = !!pv.saisieArrivee; $('#pa-plan-sa-dep').checked = !!pv.saisieDepart;
     $('#pa-vitesse-voix').value = vis.vitesseVoix == null ? 1 : vis.vitesseVoix; $('#pa-vitesse-voix-val').textContent = '× ' + (+$('#pa-vitesse-voix').value).toFixed(2);
     $('#pa-prononciation').value = vis.prononciation == null ? 'ATL=Atlantique' : vis.prononciation;
     SC.voixFrancaises().then(function (l) {
@@ -1490,6 +1529,11 @@
     if (dtx !== '' && !(/^\d{1,3}$/.test(dtx) && +dtx <= 120)) err.push('Alerte travaux : de 0 à 120 secondes.');
     p.visuel.alerteTravauxSecondes = dtx === '' ? 5 : +dtx;
     p.visuel.sonArrivees = $('#pa-son').checked; p.visuel.voixArrivees = $('#pa-voix').checked; p.visuel.volumeSon = +$('#pa-volume').value;
+    p.visuel.animTrain = { actif: $('#pa-anim').checked, adresse: $('#pa-anim-url').value.trim() };
+    var pdur = +$('#pa-plan-duree').value || 10; if (pdur < 3 || pdur > 120) err.push('Plan de voie : durée de 3 à 120 secondes.');
+    var purl = $('#pa-plan-url').value.trim(); if (purl && !/^https?:\/\/|^[\w.\-\/]+\.html?(\?.*)?$/i.test(purl)) err.push('Plan de voie : adresse invalide (https://… ou page.html).');
+    p.visuel.planVoie = { adresse: purl, duree: pdur, tvArrivee: $('#pa-plan-tv-arr').checked, tvDepart: $('#pa-plan-tv-dep').checked,
+      saisieArrivee: $('#pa-plan-sa-arr').checked, saisieDepart: $('#pa-plan-sa-dep').checked };
     p.visuel.sonFinTravaux = $('#pa-son-fin').checked; p.visuel.nomVoix = $('#pa-nom-voix').value;
     p.visuel.vitesseVoix = +$('#pa-vitesse-voix').value; p.visuel.prononciation = $('#pa-prononciation').value.trim();
     p.visuel.sons = {};
@@ -1925,7 +1969,7 @@
     api('GET', '/api/config').then(function (r) {
       if (r.status === 403) { ouvrirConnexion('Clé refusée par le serveur : ' + ((r.data && r.data.erreur) || '')); throw new Error('clé refusée'); }
       if (r.status !== 200) throw new Error('configuration illisible');
-      app.params = r.data.parametres; app.planning = r.data.planning; app.serviceOk = true; reglerJours();
+      app.params = r.data.parametres; app.planning = r.data.planning; app.serviceOk = true; reglerJours(); majBoutonPlan();
       if (!(app.planning.circulations || []).length || !(app.params.voies || []).length) {
         ouvrirConnexion('Le serveur ne contient encore ni planning ni paramètres : importez le fichier donnees-initiales.json.');
         throw new Error('serveur vide');

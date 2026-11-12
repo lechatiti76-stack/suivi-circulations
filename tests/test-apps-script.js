@@ -197,7 +197,7 @@ test('avis par clé d\'envoi : format simple et webhook Notion, fin, clé refus�
   assert.deepStrictEqual(l.data.liste.map(function (t) { return t.code; }), ['PF2']);
   assert.strictEqual(g.appel('POST', '/api/travaux', JSON.stringify({ appareil: 'PF2', couleur: 'fin' })).data.liste.length, 0);
   // créneau : texte lisible ; « journée » et heure de fin → fin automatique ; Notion « Créneau »
-  r = post('jeton-essai-123', { appareil: 'PPM A', couleur: 'orange', creneau: 'journée' });
+  r = post('jeton-essai-123', { appareil: 'PPM A', couleur: 'orange', creneau: 'journée', cause: 'panne spreader' });
   assert.ok(r.ok && r.appareil === 'PPMA');
   r = post('jeton-essai-123', { data: { properties: { 'Appareil': { type: 'title', title: [{ plain_text: 'RMG3' }] },
     'Couleur': { type: 'select', select: { name: 'Rouge', color: 'red' } }, 'Créneau': { type: 'select', select: { name: 'Demi-journée matin' } } } } });
@@ -205,6 +205,12 @@ test('avis par clé d\'envoi : format simple et webhook Notion, fin, clé refus�
   var lc = g.appel('GET', '/api/travaux').data.liste;
   assert.deepStrictEqual(lc.map(function (t) { return t.code + ' ' + t.creneau; }), ['RMG3 demi-journée (matin)', 'PPMA toute la journée']);
   assert.ok(/T23:59:00$/.test(lc[1].fin) && !lc[0].fin);
+  assert.strictEqual(lc[1].cause, 'panne spreader');
+  // Notion : propriété « Cause » ; un nouvel envoi sans cause garde la précédente
+  post('jeton-essai-123', { data: { properties: { 'Appareil': { type: 'title', title: [{ plain_text: 'RMG3' }] }, 'Couleur': { type: 'select', select: { name: 'Rouge', color: 'red' } },
+    'Cause': { type: 'rich_text', rich_text: [{ plain_text: 'câble arraché' }] } } } });
+  post('jeton-essai-123', { appareil: 'RMG3', couleur: 'rouge' });
+  assert.strictEqual(g.appel('GET', '/api/travaux').data.liste.filter(function (t) { return t.code === 'RMG3'; })[0].cause, 'câble arraché');
 });
 
 console.log('Jours préparés (samedi / dimanche)');

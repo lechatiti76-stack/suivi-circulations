@@ -29,6 +29,10 @@
   </main>
   <!-- nouvel avis de travaux : en grand 5 s, puis dans le bandeau « Travaux » -->
   <div class="tx-alerte" id="v-tx-alerte" hidden></div>
+  <!-- animation « alerte train » (alerte-train.html) dans la moitié basse pendant une arrivée imminente -->
+  <div class="anim-train" id="v-anim" hidden></div>
+  <!-- plan de voie (page du simulateur) quelques secondes après une arrivée / un départ -->
+  <div class="plan-voie" id="v-plan" hidden><div class="plan-tete"><b>Plan de voie</b><span>occupation des voies en direct</span><i id="v-plan-compte"></i></div><iframe id="v-plan-iframe" title="Plan de voie"></iframe></div>
   <div class="attente-donnees" id="v-attente">En attente des données du poste de saisie…</div>
   <div class="travaux" id="v-travaux" hidden><span class="travaux-lib">Travaux</span><div class="travaux-fen" id="v-travaux-fen"><div class="travaux-txt" id="v-travaux-txt"></div></div></div>
   <div class="flash" id="v-flash" hidden><span class="flash-lib">Flash info</span><div class="flash-fen" id="v-flash-fen"><div class="flash-txt" id="v-flash-txt"></div></div></div>

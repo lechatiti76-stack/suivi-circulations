@@ -287,7 +287,7 @@
     // passage « pas encore fait » → « fait » vu par cet écran : on retient l'instant (pas au démarrage de l'écran)
     var avantReel = reelPrecedent[cleL];
     reelPrecedent[cleL] = l.reel || '';
-    if (l.reel && avantReel === '' && !faitVuA[cleL + '|' + l.reel]) faitVuA[cleL + '|' + l.reel] = Date.now();
+    if (l.reel && avantReel === '' && !faitVuA[cleL + '|' + l.reel]) { faitVuA[cleL + '|' + l.reel] = Date.now(); programmerPlanVoie(arr); }
     if (l.reel) {
       var depuis = -secAvant(l.reel), duree = arr ? VED.apres * 60 : VED.apresDepart;
       var vu = faitVuA[cleL + '|' + l.reel], vuDepuis = vu ? (Date.now() - vu) / 1000 : Infinity;
@@ -480,6 +480,7 @@
     }
     var vn = vue === 'trains' ? [] : vedettesNavettes(d), vt = vue === 'navettes' ? [] : vedettesTrains(d);
     annoncerArrivees(vn, vt);
+    try { animerArrivees(vn, vt); } catch (e) { signaler(e); }
     // navettes : 4 carrés au plus côte à côte (les plus proches) ; le reste est compté
     var htmlNav = vn.length ? '<div class="ved-tuiles" style="--n:' + Math.min(4, vn.length) + '">' + vn.slice(0, 4).map(tuileNavette).join('') + '</div>' +
       (vn.length > 4 ? '<div class="ved-plus">+ ' + (vn.length - 4) + ' autre(s)</div>' : '') : '';
@@ -507,8 +508,91 @@
       poser(cNav, rn.top - rg.top, htmlTr ? basNav : Math.max(rn.bottom - rg.top, basNav), rn.left - rg.left, rn.width || rg.width);
       cNav.hidden = false;
     } else { cNav.hidden = true; dernierVed.nav = ''; }
+    // animation train en cours : les grands bandeaux se réduisent à la moitié haute de l'écran
+    if (anim.moitie && (htmlNav || htmlTr)) {
+      var H = Math.max(140, window.innerHeight * 0.5 - rg.top - 8);
+      if (htmlNav && htmlTr) { poser(cNav, 0, H * 0.58, rn.left - rg.left, rn.width || rg.width); poser(cTr, H * 0.58 + 8, H, rt.left - rg.left, rt.width); }
+      else if (htmlNav) poser(cNav, 0, H, rn.left - rg.left, rn.width || rg.width);
+      else poser(cTr, 0, H, rt.left - rg.left, rt.width);
+    }
     grille.classList.toggle('ved-nav-on', !!htmlNav);
     grille.classList.toggle('ved-trains-on', !!htmlTr);
+  }
+
+  // ===================================== ANIMATION « ALERTE TRAIN » (arrivée imminente)
+  /*
+   * Arrivée imminente d'une navette ou d'un train : le grand bandeau s'affiche 2 s, se réduit de moitié pendant que
+   * l'animation alerte-train.html (déposée dans le dépôt, réglages dans alerte-train.config.js) passe dans la moitié
+   * basse, puis le grand bandeau revient jusqu'à l'arrivée. Une fois par arrivée. Sans la page, rien ne change.
+   * Adresse de l'écran : ?anim=0 (désactiver), ?animDuree=12.5 (secondes de la séquence), ?animAttente=2.
+   */
+  var anim = { file: [], vus: null, enCours: false, moitie: false, dispo: {} },
+    ANIM_DUREE = paramNum('animDuree', 12.5), ANIM_ATTENTE = paramNum('animAttente', 2), ANIM_ECRAN = !/[?&]anim=0\b/.test(location.search);
+  function adresseAnim() { var a = etat.d && etat.d.animTrain; return a && a.actif !== false && ANIM_ECRAN ? (a.adresse || 'alerte-train.html') : ''; }
+  /** La page de l'animation existe-t-elle ? (vérifié une fois par adresse) */
+  function animDisponible(url, suite) {
+    if (anim.dispo[url] != null) return suite(anim.dispo[url]);
+    anim.dispo[url] = false;
+    fetch(url, { method: 'GET', cache: 'no-store' }).then(function (r) { anim.dispo[url] = r.ok; suite(r.ok); }, function () { suite(false); });
+  }
+  function animerArrivees(vn, vt) {
+    var url = adresseAnim(); if (!url) return;
+    var premier = anim.vus === null; if (premier) anim.vus = {};
+    vn.concat(vt).filter(function (v) { return v.ph.cle === 'approche'; }).forEach(function (v) {
+      var k = (v.l.id || v.l.code) + '|' + (v.l.theo || '');
+      if (anim.vus[k]) return; anim.vus[k] = true;
+      if (premier && !(v.ph.sec != null && v.ph.sec > VED.avant * 60 - 60)) return;
+      anim.file.push(v);
+    });
+    if (anim.file.length && !anim.enCours) animDisponible(url, function (ok) { if (ok) lancerAnim(url); else anim.file = []; });
+  }
+  function paramsAnim(v) {
+    var l = v.l, min = v.ph.sec != null ? Math.max(0, Math.ceil(v.ph.sec / 60)) : 0;
+    var couleur = v.g ? v.g.couleur : couleurEF(v.t.groupe);
+    var p = { train: v.g ? l.code + (l.numero ? ' · ' + l.numero : '') : (l.numero || v.t.code), dest: 'En provenance de ' + (v.g ? v.g.libelle : (v.t.nom || v.t.code)),
+      voie: l.voie || '', min: min, fret: l.wagons != null && l.wagons !== '' ? l.wagons + ' wagons' : '', couleur: couleur, fond: '0' };
+    return Object.keys(p).map(function (k) { return k + '=' + encodeURIComponent(p[k]); }).join('&');
+  }
+  function lancerAnim(url) {
+    if (anim.enCours || !anim.file.length) return;
+    var v = anim.file.shift(), boite = $('#v-anim');
+    anim.enCours = true;
+    // 1) grand bandeau seul pendant 2 s
+    setTimeout(function () {
+      // 2) bandeau réduit de moitié, animation dans la moitié basse
+      anim.moitie = true; $('#ecran').classList.add('anim-moitie');
+      boite.innerHTML = '<iframe title="Alerte train" allowtransparency="true" src="' + esc(url + (url.indexOf('?') < 0 ? '?' : '&') + paramsAnim(v)) + '"></iframe>';
+      boite.hidden = false; boite.classList.remove('sortie');
+      dernierVed.nav = dernierVed.trains = ''; majVedettes();
+      setTimeout(function () {
+        // 3) retour au grand bandeau jusqu'à l'arrivée
+        boite.classList.add('sortie');
+        anim.moitie = false; $('#ecran').classList.remove('anim-moitie');
+        majVedettes();
+        setTimeout(function () { boite.hidden = true; boite.innerHTML = ''; anim.enCours = false; lancerAnim(url); }, 600);
+      }, ANIM_DUREE * 1000);
+    }, ANIM_ATTENTE * 1000);
+  }
+
+  // ===================================== PLAN DE VOIE (après une arrivée / un départ)
+  var plan = { minuteur: null, fin: 0 };
+  function programmerPlanVoie(arr) {
+    var pv = etat.d && etat.d.planVoie;
+    if (!pv || !pv.adresse || !(arr ? pv.apresArrivee : pv.apresDepart)) return;
+    // juste après l'affichage « Arrivée / Parti » en grand (garde)
+    setTimeout(function () { afficherPlanVoie(pv); }, (VED.garde + 0.5) * 1000);
+  }
+  function afficherPlanVoie(pv) {
+    var el = $('#v-plan'), f = $('#v-plan-iframe'), url = new URL(pv.adresse, location.href).href;
+    if (f.getAttribute('src') !== url) f.setAttribute('src', url);
+    plan.fin = Date.now() + (pv.duree || 10) * 1000;
+    el.hidden = false; el.classList.remove('sortie');
+    clearInterval(plan.minuteur);
+    plan.minuteur = setInterval(function () {
+      var r = Math.ceil((plan.fin - Date.now()) / 1000);
+      $('#v-plan-compte').textContent = r > 0 ? r + ' s' : '';
+      if (r <= 0) { clearInterval(plan.minuteur); el.classList.add('sortie'); setTimeout(function () { el.hidden = true; }, 500); }
+    }, 250);
   }
 
   // =========================================== fenêtres navettes : 2 ou 3 selon l'heure
@@ -610,7 +694,7 @@
     ];
     var jour = SC.cleDate(new Date());
     return { schema: 1, date: jour, jour: SC.libelleJour(jour), demain: 'Demain', titre: 'Circulations du jour · DÉMO', seuilRetardMinutes: 15,
-      vitesseFlash: 90, alerteSansNouvellesSecondes: 45, version: 1, publieA: SC.iso(new Date()), navettes: nav, trains: tr,
+      vitesseFlash: 90, alerteSansNouvellesSecondes: 45, version: 1, publieA: SC.iso(new Date()), navettes: nav, trains: tr, animTrain: { actif: true, adresse: 'alerte-train.html' },
       flash: { texte: 'DÉMONSTRATION : départs et arrivées simulés en boucle toutes les 7 minutes (navettes en haut, trains en bas).' } };
   }
 
@@ -693,7 +777,8 @@
     bloc.hidden = !liste.length;
     bloc.className = 'travaux' + (liste.some(function (x) { return x.couleur === 'rouge'; }) ? ' rouge' : '');
     t.innerHTML = liste.map(function (x) {
-      return '<span class="tx ' + esc(x.couleur) + '"><i></i>' + esc(x.texte) + (x.creneau ? ' <b class="tx-cr">' + esc(x.creneau) + '</b>' : '') + (x.message ? ' <em>(' + esc(x.message) + ')</em>' : '') + '</span>';
+      return '<span class="tx ' + esc(x.couleur) + '"><i></i>' + esc(x.texte) + (x.creneau ? ' <b class="tx-cr">' + esc(x.creneau) + '</b>' : '') +
+        (x.cause ? ' <span class="tx-cause">Cause : ' + esc(x.cause) + '</span>' : '') + (x.message ? ' <em>(' + esc(x.message) + ')</em>' : '') + '</span>';
     }).join('');
     alerterTravaux(liste);
     t.style.animation = 'none';
@@ -752,6 +837,7 @@
       '<div class="txa-app">' + esc(x.libelle || x.code) + '</div>' +
       '<div class="txa-etat">' + (rouge ? 'Hors service' : 'En maintenance') + '</div>' +
       '<div class="txa-texte">' + esc(x.texte) + '</div>' +
+      (x.cause ? '<div class="txa-cause">Cause : <b>' + esc(x.cause) + '</b></div>' : '') +
       (x.creneau || x.message ? '<div class="txa-plus">' + [x.creneau ? '<b>' + esc(x.creneau) + '</b>' : '', x.message ? esc(x.message) : ''].filter(Boolean).join(' · ') + '</div>' : '') +
       '</div>';
     }
@@ -780,7 +866,7 @@
     var puce = function (a) {
       var en = parCode[a.code], k = en ? (en.couleur === 'rouge' ? 'rouge' : 'orange') : 'ok';
       return '<span class="txa-pc ' + k + '"><i>' + (en ? '!' : '✓') + '</i>' + esc(nomCourt(a.libelle || a.code)) +
-        (en ? ' <small>' + (en.couleur === 'rouge' ? 'hors service' : 'maintenance') + (en.creneau ? ' · ' + esc(en.creneau) : '') + '</small>' : '') + '</span>';
+        (en ? ' <small>' + (en.couleur === 'rouge' ? 'hors service' : 'maintenance') + (en.creneau ? ' · ' + esc(en.creneau) : '') + (en.cause ? ' · ' + esc(en.cause) : '') + '</small>' : '') + '</span>';
     };
     return '<div class="txa-cadre' + (ko.length ? ' reste' : '') + '"><div class="txa-tete"><span>✓</span> Fin d\'intervention <span>✓</span></div>' +
       '<div class="txa-app">' + esc(finis.join(' · ')) + '</div>' +

@@ -456,6 +456,9 @@
         .map(function (a) { return { code: a.code, libelle: a.libelle }; }),
       // tableau complet : tous les groupes de navettes en grand (pas de colonne réduite ni « terminé ») ; animations en grand
       tableauComplet: !!vis.tableauComplet, vedettes: vis.vedettes !== false,
+      // animation « alerte train » (page alerte-train.html du dépôt) et plan de voie (page du simulateur)
+      animTrain: { actif: !vis.animTrain || vis.animTrain.actif !== false, adresse: (vis.animTrain && vis.animTrain.adresse) || 'alerte-train.html' },
+      planVoie: vis.planVoie && vis.planVoie.adresse ? { adresse: vis.planVoie.adresse, duree: vis.planVoie.duree || 10, apresArrivee: !!vis.planVoie.tvArrivee, apresDepart: !!vis.planVoie.tvDepart } : null,
       version: j.version, publieA: maint,
       navettes: navettes, trains: trains,
       flash: flashActif ? { texte: String(f.texte).trim(), jusqua: f.jusqua || '' } : null

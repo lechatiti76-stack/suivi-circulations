@@ -122,6 +122,13 @@ Copier chaque fichier sur le bureau du poste concerné. `Ecrans.bat` ouvre la pa
 - **Voix** : la voix la plus naturelle de l'écran est choisie d'office (voix « Natural » d'Edge, puis Google…) ; on peut en imposer une, régler la vitesse et dire certains mots autrement (`ATL=Atlantique`), dans Paramètres › Écrans TV.
 - **Trains de ligne** : une pastille verte ✓ devant le départ une fois le train parti, rouge ✕ s'il est calé.
 
+## Animation train, plan de voie, ordre chronologique, cause des travaux
+
+- **Animation « alerte train »** : à une arrivée imminente (navette ou train), le grand bandeau s'affiche 2 s, se réduit à la moitié haute pendant que l'animation passe dans la moitié basse (≈ 12,5 s), puis revient en grand jusqu'à l'arrivée. Déposer `alerte-train.html` et `alerte-train.config.js` dans le dépôt, à côté de `visuel.html`. Infos passées à l'animation : `train`, `dest` (« En provenance de … »), `voie`, `min`, `fret` (wagons), `couleur` (couleur du groupe), `fond=0`. Réglages : Paramètres › Animation train et plan de voie ; adresse de l'écran `&anim=0`, `&animDuree=12.5`, `&animAttente=2`.
+- **Plan de voie** (page du simulateur) : adresse dans Paramètres ; bouton « Plan de voie » dans la saisie ; affichage automatique quelques secondes après une arrivée et/ou un départ, sur les écrans et/ou dans la saisie.
+- **Saisie** : bouton « 🕒 Chronologique » au-dessus du tableau de droite (toutes les circulations dans l'ordre des heures, gardé sur ce poste).
+- **Travaux** : le service peut envoyer une **cause** (`"cause"`, ou propriété Notion « Cause » / « Motif » / « Raison ») ; elle s'affiche dans les bandeaux et l'alerte en grand (serveur 2.7.0).
+
 ## Flash info
 
 - Bouton **Flash info** : phrases toutes prêtes (un clic), **complément** ajouté à la suite (ex. « Défaillance des installations de sécurité » + « ADV 5011 »), créneau **De / Jusqu'à** (boutons rapides 6h–13h30, 13h30–21h, 8h–12h, 1 h, 2 h…). Le flash ne passe sur les écrans que pendant le créneau ; « Indiquer le créneau dans le texte » ajoute « — de 8h à 12h ». « Afficher sur les écrans » est coché d'office. Aperçu en bas de la fenêtre.
