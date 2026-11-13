@@ -52,6 +52,7 @@
     <div class="champ"><label for="f-cv">Chargés/vides</label><select id="f-cv"><option value="chargés">chargés</option><option value="vides">vides</option><option value="/">/</option></select></div>
     <div class="champ"><label for="f-sit">Situation voie</label><select id="f-sit"><option value="libre">libre</option><option value="occupée">occupée</option></select></div>
     <div class="champ"><label for="f-vers">Vers</label><input class="mono" id="f-vers" list="l-voies" spellcheck="false"></div>
+    <div class="champ champ-cote"><label for="f-cote" title="Côté de la voie où se fait le mouvement : P = Paris (moitié droite du plan), H ou L = Le Havre (moitié gauche)">Côté</label><select id="f-cote"><option value="">—</option><option value="P">PARIS</option><option value="H">LE HAVRE</option></select></div>
     <div class="champ"><label for="f-comm">Commentaire interne</label><input id="f-comm" placeholder="non diffusé, facultatif"></div>
     <button type="submit" class="bouton primaire" id="s-valider">Valider ↵</button>
   </div>
@@ -243,18 +244,28 @@
 </dialog>
 
 <!-- Paramètres -->
-<dialog id="d-params">
+<dialog id="d-params" class="d-params">
   <form method="dialog" id="fm-params">
     <div class="dlg-tete"><h2>Paramètres</h2><button type="button" class="bouton" data-fermer>Fermer</button></div>
-    <div class="dlg-corps">
-      <div class="section"><h4>Base des numéros : N° ou appellation → EF</h4>
+    <div class="dlg-corps params-corps">
+      <nav class="params-nav" id="pa-nav" aria-label="Rubriques des paramètres">
+        <button type="button" data-pnav="saisie"><span>✎</span>Saisie</button>
+        <button type="button" data-pnav="trains"><span>🚆</span>Trains et planning</button>
+        <button type="button" data-pnav="plan"><span>▤</span>Plan de voie</button>
+        <button type="button" data-pnav="ecrans"><span>🖥</span>Écrans TV</button>
+        <button type="button" data-pnav="sons"><span>♪</span>Sons et voix</button>
+        <button type="button" data-pnav="mails"><span>✉</span>Mails</button>
+        <button type="button" data-pnav="travaux"><span>⚠</span>Travaux</button>
+      </nav>
+      <div class="params-pages">
+      <div class="section" data-pgroupe="saisie"><h4>Base des numéros : N° ou appellation → EF</h4>
         <p class="note">L'EF se remplit d'après cette base dès que le numéro est tapé (exemple : locom → LHTE, 511911 → NRS). Une EF corrigée à la main peut y être ajoutée d'un clic après l'enregistrement.</p>
         <div class="tableau" style="max-height:240px"><table><thead><tr><th>N° ou appellation</th><th>EF</th><th></th></tr></thead><tbody id="pa-base"></tbody></table></div>
         <div style="display:flex;gap:10px;align-items:center;margin-top:8px"><button type="button" class="bouton petit" id="pa-base-ajouter">+ Ajouter une ligne</button>
           <label class="note" for="pa-vers">Voie de destination (Vers) obligatoire :</label>
           <select id="pa-vers"><option value="internes">pour les locomotives et manœuvres (locom, nrs…)</option><option value="toujours">pour tous les mouvements</option><option value="jamais">jamais</option></select></div>
       </div>
-      <div class="section"><h4>Mails automatiques</h4>
+      <div class="section" data-pgroupe="mails"><h4>Mails automatiques</h4>
         <div class="formgrid">
           <div class="champ"><label for="pa-mode">Mode</label><select id="pa-mode"><option value="simulation">Simulation (rien n'est envoyé)</option><option value="brouillon">Brouillon Outlook à valider</option><option value="auto">Envoi automatique</option><option value="desactive">Désactivé</option></select></div>
           <div class="champ"><label for="pa-signature">Image de signature</label><input id="pa-signature" class="mono"></div>
@@ -269,7 +280,7 @@
           <textarea id="pa-listes" style="min-height:70px"></textarea>
         </details>
       </div>
-      <div class="section"><h4>Exploitation</h4>
+      <div class="section" data-pgroupe="saisie"><h4>Exploitation</h4>
         <div class="formgrid">
           <div class="champ"><label for="pa-seuil">Seuil de retard (min)</label><input id="pa-seuil" class="mono" inputmode="numeric"></div>
           <div class="champ"><label for="pa-coupure">Coupure matin / après-midi</label><input id="pa-coupure" class="mono"></div>
@@ -281,7 +292,7 @@
           <div class="champ large"><label for="pa-alias">Graphies corrigées automatiquement (ex. vext1=ext1)</label><input id="pa-alias" class="mono"></div>
         </div>
       </div>
-      <div class="section"><h4>Suivi trains (lecture automatique, version Google)</h4>
+      <div class="section" data-pgroupe="trains"><h4>Suivi trains (lecture automatique, version Google)</h4>
         <p class="note">Toutes les 10 secondes, la saisie lit le classeur Google du Suivi trains (onglets « Navettes » et « Journal ») :
           navette FL1 validée → FL1 « en route » sur les écrans avec ses points de passage et son heure d'arrivée estimée ;
           arrivée, tableau des départs (LF1…) et départ pour la ligne → heure réelle ; étapes du train → déroulé du départ.</p>
@@ -293,7 +304,7 @@
         <textarea id="pa-st-parcours" class="mono" style="min-height:70px"></textarea>
         <p class="note" id="pa-st-etat"></p>
       </div>
-      <div class="section"><h4>Travaux (avis envoyés par un autre service)</h4>
+      <div class="section" data-pgroupe="travaux"><h4>Travaux (avis envoyés par un autre service)</h4>
         <p class="note">Un autre service (par exemple une automatisation Notion « Envoyer un webhook ») peut afficher un bandeau « Travaux » sur les écrans
           et ici : il envoie le nom de l'appareil et une couleur (orange = en maintenance, rouge = hors service, vert = remis en service, l'avis disparaît).
           Donnez-lui <b>l'adresse d'envoi ci-dessous</b> : elle contient une clé d'envoi propre à cet usage (ce n'est pas la clé de la saisie).
@@ -321,16 +332,16 @@
           <button type="button" class="bouton petit" data-tx-essai="vert">Fin (vert)</button>
         </div>
       </div>
-      <div class="section"><h4>Temps d'arrivée des trains de ligne</h4>
+      <div class="section" data-pgroupe="trains"><h4>Temps d'arrivée des trains de ligne</h4>
         <p class="note">Minutes entre « En approche » (validé ici ou dans le Suivi trains) et l'arrivée chez nous : les écrans comptent à rebours avec ce temps.
           Mettez les mêmes valeurs que dans le Suivi trains (Réglages › Arrivées). Si le Suivi trains envoie sa propre heure d'arrivée, c'est elle qui compte. Vide = 180 min.</p>
         <div class="formgrid" id="pa-arrivees"></div>
       </div>
-      <div class="section"><h4>Jours de circulation et numéros</h4>
+      <div class="section" data-pgroupe="trains"><h4>Jours de circulation et numéros</h4>
         <p class="note">Pour chaque train et navette : jours de circulation, et numéro (sillon) qui change selon le jour.</p>
         <button type="button" class="bouton" id="pa-planning">Ouvrir le planning (jours et numéros par jour)</button>
       </div>
-      <div class="section"><h4>Écrans et fichiers</h4>
+      <div class="section" data-pgroupe="ecrans"><h4>Écrans et fichiers</h4>
         <div class="formgrid">
           <div class="champ large"><label for="pa-diffusion">Dossiers de diffusion lus par les écrans (un par ligne)</label><textarea id="pa-diffusion" style="min-height:52px"></textarea></div>
           <div class="champ"><label for="pa-sauvegarde">Copie de sauvegarde (dossier)</label><input id="pa-sauvegarde" class="mono"></div>
@@ -342,7 +353,7 @@
           <div class="champ large"><label for="pa-noms">Villes des trains de ligne sur les écrans (CODE=Nom, séparés par des virgules)</label><input id="pa-noms"></div>
         </div>
       </div>
-      <div class="section"><h4>Écrans TV : affichage et sons</h4>
+      <div class="section" data-pgroupe="sons"><h4>Écrans TV : affichage et sons</h4>
         <div class="fl-coches">
           <label><input type="checkbox" id="pa-complet"> Tableau complet : toutes les navettes de chaque groupe en grand (pas de colonne réduite ni « terminé »)</label>
           <label><input type="checkbox" id="pa-vedettes"> Animations en grand (arrivées, départs imminents)</label>
@@ -362,7 +373,7 @@
           <label>Volume <input type="range" id="pa-volume" min="0" max="100" step="5" style="width:180px"> <span id="pa-volume-val" class="mono"></span></label><span></span><span></span>
         </div>
       </div>
-      <div class="section"><h4>Animation train et plan de voie</h4>
+      <div class="section" data-pgroupe="ecrans"><h4>Animation train et plan de voie</h4>
         <p class="note">Arrivée imminente : le grand bandeau s'affiche 2 s, se réduit de moitié pendant que l'animation « alerte train » passe dans la moitié basse,
           puis revient en grand jusqu'à l'arrivée. L'animation est la page <span class="mono">alerte-train.html</span> (et son fichier <span class="mono">alerte-train.config.js</span>)
           à déposer dans le dépôt GitHub, à côté de <span class="mono">visuel.html</span> ; sans elle, rien ne change.</p>
@@ -370,10 +381,11 @@
           <label><input type="checkbox" id="pa-anim"> Animation train aux arrivées imminentes</label>
           <label>Adresse <input id="pa-anim-url" class="mono" placeholder="alerte-train.html" style="width:260px"></label>
         </div>
-        <p class="note" style="margin-top:12px"><b>Plan de voie</b> (occupation des voies en direct, page du simulateur) : collez l'adresse de la page ; le bouton
-          « Plan de voie » de la saisie l'ouvre, et elle peut s'afficher quelques secondes après une arrivée ou un départ.</p>
+      </div>
+      <div class="section" data-pgroupe="plan"><h4>Plan de voie</h4>
+        <p class="note">Occupation des voies en direct : bouton « Plan de voie » de la saisie, et affichage quelques secondes après une arrivée ou un départ.</p>
         <div class="formgrid">
-          <div class="champ large"><label for="pa-plan-url">Adresse du plan de voie (fichier déposé dans le dépôt, ex. simulateur_3d.html#plan)</label><input id="pa-plan-url" class="mono" placeholder="simulateur_3d.html#plan"></div>
+          <div class="champ large"><label for="pa-plan-url">Adresse du plan de voie (page du dépôt : plan-de-voie.html)</label><input id="pa-plan-url" class="mono" placeholder="simulateur_3d.html#plan"></div>
           <div class="champ"><label for="pa-plan-duree">Durée d'affichage (s)</label><input id="pa-plan-duree" class="mono" inputmode="numeric"></div>
         </div>
         <div class="fl-coches">
@@ -382,6 +394,18 @@
           <label><input type="checkbox" id="pa-plan-sa-arr"> Saisie : après une arrivée</label>
           <label><input type="checkbox" id="pa-plan-sa-dep"> Saisie : après un départ</label>
         </div>
+        <div class="formgrid" style="margin-top:10px">
+          <div class="champ"><label for="pa-plan-taille">Taille du texte du plan <span class="mono" id="pa-plan-taille-val"></span></label><input type="range" id="pa-plan-taille" min="80" max="180" step="10"></div>
+        </div>
+      </div>
+      <div class="section" data-pgroupe="plan"><h4>Entreprises du plan de voie</h4>
+        <p class="note">Entreprises et relations proposées quand vous saisissez les wagons d'une voie dans le plan. Une par ligne :
+          <span class="mono">CODE | Nom affiché | couleur</span> (ex. <span class="mono">WASCOSA | Wascosa | #0ea5e9</span>). Supprimez une ligne pour l'enlever.</p>
+        <div class="pv-ef" id="pa-plan-ef-apercu"></div>
+        <textarea id="pa-plan-ef" class="mono" style="min-height:220px"></textarea>
+        <div style="display:flex;gap:8px;margin-top:6px"><button type="button" class="bouton petit" id="pa-plan-ef-defaut">Remettre la liste d'origine</button></div>
+      </div>
+    </div>
       </div>
     </div>
     <div class="dlg-pied"><span class="gauche" id="pa-erreur"></span><button type="submit" class="bouton primaire">Enregistrer</button></div>

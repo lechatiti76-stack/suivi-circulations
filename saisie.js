@@ -14,7 +14,7 @@
   };
   var F = {
     num: $('#f-num'), voie: $('#f-voie'), compo: $('#f-compo'), cv: $('#f-cv'), sit: $('#f-sit'),
-    vers: $('#f-vers'), comm: $('#f-comm'), reel: $('#f-reel'), annonce: $('#f-annonce'), ef: $('#f-ef')
+    vers: $('#f-vers'), cote: $('#f-cote'), comm: $('#f-comm'), reel: $('#f-reel'), annonce: $('#f-annonce'), ef: $('#f-ef')
   };
 
   // ------------------------------------------------------------------ outils
@@ -457,6 +457,7 @@
       cv: compo === 'hlp' ? '/' : (compo ? F.cv.value : ''),
       sit: F.sit.value,
       vers: SC.normaliserVoie(F.vers.value, app.params),
+      cote: F.cote.value || '',
       comm: F.comm.value.trim(),
       reel: F.reel.value.trim() ? SC.heureProche(j.date, F.reel.value, annonce) : null,
       annonce: annonce,
@@ -509,11 +510,11 @@
     if (compo && compo !== 'hlp' && !/^\d{1,3}$/.test(compo)) F.compo.classList.add('erreur');
     if (F.reel.value.trim() && !SC.normHeure(F.reel.value)) F.reel.classList.add('erreur');
     if (F.annonce.value.trim() && !SC.normHeure(F.annonce.value)) F.annonce.classList.add('erreur');
-    $('#s-aide').innerHTML = morceaux.length ? morceaux.join('') : '<span>Tapez un numéro : EF, zone et voie se remplissent. <span class="touche">Entrée</span> passe au champ suivant jusqu\'à Valider ;<span class="touche">Ctrl+Entrée</span> enregistre directement.</span>';
+    $('#s-aide').innerHTML = morceaux.length ? morceaux.join('') : '<span>Tapez un numéro : EF, zone et voie se remplissent. Une lettre suffit : <b>C</b>/<b>V</b> chargés/vides, <b>O</b>/<b>L</b> occupée/libre, côté <b>P</b> Paris / <b>H</b> Le Havre. <span class="touche">Entrée</span> passe au champ suivant jusqu\'à Valider ;<span class="touche">Ctrl+Entrée</span> enregistre directement.</span>';
   }
   function viderFormulaire() {
     Object.keys(F).forEach(function (k) { if (F[k].tagName === 'INPUT') { F[k].value = ''; F[k].classList.remove('auto', 'erreur', 'avert'); } });
-    F.cv.value = 'chargés'; F.cv.disabled = false; F.sit.value = 'libre';
+    F.cv.value = 'chargés'; F.cv.disabled = false; F.sit.value = 'libre'; F.cote.value = '';
     app.auto = {}; app.touche = {}; app.edition = null;
     $('#saisie').classList.remove('edition');
     $('#s-titre').textContent = 'Nouveau mouvement';
@@ -525,7 +526,7 @@
     viderFormulaire();
     app.edition = id; app.touche = { ef: true, sit: true, cv: true };
     F.num.value = m.num; F.voie.value = m.voie || ''; F.compo.value = m.compo || ''; F.cv.value = m.cv && m.cv !== '/' ? m.cv : 'chargés';
-    F.sit.value = m.sit || 'libre'; F.vers.value = m.vers || ''; F.comm.value = m.comm || ''; F.reel.value = hm(m.reel); F.annonce.value = hm(m.annonce); F.ef.value = m.ef || '';
+    F.sit.value = m.sit || 'libre'; F.vers.value = m.vers || ''; F.cote.value = m.cote || ''; F.comm.value = m.comm || ''; F.reel.value = hm(m.reel); F.annonce.value = hm(m.annonce); F.ef.value = m.ef || '';
     $('#saisie').classList.add('edition');
     $('#s-titre').textContent = 'Modification de la ligne ' + m.n;
     $('#s-annuler').hidden = false;
@@ -548,7 +549,19 @@
     return null;
   }
   /** Ordre de passage avec Entrée, comme dans le classeur : N°, voie, wagons, chargés/vides, situation, vers, commentaire, puis Valider. */
-  var MARCHE = ['num', 'voie', 'compo', 'cv', 'sit', 'vers', 'comm'];
+  var MARCHE = ['num', 'voie', 'compo', 'cv', 'sit', 'vers', 'cote', 'comm'];
+  // saisie rapide au clavier : une lettre suffit (P = PARIS, H ou L = LE HAVRE ; O = occupée, L = libre ; C = chargés, V = vides)
+  var LETTRES = { cote: { p: 'P', h: 'H', l: 'H', '-': '', ' ': '' }, sit: { o: 'occupée', l: 'libre' }, cv: { c: 'chargés', v: 'vides', '/': '/' } };
+  Object.keys(LETTRES).forEach(function (k) {
+    F[k].addEventListener('keydown', function (e) {
+      if (e.ctrlKey || e.altKey || e.metaKey) return;
+      var v = LETTRES[k][e.key.toLowerCase()];
+      if (v === undefined && k === 'cote' && (e.key === 'Backspace' || e.key === 'Delete')) v = '';
+      if (v === undefined) return;
+      e.preventDefault(); F[k].value = v; app.touche[k] = true; F[k].dispatchEvent(new Event('change', { bubbles: true }));
+      var s = champSuivant(k); s.focus(); if (s.select && s.tagName === 'INPUT') s.select();
+    });
+  });
   function champSuivant(k) {
     for (var j = MARCHE.indexOf(k) + 1; j < MARCHE.length; j++) { if (!F[MARCHE[j]].disabled) return F[MARCHE[j]]; }
     return $('#s-valider');
@@ -966,7 +979,7 @@
         '<td class="faible">' + m.n + '</td><td class="mono">' + hm(m.annonce) + '</td><td class="mono"><b>' + esc(m.num) + '</b></td>' +
         '<td>' + esc(m.ef || '') + '</td><td class="mono voie">' + esc(m.voie || '') + '</td><td class="faible">' + esc(SC.deduireZone(m.num)) + '</td>' +
         '<td class="mono">' + compo + '</td><td>' + (m.sit === 'libre' ? '<span class="puce fait">libre</span>' : (m.sit ? '<span class="puce neutre">occupée</span>' : '')) + '</td>' +
-        '<td class="mono">' + esc(m.vers || '') + '</td><td class="mono">' + (m.reel ? hm(m.reel) : '<span class="faible">—</span>') + '</td>' +
+        '<td class="mono">' + esc(m.vers || '') + (m.cote ? '<span class="cote-tag' + (m.cote === 'H' ? ' h' : '') + '" title="côté ' + (m.cote === 'P' ? 'Paris' : 'Le Havre') + '">' + (m.cote === 'P' ? 'PARIS' : 'LE HAVRE') + '</span>' : '') + '</td><td class="mono">' + (m.reel ? hm(m.reel) : '<span class="faible">—</span>') + '</td>' +
         '<td class="com">' + esc(m.comm || '') + '</td><td>' + (c ? '<span class="puce lien">' + esc(c.code) + '</span>' : '') + '</td>' +
         '<td><div class="act">' + actions + '</div></td></tr>';
     }).join('');
@@ -1444,8 +1457,37 @@
   $('#pl-regenerer').addEventListener('click', function () { regenererDemain(); });
 
   // Paramètres
+  // ------------------------------------------------ paramètres en rubriques
+  function rubrique(g) {
+    g = g || lsLire('suivi:rubrique') || 'saisie';
+    $$('#pa-nav [data-pnav]').forEach(function (b) { b.setAttribute('aria-current', String(b.getAttribute('data-pnav') === g)); });
+    $$('#fm-params [data-pgroupe]').forEach(function (x) { x.hidden = x.getAttribute('data-pgroupe') !== g; });
+    lsEcrire('suivi:rubrique', g);
+    var c = $('#fm-params .params-pages'); if (c) c.scrollTop = 0;
+  }
+  $$('#pa-nav [data-pnav]').forEach(function (b) { b.addEventListener('click', function () { rubrique(b.getAttribute('data-pnav')); }); });
+  /** Entreprises proposées dans le plan de voie (modifiable : Paramètres › Plan de voie). */
+  var EF_PLAN_DEFAUT = [['TDF', 'TDF', '#F28C28'], ['TN', 'TN', '#2D8CFF'], ['ATL', 'ATL', '#F2C230'], ['NAVILAND', 'Naviland', '#8E5CF7'], ['FEROVERGNE', 'Ferovergne', '#22B573'],
+    ['DELTA', 'Delta', '#0EA5E9'], ['FORWARDIS', 'Forwardis', '#EC4899'], ['ARMEE', 'Armée', '#8D9EAF'], ['LHTE', 'LHTE', '#2E9E4F'], ['NRS', 'NRS', '#E07B00'],
+    ['NVL', 'Naviland (NVL)', '#7A3FB5'], ['REGIORAIL', 'Regiorail', '#1F9D8F'], ['DB', 'DB', '#D4202A'], ['Captrain', 'Captrain', '#0A8FB8'], ['VFLI', 'VFLI', '#C9A200'],
+    ['SNCF', 'SNCF', '#5A6570'], ['WASCOSA', 'Wascosa', '#0891B2']];
+  function efPlanEnTexte(l) { return l.map(function (e) { return e.code + ' | ' + e.nom + ' | ' + e.couleur; }).join('\n'); }
+  function texteEnEfPlan(t) {
+    return String(t || '').split(/\n/).map(function (l) { return l.trim(); }).filter(Boolean).map(function (l) {
+      var c = l.split('|').map(function (x) { return x.trim(); });
+      return { code: c[0].replace(/[^A-Za-z0-9 _.()-]/g, '').slice(0, 40), nom: (c[1] || c[0]).slice(0, 40), couleur: /^#[0-9a-f]{3,8}$/i.test(c[2] || '') ? c[2] : '#8a97a3' };
+    }).filter(function (e) { return e.code; });
+  }
+  function apercuEfPlan() {
+    $('#pa-plan-ef-apercu').innerHTML = texteEnEfPlan($('#pa-plan-ef').value).map(function (e) { return '<span><i style="background:' + esc(e.couleur) + '"></i>' + esc(e.nom) + ' <small class="mono">' + esc(e.code) + '</small></span>'; }).join('');
+  }
+  $('#pa-plan-ef').addEventListener('input', apercuEfPlan);
+  $('#pa-plan-ef-defaut').addEventListener('click', function () { $('#pa-plan-ef').value = efPlanEnTexte(EF_PLAN_DEFAUT.map(function (e) { return { code: e[0], nom: e[1], couleur: e[2] }; })); apercuEfPlan(); });
+  $('#pa-plan-taille').addEventListener('input', function () { $('#pa-plan-taille-val').textContent = $('#pa-plan-taille').value + ' %'; });
+
   $('#b-params').addEventListener('click', function () {
     var p = app.params, m = p.mails || {};
+    rubrique();
     $('#pa-mode').value = m.mode || 'simulation'; $('#pa-signature').value = m.signature || '';
     // adresses par EF (trains de ligne) et par groupe (navettes), puis les copies ; les autres listes restent en texte
     var listes = m.listes || {}, nomCci = m.listeCopieCacheeLignes || '', utilisees = {};
@@ -1475,6 +1517,8 @@
     $('#pa-plan-url').value = pv.adresse || 'plan-de-voie.html'; $('#pa-plan-duree').value = pv.duree || 10;
     $('#pa-plan-tv-arr').checked = !!pv.tvArrivee; $('#pa-plan-tv-dep').checked = !!pv.tvDepart;
     $('#pa-plan-sa-arr').checked = !!pv.saisieArrivee; $('#pa-plan-sa-dep').checked = !!pv.saisieDepart;
+    $('#pa-plan-taille').value = pv.taille || 120; $('#pa-plan-taille-val').textContent = (pv.taille || 120) + ' %';
+    $('#pa-plan-ef').value = efPlanEnTexte(Array.isArray(pv.entreprises) ? pv.entreprises : EF_PLAN_DEFAUT.map(function (e) { return { code: e[0], nom: e[1], couleur: e[2] }; })); apercuEfPlan();
     $('#pa-vitesse-voix').value = vis.vitesseVoix == null ? 1 : vis.vitesseVoix; $('#pa-vitesse-voix-val').textContent = '× ' + (+$('#pa-vitesse-voix').value).toFixed(2);
     $('#pa-prononciation').value = vis.prononciation == null ? 'ATL=Atlantique' : vis.prononciation;
     SC.voixFrancaises().then(function (l) {
@@ -1607,7 +1651,8 @@
     if (/^file:/i.test(purl)) err.push('Plan de voie : une adresse file:/// n\'existe que sur ce PC (les écrans ne peuvent pas l\'ouvrir). Déposez le fichier dans le dépôt GitHub et indiquez son nom, ex. simulateur_3d.html#plan.');
     else if (purl && !/^https?:\/\/|^[\w.\-\/]+\.html?(\?[^#]*)?(#.*)?$/i.test(purl)) err.push('Plan de voie : adresse invalide (https://… ou page.html#plan).');
     p.visuel.planVoie = { adresse: purl, duree: pdur, tvArrivee: $('#pa-plan-tv-arr').checked, tvDepart: $('#pa-plan-tv-dep').checked,
-      saisieArrivee: $('#pa-plan-sa-arr').checked, saisieDepart: $('#pa-plan-sa-dep').checked };
+      saisieArrivee: $('#pa-plan-sa-arr').checked, saisieDepart: $('#pa-plan-sa-dep').checked,
+      taille: +$('#pa-plan-taille').value || 120, entreprises: texteEnEfPlan($('#pa-plan-ef').value) };
     p.visuel.sonFinTravaux = $('#pa-son-fin').checked; p.visuel.nomVoix = $('#pa-nom-voix').value;
     p.visuel.vitesseVoix = +$('#pa-vitesse-voix').value; p.visuel.prononciation = $('#pa-prononciation').value.trim();
     p.visuel.sons = {};

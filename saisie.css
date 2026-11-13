@@ -68,7 +68,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .saisie-tete h2 { margin: 0; font-family: var(--f-titre); font-size: 15px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--encre-2); }
 .saisie.edition { background: var(--alerte-fond); }
 .saisie.edition h2 { color: var(--alerte); }
-.champs { display: grid; grid-template-columns: 130px 104px 90px 86px 104px 104px 90px minmax(130px, 1fr) auto; gap: 7px; align-items: end; }
+.champs { display: grid; grid-template-columns: 130px 104px 90px 86px 104px 104px 90px 104px minmax(130px, 1fr) auto; gap: 7px; align-items: end; }
 .champ input#f-ef { background: var(--surface-2); }
 .champ input.manquant { border-color: var(--alerte); }
 .ligne-aide { display: flex; gap: 14px; align-items: center; justify-content: space-between; }
@@ -381,3 +381,24 @@ iframe.apercu { width: 100%; height: 300px; border: 1px solid var(--trait); bord
 .plan-flottant.reduit { height: auto !important; width: 300px !important; resize: none; min-height: 0; }
 .plan-flottant.reduit .plan-cadre { height: 0; flex: none; overflow: hidden; }
 .plan-flottant.grand { left: 8px !important; top: 8px !important; width: calc(100vw - 16px) !important; height: calc(100vh - 16px) !important; resize: none; }
+
+/* ---- Paramètres en rubriques ---- */
+.d-params { width: min(1180px, calc(100vw - 32px)); }
+.params-corps { display: grid; grid-template-columns: 210px minmax(0, 1fr); gap: 0; padding: 0 !important; }
+.params-nav { position: sticky; top: 0; align-self: start; display: flex; flex-direction: column; gap: 3px; padding: 14px 10px; border-right: 1px solid var(--trait); min-height: 100%; background: var(--surface-2, #f4f6f8); }
+.params-nav button { display: flex; align-items: center; gap: 10px; text-align: left; border: 0; background: transparent; color: var(--encre); font: inherit; font-size: 14px; font-weight: 500; padding: 9px 12px; border-radius: 8px; cursor: pointer; }
+.params-nav button span { width: 20px; text-align: center; opacity: .75; }
+.params-nav button:hover { background: #0001; }
+.params-nav button[aria-current="true"] { background: var(--accent); color: var(--accent-encre); }
+.params-nav button[aria-current="true"] span { opacity: 1; }
+.params-pages { padding: 16px 22px 22px; min-width: 0; }
+.params-pages .section[hidden] { display: none; }
+.params-pages .section { margin-bottom: 18px; }
+.params-pages .section h4 { font-size: 16px; }
+.pv-ef { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
+.pv-ef span { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; padding: 3px 9px; border-radius: 999px; border: 1px solid var(--trait); }
+.pv-ef i { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+@media (max-width: 760px) { .params-corps { grid-template-columns: 1fr; } .params-nav { position: static; flex-direction: row; flex-wrap: wrap; border-right: 0; border-bottom: 1px solid var(--trait); } }
+/* côté du mouvement */
+.cote-tag { display: inline-block; font-size: 10.5px; font-weight: 700; letter-spacing: .04em; padding: 0 5px; border-radius: 4px; margin-left: 4px; background: #e0e7ff; color: #3730a3; vertical-align: 1px; }
+.cote-tag.h { background: #dcfce7; color: #166534; }

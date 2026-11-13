@@ -42,7 +42,16 @@ html.plan-seul #plan-vue[hidden] { display: grid !important; }
 #plan-verif button, #pe-calcul { align-self: flex-start; color: #e8eef3; background: #1e3a5f; border: 1px solid #3b82f6; border-radius: 5px; padding: 3px 9px; font: inherit; font-size: 12.5px; cursor: pointer; }
 #plan-verif small { color: #fca5a5; }
 #plan-prev .pp-jour { font-size: 11.5px; text-transform: uppercase; letter-spacing: .06em; color: #93a4b2; margin: 8px 0 3px; }
-#plan-prev .pp { display: grid; grid-template-columns: 3.2em 1fr auto; gap: 6px; padding: 4px 0; border-top: 1px solid #24323d; font-size: 12.5px; align-items: baseline; }
+#plan-prev .pp { display: grid; grid-template-columns: 3.2em 1fr auto; gap: 6px; padding: 5px 0 5px 8px; border-left: 3px solid var(--c, #24323d); border-top: 1px solid #24323d; font-size: 13px; align-items: baseline; }
+#plan-prev .pp.en-cours { background: #a855f722; }
+#plan-prev .pp-groupe { margin-top: 6px; font-weight: 800; font-size: 12.5px; color: var(--c); letter-spacing: .04em; text-transform: uppercase; }
+#plan-cote .mvts-cache { display: none; }
+#plan-raz { width: 100%; color: #fecaca; background: #450a0a; border: 1px solid #b91c1c; border-radius: 6px; padding: 6px 10px; font: inherit; font-size: 12.5px; cursor: pointer; }
+#plan-raz.confirmer { background: #b91c1c; color: #fff; font-weight: 700; }
+#pe-engins { display: flex; flex-wrap: wrap; gap: 6px; }
+#pe-engins span { display: inline-flex; align-items: center; gap: 4px; background: #052e16; color: #4ade80; border: 1px solid #22c55e; border-radius: 5px; padding: 2px 4px 2px 8px; font-weight: 800; font-size: 12.5px; }
+#pe-engins button { border: 0; background: transparent; color: #fca5a5; cursor: pointer; font-size: 14px; padding: 0 4px; }
+#pe-vider { color: #fecaca; background: #450a0a; border: 1px solid #b91c1c; border-radius: 5px; padding: 3px 9px; font: inherit; font-size: 12.5px; cursor: pointer; justify-self: start; }
 #plan-prev .pp time { font-family: var(--mono); color: #93a4b2; }
 #plan-prev .pp .ok { color: #4ade80; } #plan-prev .pp .manque { color: #fbbf24; }
 </style>
@@ -186,15 +195,25 @@ body[data-mode="simulation"] #fiche{display:none}
 #sim-direct button{color:#fff;border-color:rgba(255,255,255,.35);background:transparent;margin-left:6px;padding:3px 9px;font-size:12.5px}
 #plan-svg{flex:1;min-height:0;width:100%;display:block}
 #plan-svg .t-ligne{fill:none;stroke:var(--p-voie);stroke-width:2.8;stroke-linecap:round;stroke-linejoin:round}
-#plan-svg .v-lit{fill:none;stroke:#1a242c;stroke-width:12;stroke-linecap:round;stroke-linejoin:round}
-#plan-svg .v-etat{fill:none;stroke-width:7.5;stroke-linecap:round;stroke-linejoin:round;transition:stroke .4s}
-#plan-svg .v-rempl{fill:none;stroke-width:7.5;stroke-linecap:butt;stroke-linejoin:round;opacity:.95}
+#plan-svg .v-lit{fill:none;stroke:#1a242c;stroke-width:16;stroke-linecap:round;stroke-linejoin:round}
+#plan-svg .v-etat{fill:none;stroke-width:10;stroke-linecap:round;stroke-linejoin:round;transition:stroke .4s}
+#plan-svg .v-rempl{fill:none;stroke-width:10;stroke-linecap:butt;stroke-linejoin:round;opacity:.95}
 #plan-svg .v-clic{fill:none;stroke:transparent;stroke-width:22;cursor:pointer;pointer-events:stroke}
 #plan-svg .v-clic:hover+.v-etat,#plan-svg .v-clic:focus-visible+.v-etat{filter:brightness(1.35)}
 #plan-svg .pastille rect.fond{fill:#0c1217;stroke-width:1.2;rx:4}
-#plan-svg text{font-family:var(--sans);fill:var(--p-encre);font-size:12.5px;dominant-baseline:middle}
-#plan-svg .nom{font-weight:700;font-size:13px}
-#plan-svg .nb{font-family:var(--mono);font-weight:500}
+#plan-svg{--pt:15px}
+#plan-svg text{font-family:var(--sans);fill:var(--p-encre);font-size:var(--pt);dominant-baseline:middle}
+#plan-svg .nom{font-weight:800;font-size:calc(var(--pt) * 1.08)}
+#plan-svg .nb{font-family:var(--mono);font-weight:800;font-size:calc(var(--pt) * 1.4)}
+#plan-svg .cap{font-family:var(--mono);font-size:calc(var(--pt) * .9);fill:var(--p-encre2)}
+#plan-svg .pv-chip rect{stroke:#0008;stroke-width:1}
+#plan-svg .pv-chip text{font-weight:700;font-size:calc(var(--pt) * .92)}
+#plan-svg .em-chip rect{fill:#052e16;stroke:#22c55e;stroke-width:2}
+#plan-svg .em-chip text{fill:#4ade80;font-weight:900;font-size:calc(var(--pt) * 1.02);letter-spacing:.02em}
+#plan-svg .v-resa{fill:none;stroke:#3b82f6;stroke-width:5;stroke-linecap:butt;opacity:.95}
+#plan-svg .v-cours{fill:none;stroke:#a855f7;stroke-width:10;stroke-linecap:butt;animation:cours 1.4s ease-in-out infinite}
+@keyframes cours{50%{opacity:.35}}
+@media (prefers-reduced-motion:reduce){#plan-svg .v-cours{animation:none}}
 #plan-svg .faible{fill:var(--p-encre2)}
 #plan-svg .acces{fill:var(--p-encre2);font-size:12px}
 #plan-svg .clignote .v-etat,#plan-svg .clignote .v-rempl{animation:clignote 1s steps(2,jump-none) infinite}
@@ -351,6 +370,8 @@ body[data-mode="simulation"] #fiche{display:none}
      <span>Wagons</span><div class="seg" role="radiogroup" aria-label="Type de wagons"><label><input type="radio" name="pe-type" value="60" checked> 60 pieds</label><label><input type="radio" name="pe-type" value="80"> 80 pieds</label></div>
      <span>Capacité</span><b id="pe-cap"></b>
      <label for="pe-hs">Wagons HS</label><input type="number" id="pe-hs" min="0" max="80" step="1" value="0" style="width:6em">
+     <span>Engins</span><div id="pe-engins"></div>
+     <span></span><button type="button" id="pe-vider" title="Plus aucun wagon ni engin sur cette voie">Effacer la voie (wagons et engins)</button>
      <span>Contenu</span><button type="button" id="pe-calcul" hidden title="Oublier le contenu saisi : la voie suit de nouveau la journée">Revenir au calcul</button>
     </div>
     <div id="pe-lignes"></div>
@@ -363,9 +384,10 @@ body[data-mode="simulation"] #fiche{display:none}
    <section><h3>Sur le site</h3><div class="p-chiffres" id="plan-chiffres"></div>
     <p id="plan-vide" class="p-conseil" hidden>Aucun wagon connu sur le site. Le simulateur ne sait que ce qui est saisi : cliquez une fois sur chaque voie occupée pour indiquer ses wagons, puis les mouvements la tiennent à jour.</p></section>
    <section id="plan-verif-s" hidden><h3>À vérifier</h3><div id="plan-verif"></div></section>
+   <section id="plan-prev-s" hidden><h3>Navettes et trains</h3><div id="plan-prev"></div></section>
    <section><h3>Wagons par entreprise</h3><ul class="p-qui" id="plan-qui"></ul></section>
-   <section><h3>Derniers mouvements</h3><ol id="plan-mvts"><li class="vide-liste">Aucun mouvement depuis l'ouverture.</li></ol></section>
-   <section id="plan-prev-s" hidden><h3>Prévisions</h3><div id="plan-prev"></div></section>
+   <section class="mvts-cache"><h3>Derniers mouvements</h3><ol id="plan-mvts"><li class="vide-liste">Aucun mouvement depuis l'ouverture.</li></ol></section>
+   <section id="plan-raz-s" hidden><button type="button" id="plan-raz" class="raz">Effacer tout le plan (essais)</button><p class="note" id="plan-raz-msg"></p></section>
    <section><h3>Légende</h3><div class="p-legende" id="plan-legende"></div><p class="note" style="color:var(--p-encre2);margin:10px 0 0;font-size:12px">Une voie qui change d'état clignote. Cliquez sur une voie pour saisir ses wagons.</p></section>
   </aside>
  </section>
@@ -1284,7 +1306,7 @@ body[data-mode="simulation"] #fiche{display:none}
       const parNumero = {}; (j.circulations || []).forEach(c => { [c.numero, c.sillon].forEach(n => { if (n) parNumero[String(n)] = c; }); });
       const lu = j.mouvements.map(m => { const c = (m.lien && circ[m.lien]) || (!m.vers && parNumero[String(m.num || "")]);
         return { n: m.n, id: m.id || "n" + m.n, heure: m.reel || m.annonce || "", num: String(m.num || ""), ef: m.ef || "", traction: "", voie: m.voie || "", compo: String(m.compo || ""),
-          cv: m.cv || "", sit: m.sit || "", annonce: m.annonce || "", reel: m.reel || "", vers: m.vers || "", comm: m.comm || "", circulation: c ? `${c.code} (${c.groupe})` : "", sens: c ? c.sens : null, supprime: !!m.supprime }; });
+          cv: m.cv || "", sit: m.sit || "", annonce: m.annonce || "", reel: m.reel || "", vers: m.vers || "", cote: m.cote || "", comm: m.comm || "", circulation: c ? `${c.code} (${c.groupe})` : "", sens: c ? c.sens : null, supprime: !!m.supprime }; });
       return { date: j.date || "", source: "json", version: j.version, mouvements: lu, circulations: j.circulations || [] };
     }
     function lire(texte) {
@@ -1871,7 +1893,7 @@ body[data-mode="simulation"] #fiche{display:none}
       const conf = JSON.stringify((r && r.voies) || {});
       if (r && !r.erreur && conf !== confVue) { confVue = conf; window.LHTE_VOIES_CONF = r.voies || {}; Tn.changer(); }
       if (!r || r.erreur) throw new Error(r && r.erreur ? "le serveur répond : " + r.erreur : "réponse vide du serveur");
-      donnees = { saisies: r.saisies || { contenus: {}, choix: {} }, previsions: r.previsions || [], date: r.date };
+      donnees = { saisies: r.saisies || { contenus: {}, choix: {} }, previsions: r.previsions || [], date: r.date, entreprises: r.entreprises || null, taille: r.taille || 120 };
       if (!r.journee && !(SEUL && Object.keys(donnees.saisies.contenus || {}).length)) return null;
       texteServeur = JSON.stringify(r.journee || { date: d, mouvements: [], circulations: [] });
       return { title: d + ".json", id: "serveur", modifiedTime: String(r.version || 0) + "·" + (r.versionPlan || 0) + "·" + texteServeur.length };
@@ -1928,18 +1950,41 @@ body[data-mode="simulation"] #fiche{display:none}
     E.choix = SA.choix || {};
     // saisies manuelles d'une voie : son contenu réel à l'instant t, puis les mouvements suivants le font évoluer
     const evts = P.mouvements.map(x => ({ h: x.heure || "", x }));
-    for (const v in cont) if (RS.voies[v]) evts.push({ h: cont[v].t || "", v, parts: cont[v].parts || [] });
-    (SA.anciens || []).forEach(c => { if (RS.voies[c.v]) evts.push({ h: c.t || "", v: c.v, parts: c.parts || [] }); });
+    for (const v in cont) if (RS.voies[v]) evts.push({ h: cont[v].t || "", v, parts: cont[v].parts || [], engins: cont[v].engins });
+    (SA.anciens || []).forEach(c => { if (RS.voies[c.v]) evts.push({ h: c.t || "", v: c.v, parts: c.parts || [], engins: c.engins }); });
+    // voie préparée pour un départ (ex. VF8 : NL2 TN 18 wg) : les wagons qu'une manœuvre y amène prennent l'entreprise de ce départ
+    const departs = (donnees.previsions || []).filter(p => p.sens === "D" && p.groupe).map(p => ({ p, v: J.lireVoie(p.voie).voie, h: p.heure || p.date + "T23:59" })).filter(o => o.v).sort((a, b) => (a.h < b.h ? -1 : 1));
+    const cotes = {}, ACCES = J.ACCES_EST;
+    const reetiqueter = x => {
+      if (!(x.type === "manoeuvre" || x.type === "entree") || !x.vers || x.vers === ACCES || !x.parts) return;
+      const v = RS.troncons[x.vers] && RS.troncons[x.vers].voie, dep = v && departs.find(o => o.v === v);
+      if (!dep) return; const G = dep.p.groupe, l = E.compo[x.vers] || [];
+      x.parts.forEach(q => {
+        if (!q.nb || String(q.cle).toUpperCase() === String(G).toUpperCase()) return;
+        const a = l.find(r => r.cle === q.cle && r.charge === q.charge); if (!a) return; const k = Math.min(a.nb, q.nb); a.nb -= k;
+        const b = l.find(r => String(r.cle).toUpperCase() === String(G).toUpperCase() && r.charge === q.charge); if (b) b.nb += k; else l.push({ cle: G, nb: k, charge: q.charge });
+      });
+      E.compo[x.vers] = l.filter(r => r.nb > 0);
+    };
     evts.sort((a, b) => (a.h < b.h ? -1 : a.h > b.h ? 1 : 0));
     evts.forEach(e => {
-      if (e.x) { try { A.appliquer(E, e.x); if (e.x.ambigu) aVerifier.push(e.x); } catch (er) { console.error(er); } return; }
+      if (e.x) {
+        try {
+          A.appliquer(E, e.x); if (e.x.ambigu) aVerifier.push(e.x); reetiqueter(e.x);
+          const vd = e.x.vers && e.x.vers !== ACCES && RS.troncons[e.x.vers] && RS.troncons[e.x.vers].voie; if (vd && e.x.ligne && e.x.ligne.cote) cotes[vd] = e.x.ligne.cote;
+        } catch (er) { console.error(er); }
+        return;
+      }
       const t = RS.voies[e.v].troncon; E.compo[t] = e.parts.map(p => Object.assign({}, p)); E.stocks[t] = e.parts.reduce((n, p) => n + p.nb, 0);
+      // saisie avec la liste des engins : les autres engins de la voie sont effacés
+      if (Array.isArray(e.engins)) for (const id in E.locos) if (E.locos[id] === t && !e.engins.includes(id)) { delete E.locos[id]; if (E.infos) delete E.infos[id]; }
+      if (!e.parts.length) delete cotes[e.v];
       for (let i = aVerifier.length - 1; i >= 0; i--) if (aVerifier[i].ambigu.voie === e.v) aVerifier.splice(i, 1); // corrigé par la saisie
     });
     A.reconstruire(E);
     memo.fichier = modif; memo.decide = true;
     const ann = P.autres.filter(x => x.statut === "annonce").length, jour = aujourdhui();
-    if (LHTE.vues && LHTE.vues.donnees) LHTE.vues.donnees({ aVerifier, previsions: donnees.previsions || [], contenus: cont, date: donnees.date || jour });
+    if (LHTE.vues && LHTE.vues.donnees) LHTE.vues.donnees({ aVerifier, previsions: donnees.previsions || [], contenus: cont, cotes, date: donnees.date || jour, entreprises: donnees.entreprises, taille: donnees.taille });
     if (LHTE.vues && LHTE.vues.mouvements) LHTE.vues.mouvements(P.mouvements.filter(x => (x.heure || "").slice(0, 10) === jour).slice(-12).reverse().map(x => ({ h: hhmm(x.heure), t: x.libelle + (x.nb && !/wagon/.test(x.libelle) ? ` · ${x.nb} wagon${x.nb > 1 ? "s" : ""}` : ""), cle: x.groupe || x.ef })));
     const n = P.mouvements.length;
     resume = `${n} mouvement${pl(n, "")} appliqué${pl(n, "")}${ann ? ` · ${ann} départ${pl(ann, "")} annoncé${pl(ann, "")}, en attente de « Parti »` : ""}`;
@@ -2080,8 +2125,12 @@ body[data-mode="simulation"] #fiche{display:none}
   const COUL = Object.assign({ libre: "#2fbf5b", partielle: "#f39c12", occupee: "#e5383b", reservee: "#3b82f6", indisponible: "#6b7280", manoeuvre: "#a855f7" }, CV.couleurs || {});
   const LIBELLES = { libre: "Libre", partielle: "Partiellement occupée", occupee: "Pleine", reservee: "Réservée", indisponible: "Indisponible", manoeuvre: "Mouvement en cours" };
   const REL = Object.fromEntries(Object.entries(M.relations || {}).filter(([k, v]) => v && v.nom));
-  const nomQui = c => (c === "~HS" ? "Wagons HS" : "") || (REL[c] && REL[c].nom) || (M.entreprises[c] && M.entreprises[c].nom) || c || "Sans entreprise";
-  const couleurQui = c => (c === "~HS" ? "#9ca3af" : "") || (REL[c] && REL[c].couleur) || (M.entreprises[c] && M.entreprises[c].couleur) || "#8a97a3";
+  let EFS = {}; // entreprises de la saisie (Paramètres › Plan de voie), par code en majuscules
+  const efDe = c => { const k = String(c || "").toUpperCase(); if (EFS[k]) return EFS[k]; for (const x in EFS) if (String(EFS[x].nom).toUpperCase() === k) return EFS[x];
+    const r = Object.keys(REL).find(x => x.toUpperCase() === k || String(REL[x].nom).toUpperCase() === k); if (r) return REL[r];
+    const m = Object.keys(M.entreprises).find(x => x.toUpperCase() === k || String(M.entreprises[x].nom).toUpperCase() === k); return m ? M.entreprises[m] : null; };
+  const nomQui = c => (c === "~HS" ? "Wagons HS" : "") || (efDe(c) && efDe(c).nom) || (REL[c] && REL[c].nom) || (M.entreprises[c] && M.entreprises[c].nom) || c || "Sans entreprise";
+  const couleurQui = c => (c === "~HS" ? "#9ca3af" : "") || (efDe(c) && efDe(c).couleur) || (REL[c] && REL[c].couleur) || (M.entreprises[c] && M.entreprises[c].couleur) || "#8a97a3";
   const echap = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
   const hhmm = iso => (iso || "").slice(11, 16) || "--:--";
   const pl = n => (n > 1 ? "s" : "");
@@ -2089,7 +2138,7 @@ body[data-mode="simulation"] #fiche{display:none}
 
   // ---------------------------------------------------------------- mode d'affichage
   let mode = "3d";
-  const pDonnees = { aVerifier: [], previsions: [], contenus: {}, date: "", sale: false };
+  const pDonnees = { aVerifier: [], previsions: [], contenus: {}, cotes: {}, date: "", taille: 120, sale: false, engins: null };
   function choisir(m, depuisAdresse) {
     m = window.LHTE_PLAN && window.LHTE_PLAN.seul ? "plan" : m === "plan" || m === "simulation" ? m : "3d"; const avant = mode; mode = m;
     document.body.dataset.mode = m; $("plan-vue").hidden = m !== "plan";
@@ -2106,7 +2155,7 @@ body[data-mode="simulation"] #fiche{display:none}
   // ---------------------------------------------------------------- plan : dessin du schéma
   // Abscisses du schéma resserrées aux deux extrémités (accès ouest, Cv5003 et limite est) pour agrandir les faisceaux ;
   // ordonnées étirées pour laisser la place aux étiquettes entre deux voies voisines.
-  const X0 = 250, X1 = 1330, SY = 1.6, sx = x => (x < X0 ? X0 - (X0 - x) * 0.18 : x > X1 ? X1 + (x - X1) * 0.2 : x);
+  const X0 = 250, X1 = 1330, SY = 1.95, sx = x => (x < X0 ? X0 - (X0 - x) * 0.18 : x > X1 ? X1 + (x - X1) * 0.2 : x);
   const pts = t => { const d = R.troncons[t], o = R.noeuds[d.ouest.noeud], e = R.noeuds[d.est.noeud]; return [[o.x, o.y], ...d.trace, [e.x, e.y]].map(q => [sx(q[0]), q[1] * SY]); };
   const chemin = p => "M" + p.map(q => q[0].toFixed(1) + " " + q[1].toFixed(1)).join("L");
   function milieu(p) { // point au milieu de la longueur, et sa direction
@@ -2128,9 +2177,13 @@ body[data-mode="simulation"] #fiche{display:none}
       el("path", { d, class: "v-lit" }, g);
       const clic = el("path", { d, class: "v-clic", tabindex: "0", role: "button", "aria-label": "Voie " + v }, g);
       const etat = el("path", { d, class: "v-etat", pathLength: "100" }, g), rempl = el("path", { d, class: "v-rempl", pathLength: "100" }, g);
+      const resa = el("path", { d, class: "v-resa", pathLength: "100", "stroke-dasharray": "0 100" }, g), cours = el("path", { d, class: "v-cours", pathLength: "100", "stroke-dasharray": "0 100" }, g);
       const m = milieu(p), pa = el("g", { class: "pastille", transform: `translate(${m.x.toFixed(1)} ${m.y.toFixed(1)})` }, pastilles);
-      const fondP = el("rect", { class: "fond", y: -10, height: 20, rx: 5 }, pa), texte = el("text", { y: 0.5 }, pa);
-      formes[v] = { g, etat, rempl, pa, fondP, texte, long: m.long, avant: null, flash: 0 };
+      const fondP = el("rect", { class: "fond", y: -13, height: 26, rx: 6 }, pa), texte = el("text", { y: 0.5 }, pa);
+      const chip = el("g", { class: "pv-chip" }, pa), chipR = el("rect", { y: -12, height: 24, rx: 6 }, chip), chipT = el("text", { y: 0.5 }, chip);
+      const em = el("g", { class: "em-chip" }, pastilles), emR = el("rect", { y: -13, height: 26, rx: 6 }, em), emT = el("text", { y: 0.5, "text-anchor": "middle" }, em);
+      formes[v] = { m, g, etat, rempl, resa, cours, pa, fondP, texte, chip, chipR, chipT, em, emR, emT, pts: p, long: m.long, avant: null, flash: 0 };
+      em.style.cursor = "pointer"; em.addEventListener("click", ev => ouvrirEdition(v, ev));
       const ouvrir = ev => ouvrirEdition(v, ev); clic.addEventListener("click", ouvrir); clic.addEventListener("keydown", ev => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); ouvrir(ev); } });
       pa.style.cursor = "pointer"; pa.addEventListener("click", ouvrir);
     }
@@ -2139,14 +2192,29 @@ body[data-mode="simulation"] #fiche{display:none}
 
   // ---------------------------------------------------------------- plan : état des voies
   function compo(v) { // wagons de la voie par relation ou EF, engins présents
-    const t = R.voies[v].troncon, q = {}; let engins = 0;
-    Tn.liste().forEach(x => { if (x.troncon !== t) return; if (x.loco) engins++; if (x.nb) q[x.ef || ""] = (q[x.ef || ""] || 0) + x.nb; });
-    return { parts: Object.entries(q).sort((a, b) => b[1] - a[1]), engins };
+    const t = R.voies[v].troncon, q = {}; let engins = 0; const ids = [];
+    Tn.liste().forEach(x => { if (x.troncon !== t) return; if (x.loco) { engins++; ids.push(x.id); } if (x.nb) q[x.ef || ""] = (q[x.ef || ""] || 0) + x.nb; });
+    return { parts: Object.entries(q).sort((a, b) => b[1] - a[1]), engins, ids };
   }
+  function pointA(p, frac) { // point situé à frac de la longueur du tracé
+    const l = []; let s = 0; for (let i = 1; i < p.length; i++) { s += Math.hypot(p[i][0] - p[i - 1][0], p[i][1] - p[i - 1][1]); l.push(s); }
+    const cible = s * frac; let i = l.findIndex(v => v >= cible); if (i < 0) i = l.length - 1; const a = p[i], b = p[i + 1], d0 = i ? l[i - 1] : 0, f = (cible - d0) / ((l[i] - d0) || 1);
+    return { x: a[0] + (b[0] - a[0]) * f, y: a[1] + (b[1] - a[1]) * f };
+  }
+  const largeur = (t, txt) => { let l = 0; try { l = t.getBBox().width; } catch (e) { l = 0; } return l || String(txt || "").length * TAILLE() * 0.62; };
+  const TAILLE = () => 16 * (pDonnees.taille || 120) / 100;
+  function bout(p, cote) { // extrémité de la partie droite (le plus long segment) de la voie, côté Paris (droite) ou Le Havre (gauche)
+    let a = 0, lg = -1; for (let i = 1; i < p.length; i++) { const d = Math.hypot(p[i][0] - p[i - 1][0], p[i][1] - p[i - 1][1]); if (d > lg) { lg = d; a = i - 1; } }
+    const g = p[a][0] <= p[a + 1][0] ? p[a] : p[a + 1], dr = p[a][0] <= p[a + 1][0] ? p[a + 1] : p[a];
+    return cote === "H" ? { x: g[0], y: g[1], ancre: "start" } : { x: dr[0], y: dr[1], ancre: "end" };
+  }
+  const demi = (cote, lg) => (cote === "P" ? `0 ${100 - lg} ${lg} 100` : `${lg} 100`); // moitié côté Paris (droite) ou Le Havre (gauche)
+  const contraste = c => { const h = String(c || "").replace("#", ""); if (h.length < 6) return "#fff"; const r = parseInt(h.slice(0, 2), 16), g = parseInt(h.slice(2, 4), 16), b = parseInt(h.slice(4, 6), 16); return (r * 299 + g * 587 + b * 114) / 1000 > 150 ? "#0b1218" : "#ffffff"; };
   function dessinerEtats(clignoter) {
-    const maintenant = Date.now(), totaux = {}, prevs = previsionsVoie(); let wagons = 0; const nb = { libre: 0, partielle: 0, occupee: 0 };
+    const maintenant = Date.now(), totaux = {}, prevs = previsionsVoie(), resas = reservationsVoie(); let wagons = 0; const nb = { libre: 0, partielle: 0, occupee: 0 };
+    svg.style.setProperty("--pt", TAILLE().toFixed(1) + "px");
     for (const v of VOIES) {
-      const f = formes[v], e = Tn.etatVoie(v), c = compo(v), code = e.code, coul = COUL[code] || "#888";
+      const f = formes[v], e = Tn.etatVoie(v), c = compo(v), code = e.code, coul = COUL[code] || "#888", cote = (pDonnees.cotes || {})[v] || "";
       c.parts.forEach(([k, n]) => { totaux[k] = (totaux[k] || 0) + n; }); if (e.hs) totaux["~HS"] = (totaux["~HS"] || 0) + e.hs; wagons += e.wagons; if (code in nb) nb[code]++;
       const signature = code + "|" + e.wagons + "|" + e.type;
       if (clignoter && f.avant !== null && f.avant !== signature && code !== "manoeuvre") f.flash = maintenant + CV.clignotement_s * 1000;
@@ -2155,26 +2223,54 @@ body[data-mode="simulation"] #fiche{display:none}
       f.g.style.setProperty("--flash", coul);
       const taux = e.capacite ? Math.min(100, 100 * e.wagons / e.capacite) : e.wagons ? 100 : 0;
       f.etat.setAttribute("stroke", coul); f.etat.setAttribute("stroke-opacity", code === "partielle" ? 0.35 : code === "libre" ? 0.6 : 0.95);
-      f.rempl.setAttribute("stroke", coul); f.rempl.setAttribute("stroke-dasharray", code === "partielle" ? `${taux.toFixed(1)} 100` : "0 100");
-      // pastille : nom, wagons / capacité, répartition
-      const morceaux = [`<tspan class="nom">${echap(v)}</tspan>`];
-      if (e.type === 80) morceaux.push(`<tspan dx="4" class="faible">80'</tspan>`);
-      const pv = prevs[v];
-      if (!e.wagons && !c.engins) morceaux.push(`<tspan dx="5" fill="${coul}">${code === "libre" ? "libre" : LIBELLES[code].toLowerCase()}</tspan>`);
+      // wagons rangés du côté où ils ont été posés (Le Havre à gauche par défaut, Paris à droite)
+      f.rempl.setAttribute("stroke", coul); f.rempl.setAttribute("stroke-dasharray", code === "partielle" ? demi(cote === "P" ? "P" : "H", taux.toFixed(1)) : "0 100");
+      // mouvement en cours (violet) et voie réservée dans la saisie (bleu, sur une moitié)
+      const r = resas[v];
+      if (r && r.enCours) { f.cours.setAttribute("stroke-dasharray", r.cote ? demi(r.cote, 50) : "100 0"); f.resa.setAttribute("stroke-dasharray", "0 100"); }
       else {
-        if (e.wagons) morceaux.push(`<tspan dx="5" class="nb">${e.wagons}${e.capacite ? `<tspan class="faible">/${e.capacite}</tspan>` : " wg"}</tspan>`);
-        const vus = c.parts.slice(0, 3); vus.forEach(([k, n]) => morceaux.push(`<tspan dx="6" fill="${couleurQui(k)}">●</tspan><tspan dx="2">${echap(nomQui(k))}${c.parts.length > 1 ? " " + n : ""}</tspan>`));
-        if (c.parts.length > 3) morceaux.push(`<tspan dx="4" class="faible">+${c.parts.length - 3}</tspan>`);
-        if (e.hs) morceaux.push(`<tspan dx="6" fill="#d1d5db" font-weight="700">HS ${e.hs}</tspan>`);
-        if (c.engins) morceaux.push(`<tspan dx="6" class="faible">${c.engins} engin${c.engins > 1 ? "s" : ""}</tspan>`);
+        f.cours.setAttribute("stroke-dasharray", "0 100");
+        f.resa.setAttribute("stroke-dasharray", r ? demi(r.cote || (e.wagons ? (cote === "P" ? "H" : "P") : "P"), 50) : "0 100");
       }
-      if (pv) morceaux.push(`<tspan dx="7" fill="#60a5fa">⏵ ${echap(pv.date === pDonnees.date ? (pv.heure || "").slice(11, 16) : jourCourt(pv.date).split(" ")[0])} ${echap(pv.groupe || pv.code)}${pv.wagons != null ? " " + pv.wagons : ""}</tspan>`);
-      if (pDonnees.aVerifier.some(x => x.ambigu.voie === v)) morceaux.push(`<tspan dx="6" fill="#fbbf24" font-weight="700">?</tspan>`);
+      // pastille : nom, 80', wagons / capacité (en gros), entreprises, HS
+      const morceaux = [`<tspan class="nom">${echap(v)}</tspan>`];
+      if (e.type === 80) morceaux.push(`<tspan dx="5" class="cap">80'</tspan>`);
+      if (!e.wagons) morceaux.push(`<tspan dx="7" fill="${coul}" font-weight="600">${code === "libre" ? "libre" : LIBELLES[code].toLowerCase()}</tspan>`);
+      else {
+        morceaux.push(`<tspan dx="7" class="nb">${e.wagons}</tspan>${e.capacite ? `<tspan class="cap">/${e.capacite}</tspan>` : `<tspan class="cap"> wg</tspan>`}`);
+        const vus = c.parts.slice(0, 3); vus.forEach(([k, n]) => morceaux.push(`<tspan dx="8" fill="${couleurQui(k)}">●</tspan><tspan dx="3" font-weight="600">${echap(nomQui(k))}${c.parts.length > 1 ? " " + n : ""}</tspan>`));
+        if (c.parts.length > 3) morceaux.push(`<tspan dx="5" class="cap">+${c.parts.length - 3}</tspan>`);
+        if (e.hs) morceaux.push(`<tspan dx="8" fill="#e5e7eb" font-weight="800">HS ${e.hs}</tspan>`);
+      }
+      if (pDonnees.aVerifier.some(x => x.ambigu.voie === v)) morceaux.push(`<tspan dx="8" fill="#fbbf24" font-weight="900">?</tspan>`);
       f.texte.innerHTML = morceaux.join("");
-      let l = 60; try { f.texte.setAttribute("x", 0); l = f.texte.getBBox().width || l; } catch (e) { /* plan masqué : mesuré au prochain affichage */ }
-      f.texte.setAttribute("x", (-l / 2).toFixed(1)); f.fondP.setAttribute("x", (-l / 2 - 7).toFixed(1)); f.fondP.setAttribute("width", (l + 14).toFixed(1));
-      f.fondP.setAttribute("stroke", coul);
-      f.pa.setAttribute("aria-label", `${v} : ${LIBELLES[code]}, ${e.wagons} wagon${pl(e.wagons)}${e.hs ? ` dont ${e.hs} HS` : ""}${e.type === 80 ? ", wagons de 80 pieds" : ""}`);
+      f.texte.setAttribute("x", 0); const l = largeur(f.texte, f.texte.textContent);
+      f.texte.setAttribute("x", (-l / 2).toFixed(1)); f.fondP.setAttribute("x", (-l / 2 - 8).toFixed(1)); f.fondP.setAttribute("width", (l + 16).toFixed(1));
+      // avec une affectation ou un engin : étiquette calée au début de la partie droite de la voie, l'engin à l'autre bout
+      const g0 = bout(f.pts, cote === "H" && c.engins ? "P" : "H"), cale = (prevs[v] || c.engins) && !(cote === "H" && c.engins);
+      const px = cale ? g0.x + 14 + l / 2 : cote === "H" && c.engins && (prevs[v]) ? g0.x - 14 - l / 2 : f.m.x, py = cale ? g0.y : f.m.y;
+      f.pa.setAttribute("transform", `translate(${px.toFixed(1)} ${py.toFixed(1)})`);
+      f.fondP.setAttribute("stroke", r && r.enCours ? COUL.manoeuvre : r ? COUL.reservee : coul);
+      // prochaine affectation, aux couleurs de sa destination : « 18:00 VNX Naviland départ 22 wg »
+      const pv = prevs[v];
+      if (pv) {
+        const cc = pv.couleur || couleurQui(pv.groupe), quand = pv.date === pDonnees.date ? (pv.heure || "").slice(11, 16) : jourCourt(pv.date).split(" ")[0] + " " + (pv.heure || "").slice(11, 16);
+        f.chipT.textContent = `${quand} ${pv.code} ${pv.libelle || pv.groupe} ${pv.sens === "A" ? "arrivée" : "départ"}${pv.wagons != null ? " " + pv.wagons + " wg" : ""}`.replace(/\s+/g, " ").trim();
+        f.chipT.setAttribute("fill", contraste(cc)); f.chipR.setAttribute("fill", cc);
+        f.chipT.setAttribute("x", 0); const lc = largeur(f.chipT, f.chipT.textContent);
+        f.chipT.setAttribute("x", (l / 2 + 18).toFixed(1)); f.chipR.setAttribute("x", (l / 2 + 10).toFixed(1)); f.chipR.setAttribute("width", (lc + 16).toFixed(1));
+        f.chip.style.display = "";
+      } else f.chip.style.display = "none";
+      // engins : en gros, en vert, toujours à l'extrémité de la voie (côté Paris par défaut)
+      if (c.engins) {
+        const ids = c.ids.map(id => String(id).replace(/^em\s+/i, "").toUpperCase()), txt = ids.slice(0, 2).join(" · ") + (ids.length > 2 ? ` +${ids.length - 2}` : "");
+        f.emT.textContent = "◀ " + txt;
+        f.emT.textContent = (cote === "H" ? "" : "◀ ") + txt + (cote === "H" ? " ▶" : "");
+        const lg = largeur(f.emT, f.emT.textContent) + 18, b = bout(f.pts, cote === "H" ? "H" : "P"), cx = b.ancre === "end" ? b.x - lg / 2 - 4 : b.x + lg / 2 + 4;
+        f.em.setAttribute("transform", `translate(${cx.toFixed(1)} ${b.y.toFixed(1)})`); f.emR.setAttribute("x", (-lg / 2).toFixed(1)); f.emR.setAttribute("width", lg.toFixed(1)); f.emT.setAttribute("x", 0);
+        f.em.style.display = "";
+      } else f.em.style.display = "none";
+      f.pa.setAttribute("aria-label", `${v} : ${LIBELLES[code]}, ${e.wagons} wagon${pl(e.wagons)}${e.hs ? ` dont ${e.hs} HS` : ""}${e.type === 80 ? ", wagons de 80 pieds" : ""}${c.engins ? `, ${c.engins} engin${pl(c.engins)}` : ""}`);
     }
     $("plan-vide").hidden = wagons > 0;
     $("plan-chiffres").innerHTML = `<div><b>${wagons}</b><span>wagons${totaux["~HS"] ? ` dont ${totaux["~HS"]} HS` : ""}</span></div><div><b style="color:${COUL.libre}">${nb.libre}</b><span>voies libres</span></div><div><b style="color:${COUL.occupee}">${nb.occupee}</b><span>voies pleines</span></div>`;
@@ -2182,6 +2278,8 @@ body[data-mode="simulation"] #fiche{display:none}
     $("plan-qui").innerHTML = qui.length ? qui.map(([k, n]) => `<li><i style="background:${couleurQui(k)}"></i><span>${echap(nomQui(k))}</span><b>${n}</b></li>`).join("") : '<li style="color:var(--p-encre2)">Aucun wagon sur le site.</li>';
     if (VOIES.some(v => formes[v].flash > maintenant)) { clearTimeout(dessinerEtats.t); dessinerEtats.t = setTimeout(() => dessinerEtats(false), 1000 + Math.min(...VOIES.map(v => formes[v].flash).filter(x => x > maintenant)) - maintenant); }
   }
+  // plan masqué au premier dessin (fenêtre réduite) : redessiné à l'affichage pour mesurer les étiquettes
+  if (window.ResizeObserver) { let av = ""; new ResizeObserver(() => { const k = svg.clientWidth + "x" + svg.clientHeight; if (k !== av && svg.clientWidth) { av = k; dessinerEtats(false); } }).observe(svg); }
   let prevu = false;
   Tn.surChangement(() => { if (prevu) return; prevu = true; requestAnimationFrame(() => { prevu = false; dessinerEtats(true); }); });
 
@@ -2224,7 +2322,7 @@ body[data-mode="simulation"] #fiche{display:none}
 
   // ---------------------------------------------------------------- plan : saisie des wagons d'une voie
   let edite = null;
-  const CHOIX = [["", "Sans entreprise"]].concat(Object.keys(REL).map(k => [k, REL[k].nom + " (relation)"]), Object.keys(M.entreprises).map(k => [k, M.entreprises[k].nom]));
+  let CHOIX = [["", "Sans entreprise"]].concat(Object.keys(REL).map(k => [k, REL[k].nom + " (relation)"]), Object.keys(M.entreprises).map(k => [k, M.entreprises[k].nom]));
   function ligneEdition(p) {
     const d = document.createElement("div"); d.className = "pe-ligne";
     const choix = p.cle && !CHOIX.some(([k]) => k === p.cle) ? CHOIX.concat([[p.cle, nomQui(p.cle)]]) : CHOIX;
@@ -2243,7 +2341,8 @@ body[data-mode="simulation"] #fiche{display:none}
   }
   function ouvrirEdition(v, ev) {
     edite = v; const e = Tn.etatVoie(v), t = R.voies[v].troncon, q = {};
-    $("pe-conf").hidden = !SEUL; pDonnees.sale = false; $("pe-calcul").hidden = !(SEUL && pDonnees.contenus[v]);
+    $("pe-conf").hidden = !SEUL; pDonnees.sale = false;
+    pDonnees.engins = compo(v).ids.slice(); pDonnees.enginsSale = false; rendreEngins(); $("pe-calcul").hidden = !(SEUL && pDonnees.contenus[v]);
     if (SEUL) { const cf = (window.LHTE_VOIES_CONF || {})[v] || {}; document.querySelectorAll('input[name="pe-type"]').forEach(r => { r.checked = Number(r.value) === (Number(cf.type) === 80 ? 80 : 60); }); $("pe-hs").value = cf.hs || 0; }
     Tn.liste().forEach(x => { if (x.troncon === t && x.nb) { const k = (x.ef || "") + "|" + x.charge; q[k] = (q[k] || 0) + x.nb; } });
     $("pe-titre").textContent = `Voie ${v}`; $("pe-note").textContent = `${LIBELLES[e.code]} · ${e.wagons} wagon${pl(e.wagons)}${e.capacite ? ` sur ${e.capacite}` : ""}. Saisissez ce qui s'y trouve réellement.`;
@@ -2256,6 +2355,11 @@ body[data-mode="simulation"] #fiche{display:none}
   // saisie du contenu modifiée ? (sinon seuls le type et les HS sont enregistrés)
   $("pe-lignes").addEventListener("input", () => { pDonnees.sale = true; }); $("pe-lignes").addEventListener("change", () => { pDonnees.sale = true; });
   $("pe-lignes").addEventListener("click", e => { if (e.target.closest("button")) pDonnees.sale = true; });
+  function rendreEngins() {
+    const l = pDonnees.engins || []; $("pe-engins").innerHTML = l.length ? l.map((id, i) => `<span>${echap(String(id).replace(/^em\s+/i, "").toUpperCase())}<button type="button" data-i="${i}" title="Effacer cet engin" aria-label="Effacer l'engin ${echap(id)}">✕</button></span>`).join("") : '<small class="note">aucun</small>';
+    $("pe-engins").querySelectorAll("button").forEach(b => b.addEventListener("click", () => { pDonnees.engins.splice(+b.dataset.i, 1); pDonnees.enginsSale = true; rendreEngins(); }));
+  }
+  $("pe-vider").addEventListener("click", () => { $("pe-lignes").innerHTML = ""; pDonnees.sale = true; pDonnees.engins = []; pDonnees.enginsSale = true; rendreEngins(); $("pe-hs").value = 0; $("pe-msg").textContent = "La voie sera vide (sans wagon ni engin) à l'enregistrement."; });
   const isoLocal = () => { const d = new Date(); return new Date(d - d.getTimezoneOffset() * 60000).toISOString().slice(0, 19); };
   async function envoyerPlan(corps) {
     let cx = {}; try { cx = JSON.parse(localStorage.getItem("suivi:connexion") || "null") || {}; } catch (e) { /* stockage indisponible */ }
@@ -2269,6 +2373,16 @@ body[data-mode="simulation"] #fiche{display:none}
     return r.data;
   }
   const peutSaisir = () => { try { const c = JSON.parse(localStorage.getItem("suivi:connexion") || "null") || {}; return !!(c.url && c.cle); } catch (e) { return false; } };
+  // tout effacer (essais) : chaque voie vide et sans engin à partir de maintenant ; les mouvements suivants s'appliquent
+  let razT = null;
+  $("plan-raz").addEventListener("click", () => {
+    const b = $("plan-raz");
+    if (!b.classList.contains("confirmer")) { b.classList.add("confirmer"); b.textContent = "Confirmer : tout effacer"; $("plan-raz-msg").textContent = "Toutes les voies seront vides, sans engin. Cliquez encore pour confirmer."; clearTimeout(razT); razT = setTimeout(() => { b.classList.remove("confirmer"); b.textContent = "Effacer tout le plan (essais)"; $("plan-raz-msg").textContent = ""; }, 6000); return; }
+    clearTimeout(razT); b.disabled = true; $("plan-raz-msg").textContent = "Effacement…";
+    envoyerPlan({ vider: VOIES, t: isoLocal() }).then(() => { b.disabled = false; b.classList.remove("confirmer"); b.textContent = "Effacer tout le plan (essais)"; $("plan-raz-msg").textContent = "Plan effacé."; },
+      e => { b.disabled = false; $("plan-raz-msg").textContent = e.message; });
+  });
+  if (SEUL && peutSaisir()) $("plan-raz-s").hidden = false;
   $("pe-calcul").addEventListener("click", () => {
     const v = edite; if (!v) return; $("pe-msg").textContent = "Enregistrement…";
     envoyerPlan({ voie: v, parts: null }).then(() => { fermer(); noterMvt(new Date().toTimeString().slice(0, 5), `${v} : contenu recalculé depuis la saisie`, "", true); }, e => { $("pe-msg").textContent = e.message; });
@@ -2278,7 +2392,14 @@ body[data-mode="simulation"] #fiche{display:none}
   const JOURS = ["dim.", "lun.", "mar.", "mer.", "jeu.", "ven.", "sam."];
   const jourCourt = d => JOURS[new Date(d + "T12:00:00").getDay()] + " " + d.slice(8, 10);
   const voieDe = brut => { const r = A.J.lireVoie(brut); return r && r.voie; };
-  function donnees(o) { Object.assign(pDonnees, o); rendreVerif(); rendrePrev(); dessinerEtats(false); }
+  function donnees(o) {
+    Object.assign(pDonnees, o);
+    if (Array.isArray(o.entreprises) && o.entreprises.length) { // liste de la saisie : elle remplace la liste d'origine
+      EFS = {}; o.entreprises.forEach(e => { if (e && e.code) EFS[String(e.code).toUpperCase()] = { nom: e.nom || e.code, couleur: e.couleur || "#8a97a3" }; });
+      CHOIX = [["", "Sans entreprise"]].concat(o.entreprises.filter(e => e && e.code).map(e => [e.code, e.nom || e.code]));
+    }
+    rendreVerif(); rendrePrev(); dessinerEtats(false);
+  }
   function rendreVerif() {
     const l = pDonnees.aVerifier, saisir = peutSaisir(); $("plan-verif-s").hidden = !l.length;
     $("plan-verif").innerHTML = l.map((x, i) => {
@@ -2299,18 +2420,30 @@ body[data-mode="simulation"] #fiche{display:none}
     const m = {}; pDonnees.previsions.slice().sort((a, b) => (a.date + a.heure < b.date + b.heure ? -1 : 1)).forEach(p => { const v = voieDe(p.voie); if (v && !m[v]) m[v] = p; });
     return m;
   }
-  function surPlace(v, groupe) { const c = compo(v); return c.parts.filter(([k]) => k === groupe || nomQui(k) === groupe).reduce((n, [, q]) => n + q, 0); }
-  function rendrePrev() {
+  function reservationsVoie() { // voies données dans la saisie pour aujourd'hui : en cours (violet) ou réservées (bleu)
+    const m = {}; pDonnees.previsions.filter(p => p.date === pDonnees.date).forEach(p => { const v = voieDe(p.voie); if (!v) return; if (!m[v] || (p.enCours && !m[v].enCours)) m[v] = p; });
+    return m;
+  }
+  function surPlace(v, groupe) { const c = compo(v), g = String(groupe || "").toUpperCase(); return c.parts.filter(([k]) => String(k).toUpperCase() === g || String(nomQui(k)).toUpperCase() === String(nomQui(groupe)).toUpperCase()).reduce((n, [, q]) => n + q, 0); }
+  function rendrePrev() { // navettes et trains de ligne de la saisie, par groupe, avec leur voie et leurs wagons
     const l = pDonnees.previsions.slice().sort((a, b) => (a.date + a.heure < b.date + b.heure ? -1 : 1)); $("plan-prev-s").hidden = !l.length;
-    let jour = "", h = "";
-    l.forEach(p => {
-      if (p.date !== jour) { jour = p.date; h += `<div class="pp-jour">${p.date === pDonnees.date ? "Aujourd'hui" : jourCourt(p.date)}</div>`; }
-      const v = voieDe(p.voie), dep = p.sens === "D", n = v && dep && p.wagons ? surPlace(v, p.groupe) : null;
-      h += `<div class="pp"><time>${echap((p.heure || "").slice(11, 16) || "--:--")}</time><span><span style="color:${couleurQui(p.groupe)}">●</span> ${echap(p.code)} <small class="faible">${dep ? "départ" : "arrivée"}</small> · ${echap(v || p.voie || "voie ?")}${p.wagons != null ? " · " + p.wagons + " wg" : ""}</span>`
-        + (n != null ? `<span class="${n >= p.wagons ? "ok" : "manque"}" title="wagons ${echap(p.groupe)} déjà sur la voie">${n}/${p.wagons}</span>` : "<span></span>") + "</div>";
+    const jours = [...new Set(l.map(p => p.date))].slice(0, 2); let h = "";
+    jours.forEach(d => {
+      h += `<div class="pp-jour">${d === pDonnees.date ? "Aujourd'hui" : jourCourt(d)}</div>`;
+      const parG = {}; l.filter(p => p.date === d).forEach(p => { (parG[p.libelle || p.groupe] = parG[p.libelle || p.groupe] || []).push(p); });
+      Object.keys(parG).forEach(g => {
+        const cc = parG[g][0].couleur || couleurQui(parG[g][0].groupe);
+        h += `<div class="pp-groupe" style="--c:${cc}">${echap(g)}</div>`;
+        parG[g].forEach(p => {
+          const v = voieDe(p.voie), dep = p.sens === "D", n = v && dep && p.wagons ? surPlace(v, p.groupe) : null;
+          h += `<div class="pp${p.enCours ? " en-cours" : ""}" style="--c:${cc}"><time>${echap((p.heure || "").slice(11, 16) || "--:--")}</time><span><b>${echap(p.code)}</b> ${echap(v || p.voie || "voie ?")}${p.wagons != null ? ` · <b>${p.wagons}</b> wg` : ""} <small class="faible">${dep ? "départ" : "arrivée"}${p.enCours ? " · en cours" : ""}</small></span>`
+            + (n != null ? `<span class="${n >= p.wagons ? "ok" : "manque"}" title="wagons ${echap(p.groupe)} déjà sur la voie">${n}/${p.wagons}</span>` : "<span></span>") + "</div>";
+        });
+      });
     });
     $("plan-prev").innerHTML = h;
   }
+
   const fermer = () => { $("plan-edition").hidden = true; edite = null; };
   $("pe-annuler").addEventListener("click", fermer);
   $("plan-edition").addEventListener("keydown", e => { if (e.key === "Escape") fermer(); });
@@ -2321,11 +2454,12 @@ body[data-mode="simulation"] #fiche{display:none}
     if (SEUL) {
       const v = edite, ty = Number((document.querySelector('input[name="pe-type"]:checked') || {}).value) === 80 ? 80 : 60, hs = Math.max(0, Math.min(80, parseInt($("pe-hs").value, 10) || 0));
       const corps = { voie: v, type: ty, hs };
+      if (pDonnees.enginsSale && !pDonnees.sale) { pDonnees.sale = true; } // engin effacé : la voie est ressaisie telle quelle, sans lui
       if (pDonnees.sale) {
         const parts = [...$("pe-lignes").querySelectorAll(".pe-ligne")].map(d => { const [s1, n, s2] = d.querySelectorAll("select,input"); return { cle: s1.value, nb: Math.max(0, Math.min(120, parseInt(n.value, 10) || 0)), charge: s2.value }; }).filter(p => p.nb > 0);
         const tot = parts.reduce((k, p) => k + p.nb, 0) + hs, cap = capType(v, ty);
         if (cap && tot > cap) { $("pe-msg").textContent = `${tot} wagons (HS compris) dépassent la capacité de ${v} : ${cap} wagons de ${ty} pieds.`; return; }
-        corps.parts = parts; corps.t = isoLocal();
+        corps.parts = parts; corps.t = isoLocal(); if (pDonnees.enginsSale) corps.engins = pDonnees.engins.slice();
       }
       $("pe-msg").textContent = "Enregistrement…"; $("pe-ok").disabled = true;
       envoyerPlan(corps).then(() => { $("pe-ok").disabled = false; fermer();

@@ -15,7 +15,7 @@
  */
 
 const CLE = 'CHANGER-CE-MOT-DE-PASSE';
-const VERSION = '2.9.1';
+const VERSION = '2.10.0';
 const FUSEAU = 'Europe/Paris';
 const NOM_DOSSIER = 'Suivi des circulations - données';
 
@@ -53,6 +53,7 @@ function router_(m, c, corps) {
   if (m === 'PUT' && (c === '/api/parametres' || c === '/api/planning')) return ecrireConfig_(c === '/api/parametres' ? 'parametres.json' : 'planning.json', corps);
   if (m === 'GET' && c === '/api/journees') return ok_({ dates: listeJournees_() });
   if (m === 'PUT' && c === '/api/plan-voies') return ecrirePlanVoies_(corps);
+  if (m === 'GET' && (r = /^\/api\/plan(?:\/(\d{4}-\d{2}-\d{2}))?$/.exec(c))) return ok_(planPublic_(r[1]));
   if (m === 'PUT' && c === '/api/plan-saisie') return avecVerrou_(() => ecrirePlanSaisie_(corps));
   if ((r = /^\/api\/journee\/(\d{4}-\d{2}-\d{2})$/.exec(c))) {
     if (m === 'GET') return lireJournee_(r[1]);
@@ -335,6 +336,8 @@ function ecrireConfig_(nom, corps) {
   const ancien = lireTexte_(nom);
   if (ancien) ecrireTexte_(nom + '.precedent', ancien);
   ecrireTexte_(nom, corps);
+  // le plan de voie reprend ces réglages (entreprises, couleurs, prévisions) sans attendre son cache
+  try { const p = proprietes_(); p.setProperty('version:planvoies', String(Number(p.getProperty('version:planvoies') || 0) + 1)); } catch (e) { /* facultatif */ }
   return ok_({ ok: true });
 }
 
@@ -371,27 +374,36 @@ function planPublic_(date) {
     const j = x === d ? (jour = lire(x)) : lire(x); if (!j) return;
     const pre = x === d ? '' : x + ':';
     (j.mouvements || []).forEach(m => fusion.mouvements.push({ n: m.n, id: m.id, num: m.num, ef: m.ef || '', voie: m.voie || '', compo: m.compo || '', cv: m.cv || '', sit: m.sit || '',
-      annonce: m.annonce || '', reel: m.reel || '', vers: m.vers || '', lien: m.lien ? pre + m.lien : '', supprime: !!m.supprime }));
+      annonce: m.annonce || '', reel: m.reel || '', vers: m.vers || '', cote: m.cote || '', lien: m.lien ? pre + m.lien : '', supprime: !!m.supprime }));
     (j.circulations || []).forEach(c => fusion.circulations.push({ id: pre + c.id, code: c.code, groupe: c.groupe, sens: c.sens, numero: c.numero || '', sillon: c.sillon || '' }));
   });
+  // réglages du plan pris dans la saisie (Paramètres › Plan de voie) : entreprises proposées, taille du texte
+  const params = lireJson_('parametres.json', {}), pv = ((params.visuel || {}).planVoie) || {};
+  const planning = lireJson_('planning.json', { groupes: [] }), groupes = {};
+  (planning.groupes || []).forEach(g => { groupes[g.id] = g; });
   const out = { date: d, version: version, versionPlan: vVoies, jours: jours, voies: voies, saisies: saisies,
-    previsions: jour ? previsionsPlan_(jour) : [], journee: jour || fusion.mouvements.length ? fusion : null };
+    entreprises: Array.isArray(pv.entreprises) ? pv.entreprises : null, taille: Number(pv.taille) || 100,
+    previsions: jour ? previsionsPlan_(jour, groupes, (params.visuel || {}).couleurs || {}) : [], journee: jour || fusion.mouvements.length ? fusion : null };
   // cache limité à 100 Ko par valeur : une grosse journée n'est simplement pas mise en cache
   try { const t = JSON.stringify(out); if (t.length < 95000) cache.put(cle, t, 60); } catch (err) { /* sans cache */ }
   return out;
 }
 /** Circulations encore à venir (jour en cours, Demain, Après-demain) avec leur voie et leurs wagons prévus. */
-function previsionsPlan_(j) {
+function previsionsPlan_(j, groupes, couleurs) {
   const out = [], mv = (j.mouvements || []).filter(m => !m.supprime);
-  const ajouter = (date, c, voie, wagons) => {
+  groupes = groupes || {}; couleurs = couleurs || {};
+  const ajouter = (date, c, voie, wagons, enCours, cote) => {
     if (!c || c.etat === 'supprime' || c.reel) return;
     voie = voie || c.voiePrevue || ''; wagons = wagons != null ? wagons : (c.wagonsDemandes == null || c.wagonsDemandes === '' ? null : Number(c.wagonsDemandes));
     if (!voie && wagons == null) return;
-    out.push({ date: date, code: c.code || '', groupe: c.groupe || '', sens: c.sens || '', heure: c.theo || '', numero: c.numero || c.sillon || '', voie: voie, wagons: wagons });
+    const g = groupes[c.groupe] || {};
+    out.push({ date: date, code: c.code || '', groupe: c.groupe || '', libelle: g.libelle || c.groupe || '', famille: g.famille || '', couleur: couleurs[c.groupe] || g.couleur || '',
+      sens: c.sens || '', heure: c.theo || '', numero: c.numero || c.sillon || '', voie: voie, wagons: wagons, enCours: !!enCours, cote: cote || '' });
   };
   (j.circulations || []).forEach(c => {
     const lies = mv.filter(m => m.lien === c.id); if (lies.some(m => m.reel)) return;
-    const der = lies[lies.length - 1]; ajouter(j.date, c, der && der.voie, der && /^\d+$/.test(String(der.compo || '')) ? Number(der.compo) : null);
+    // une ligne déjà saisie sans heure réelle : mouvement en cours (annoncé)
+    const der = lies[lies.length - 1]; ajouter(j.date, c, der && der.voie, der && /^\d+$/.test(String(der.compo || '')) ? Number(der.compo) : null, !!der, der && der.cote);
   });
   [j.demain, j.surlendemain].forEach(p => { if (p && p.date) (p.circulations || []).forEach(c => ajouter(p.date, c)); });
   return out;
@@ -400,6 +412,7 @@ function lireSaisiesPlan_() {
   const s = lireJson_('plan-saisies.json', {}) || {};
   return { contenus: s.contenus || {}, anciens: s.anciens || [], choix: s.choix || {} };
 }
+const enginsPlan_ = l => (Array.isArray(l) ? l : []).slice(0, 20).map(x => String(x || '').replace(/[^A-Za-z0-9 _.-]/g, '').slice(0, 30)).filter(String);
 const partsPlan_ = l => (Array.isArray(l) ? l : []).slice(0, 20).map(p => ({
   cle: String((p && p.cle) || '').replace(/[^A-Za-z0-9 _.()-]/g, '').slice(0, 40), nb: Math.max(0, Math.min(120, Math.floor(Number(p && p.nb) || 0))),
   charge: p && p.charge === 'vides' ? 'vides' : 'chargés' })).filter(p => p.nb > 0);
@@ -421,13 +434,22 @@ function ecrirePlanSaisie_(corps) {
     const limite = Utilities.formatDate(new Date(Date.now() - 14 * 864e5), FUSEAU, "yyyy-MM-dd'T'HH:mm:ss");
     s.anciens = s.anciens.filter(a => a.t >= limite).slice(-150);
     if (o.parts === null) { delete s.contenus[v]; s.anciens = s.anciens.filter(a => a.v !== v); }
-    else if (o.parts !== undefined) s.contenus[v] = { t: /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?$/.test(String(o.t || '')) ? String(o.t) : maintenant_(), parts: partsPlan_(o.parts) };
+    else if (o.parts !== undefined) {
+      s.contenus[v] = { t: /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?$/.test(String(o.t || '')) ? String(o.t) : maintenant_(), parts: partsPlan_(o.parts) };
+      if (Array.isArray(o.engins)) s.contenus[v].engins = enginsPlan_(o.engins); // engins gardés sur la voie (les autres sont effacés)
+    }
     if (o.type !== undefined || o.hs !== undefined) {
       const avant = voies[v] || {}, type = Number(o.type !== undefined ? o.type : avant.type) === 80 ? 80 : 60;
       const hs = Math.max(0, Math.min(80, Math.floor(Number(o.hs !== undefined ? o.hs : avant.hs) || 0)));
       if (type !== 60 || hs) voies[v] = { type: type, hs: hs }; else delete voies[v];
       ecrireTexte_('plan-voies.json', JSON.stringify(voies, null, 2));
     }
+  }
+  // tout effacer (essais) : chaque voie vide, sans engin, à l'instant t ; les choix de retrait sont oubliés
+  if (Array.isArray(o.vider)) {
+    const t = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?$/.test(String(o.t || '')) ? String(o.t) : maintenant_();
+    o.vider.slice(0, 200).forEach(v => { v = String(v); if (!/^[A-Za-z0-9_-]{1,20}$/.test(v)) return; if (s.contenus[v]) s.anciens.push(Object.assign({ v: v }, s.contenus[v])); s.contenus[v] = { t: t, parts: [], engins: [] }; });
+    s.anciens = s.anciens.slice(-150); s.choix = {};
   }
   if (o.choix && o.choix.id) {
     const id = String(o.choix.id).slice(0, 60);
