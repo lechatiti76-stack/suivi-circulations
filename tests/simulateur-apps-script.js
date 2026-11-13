@@ -22,6 +22,8 @@ function creerServices() {
   Fichier.prototype.setContent = function (t) { this.contenu = String(t); return this; };
   Fichier.prototype.getBlob = function () { var f = this; return { getDataAsString: function () { return f.contenu; } }; };
   Fichier.prototype.moveTo = function (d) { this.parent = d.id; return this; };
+  Fichier.prototype.setTrashed = function () { delete fichiers[this.id]; return this; };
+  Fichier.prototype.getUrl = function () { return 'https://drive.google.com/file/d/' + this.id + '/view'; };
   function Dossier(nom, parent) { this.id = nouvelId(); this.nom = nom; this.parent = parent; dossiers[this.id] = this; }
   Dossier.prototype.getId = function () { return this.id; };
   Dossier.prototype.getName = function () { return this.nom; };
@@ -29,7 +31,10 @@ function creerServices() {
   Dossier.prototype.getFoldersByName = function (nom) { var id = this.id; return iterateur(Object.keys(dossiers).map(function (k) { return dossiers[k]; }).filter(function (d) { return d.parent === id && d.nom === nom; })); };
   Dossier.prototype.getFilesByName = function (nom) { var id = this.id; return iterateur(Object.keys(fichiers).map(function (k) { return fichiers[k]; }).filter(function (f) { return f.parent === id && f.nom === nom; })); };
   Dossier.prototype.getFiles = function () { var id = this.id; return iterateur(Object.keys(fichiers).map(function (k) { return fichiers[k]; }).filter(function (f) { return f.parent === id; })); };
-  Dossier.prototype.createFile = function (nom, contenu, type) { return new Fichier(nom, contenu, type, this.id); };
+  Dossier.prototype.createFile = function (nom, contenu, type) {
+    if (nom && typeof nom === 'object' && nom.octets) return new Fichier(nom.nom, Buffer.from(nom.octets).toString('latin1'), nom.type, this.id); // blob
+    return new Fichier(nom, contenu, type, this.id);
+  };
 
   var DriveApp = {
     createFolder: function (nom) { return new Dossier(nom, 'racine'); },
@@ -73,6 +78,8 @@ function creerServices() {
     MailApp: { sendEmail: function (o) { envois.push(o); } },
     GmailApp: { createDraft: function (to, sujet, corps, o) { brouillons.push({ to: to, sujet: sujet, options: o }); } },
     Utilities: {
+      base64Decode: function (b) { var o = Buffer.from(String(b), 'base64'); if (!o.length && b) throw new Error('base64'); return Array.from(o); },
+      newBlob: function (octets, type, nom) { return { octets: octets, type: type, nom: nom }; },
       formatDate: function (d, fuseau, format) {
         var s = d.getFullYear() + '-' + p2(d.getMonth() + 1) + '-' + p2(d.getDate());
         return format === 'yyyy-MM-dd' ? s : s + 'T' + p2(d.getHours()) + ':' + p2(d.getMinutes()) + ':' + p2(d.getSeconds());

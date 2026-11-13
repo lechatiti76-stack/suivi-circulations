@@ -345,6 +345,8 @@
       // départ annoncé à la main dans la saisie (bouton ▲) : « Départ imminent » en grand sur les écrans
       annonceTV: c.sens === 'D' && !d.reel && c.etat !== 'supprime' ? (c.annonceTV || null) : null,
       cale: c.sens === 'D' && !d.reel && c.etat !== 'supprime' ? (c.cale || null) : null,
+      // « Retard / souci » signalé dans la saisie (bouton rouge) : en rouge sur les écrans jusqu'à l'arrivée ou au départ
+      soucis: !d.reel && c.etat !== 'supprime' && c.soucis ? { texte: c.soucis.texte || '', min: c.soucis.min || null } : null,
       etat: c.etat === 'supprime' || c.etat === 'deja' ? c.etat : null
     };
   }
@@ -448,7 +450,7 @@
         // sons choisis (voir SONS) : arrivée, flash info, avis travaux orange et rouge
         choix: Object.assign({ arrivee: 'arrivee', flash: 'flash', orange: 's6_important', rouge: 's2_urgent', fin: 's12_finJoyeux' }, vis.sons || {}),
         // voix : nom de la voix préférée (sinon la plus naturelle de l'écran), vitesse, mots dits autrement (ATL=Atlantique)
-        nomVoix: vis.nomVoix || '', vitesseVoix: vis.vitesseVoix == null ? 1 : +vis.vitesseVoix,
+        nomVoix: vis.nomVoix || '', vitesseVoix: vis.vitesseVoix == null ? 1 : +vis.vitesseVoix, styleVoix: vis.styleVoix || 'classique',
         prononciation: lirePrononciation(vis.prononciation == null ? 'ATL=Atlantique' : vis.prononciation),
         finTravaux: vis.sonFinTravaux !== false },
       // appareils suivis (Paramètres › Travaux) : bandeau vert « tous en service » à la fin d'une intervention
@@ -533,6 +535,7 @@
     if (l.reel) return { cle: 'fait', libelle: (arr ? 'Arrivée ' : 'Parti ') + hm(l.reel) };
     // train déclaré calé dans le Suivi trains : prioritaire, dernière étape en dessous
     if (!arr && l.cale) return { cle: 'cale', libelle: 'Calé à ' + hm(l.cale), sous: l.etape && l.etape.lib ? l.etape.lib + ' ' + (l.etape.h || '') : '' };
+    if (l.soucis) return { cle: 'retard', soucis: true, urgent: true, libelle: l.soucis.min ? 'Retard ~' + l.soucis.min + ' min' : 'Retard / souci', sous: l.soucis.texte || '' };
     if (l.etat === 'deja') return { cle: 'deja', libelle: 'Déjà là' };
     if (l.annonce || (!arr && l.annonceTV)) return { cle: 'imminent', libelle: arr ? 'Arrivée imminente' : 'Départ imminent' };
     if (arr && l.partie) {
@@ -1065,16 +1068,84 @@
       setTimeout(fin, 1500);
     });
   }
-  /** Annonce vocale en français. opts : { nomVoix, vitesse }. Phrases découpées aux virgules pour un débit plus naturel. */
+  /**
+   * Styles d'annonce (Paramètres › Sons et voix). Ton : hauteur et débit de la voix ; langue : une vraie voix de cette langue
+   * installée sur l'écran (sinon l'annonce reste en français) ; « bilingue » : français puis anglais.
+   */
+  var STYLES_VOIX = [
+    { id: 'classique', nom: 'Classique (gare)', ton: 1, debit: 1 },
+    { id: 'solennel', nom: 'Grand hall : grave et posé', ton: 0.75, debit: 0.86 },
+    { id: 'stade', nom: 'Speaker de stade : enthousiaste', ton: 1.3, debit: 1.1 },
+    { id: 'presse', nom: 'Pressé, à bout de nerfs', ton: 1.2, debit: 1.3 },
+    { id: 'robot', nom: 'Robot', ton: 0.1, debit: 0.85 },
+    { id: 'chti', nom: 'Ch\'ti (patois du Nord)', ton: 1.05, debit: 1 },
+    { id: 'bilingue', nom: 'Bilingue : français puis anglais', ton: 1, debit: 1 },
+    { id: 'en', nom: 'Anglais', langue: 'en', ton: 1, debit: 1 },
+    { id: 'es', nom: 'Espagnol', langue: 'es', ton: 1, debit: 1 },
+    { id: 'de', nom: 'Allemand', langue: 'de', ton: 1, debit: 1 },
+    { id: 'it', nom: 'Italien', langue: 'it', ton: 1, debit: 1 },
+    { id: 'zh', nom: 'Chinois (mandarin)', langue: 'zh', ton: 1, debit: 1 },
+    { id: 'ar', nom: 'Arabe', langue: 'ar', ton: 1, debit: 1 }
+  ];
+  function styleVoix(id) { return STYLES_VOIX.filter(function (x) { return x.id === id; })[0] || STYLES_VOIX[0]; }
+  /**
+   * Phrase d'annonce d'une arrivée selon le style. a = { navette, code, prov, num, voie (dite en français), voieCode, wagons }.
+   * Renvoie [{ texte, langue }] (deux phrases pour le style bilingue).
+   */
+  function phraseAnnonce(a, idStyle) {
+    var st = styleVoix(idStyle), w = a.wagons != null && a.wagons !== '' ? a.wagons : null, num = a.num || '';
+    var vc = String(a.voieCode || '').toUpperCase().replace(/([A-Z]+)(\d)/, '$1 $2'), de = function (x) { return /^[aeiouyéèêh]/i.test(x) ? 'd\'' + x : 'de ' + x; };
+    var fr = function () {
+      var fin = (a.voie ? ' va rentrer en ' + a.voie : ' va arriver') + (w != null ? ' avec ' + w + ' wagons' : '') + '.';
+      return a.navette ? 'Attention, la navette ' + a.code + ' en provenance ' + de(a.prov) + (num ? ', numéro ' + num + ',' : '') + fin
+        : 'Attention, le train' + (num ? ' numéro ' + num : '') + ' en provenance ' + de(a.prov) + fin;
+    };
+    var qui = { en: a.navette ? 'shuttle ' + a.code : 'train', es: a.navette ? 'la lanzadera ' + a.code : 'el tren', de: a.navette ? 'der Pendelzug ' + a.code : 'der Zug', it: a.navette ? 'la navetta ' + a.code : 'il treno', zh: a.navette ? '班列' + a.code : '列车', ar: a.navette ? 'القطار المكوكي ' + a.code : 'القطار' };
+    var T = {
+      en: function () { return 'Attention please. The ' + qui.en + ' from ' + a.prov + (num ? ', number ' + num + ',' : '') + ' is now arriving' + (vc ? ' on track ' + vc : '') + (w != null ? ' with ' + w + ' wagons' : '') + '.'; },
+      es: function () { return 'Atención. ' + qui.es.charAt(0).toUpperCase() + qui.es.slice(1) + ' procedente de ' + a.prov + (num ? ', número ' + num + ',' : '') + ' va a entrar' + (vc ? ' en la vía ' + vc : '') + (w != null ? ' con ' + w + ' vagones' : '') + '.'; },
+      de: function () { return 'Achtung. ' + qui.de.charAt(0).toUpperCase() + qui.de.slice(1) + ' aus ' + a.prov + (num ? ', Nummer ' + num + ',' : '') + ' fährt jetzt ein' + (vc ? ' auf Gleis ' + vc : '') + (w != null ? ', mit ' + w + ' Wagen' : '') + '.'; },
+      it: function () { return 'Attenzione. ' + qui.it.charAt(0).toUpperCase() + qui.it.slice(1) + ' proveniente da ' + a.prov + (num ? ', numero ' + num + ',' : '') + ' sta entrando' + (vc ? ' sul binario ' + vc : '') + (w != null ? ' con ' + w + ' carri' : '') + '.'; },
+      zh: function () { return '请注意，来自' + a.prov + '的' + qui.zh + (num ? '，车次' + num : '') + '，即将进入' + (vc ? vc + '股道' : '车站') + (w != null ? '，共' + w + '节车厢' : '') + '。'; },
+      ar: function () { return 'انتباه، ' + qui.ar + ' القادم من ' + a.prov + (num ? '، رقم ' + num : '') + '، يدخل الآن' + (vc ? ' إلى السكة ' + vc : '') + (w != null ? ' مع ' + w + ' عربة' : '') + '.'; }
+    };
+    if (st.langue) return [{ texte: T[st.langue](), langue: st.langue }];
+    if (st.id === 'bilingue') return [{ texte: fr(), langue: 'fr' }, { texte: T.en(), langue: 'en' }];
+    if (st.id === 'stade') return [{ texte: 'Mesdames et messieurs ! ' + fr().replace(/\.$/, ' ! Bravo à toute l\'équipe !'), langue: 'fr' }];
+    if (st.id === 'presse') return [{ texte: 'Attention, attention ! ' + fr().replace(/^Attention, la/, 'La').replace(/^Attention, le/, 'Le').replace(/va rentrer/, 'rentre tout de suite').replace(/\.$/, ' ! On se dépêche, on n\'a pas que ça à faire !'), langue: 'fr' }];
+    if (st.id === 'robot') return [{ texte: 'Annonce. ' + fr().replace(/,/g, '.'), langue: 'fr' }];
+    if (st.id === 'chti') {
+      var t = a.navette ? 'Attintion, ch\'navette ' + a.code + ' alle arrife d\'' + a.prov + (num ? ', numéro ' + num : '') + ', alle rintre' + (a.voie ? ' in ' + a.voie : '') + (w != null ? ' avec ' + w + ' wagons' : '') + ', hein ! Mi, j\'dis cha, j\'dis rin.'
+        : 'Attintion, ch\'train' + (num ? ' numéro ' + num : '') + ' alle arrife d\'' + a.prov + (a.voie ? ', i rintre in ' + a.voie : '') + (w != null ? ' avec ' + w + ' wagons' : '') + ', hein !';
+      return [{ texte: t, langue: 'fr' }];
+    }
+    return [{ texte: fr(), langue: 'fr' }];
+  }
+  /** Meilleure voix d'une langue (naturelle d'abord), ou null si l'écran n'en a pas. */
+  function voixLangue(langue) {
+    if (typeof window === 'undefined' || !window.speechSynthesis) return null;
+    var rang = function (v) { return /natural|neural|online/i.test(v.name) ? 0 : (/google/i.test(v.name) ? 1 : 2); };
+    return window.speechSynthesis.getVoices().filter(function (v) { return v.lang.toLowerCase().indexOf(langue) === 0; }).sort(function (a, b) { return rang(a) - rang(b); })[0] || null;
+  }
+  /** Annonce une arrivée dans le style choisi (une ou deux phrases, à la suite). */
+  function annoncerStyle(a, volume, opts) {
+    opts = opts || {}; var st = styleVoix(opts.style), phrases = phraseAnnonce(a, st.id);
+    // langue absente sur cet écran : annonce classique en français
+    if (st.langue && typeof window !== 'undefined' && window.speechSynthesis && !voixLangue(st.langue)) phrases = phraseAnnonce(a, 'classique');
+    return phrases.reduce(function (p, ph) {
+      return p.then(function () { return annoncer(ph.texte, volume, Object.assign({}, opts, { langue: ph.langue === 'fr' ? null : ph.langue, ton: ph.langue === 'fr' || st.langue ? st.ton : 1, debitStyle: st.debit })); });
+    }, Promise.resolve(true));
+  }
+  /** Annonce vocale. opts : { nomVoix, vitesse, langue, ton, debitStyle }. Phrases découpées aux virgules pour un débit plus naturel. */
   function annoncer(texte, volume, opts) {
     if (typeof window === 'undefined' || !window.speechSynthesis || !texte) return Promise.resolve(false);
     opts = opts || {};
     return voixFrancaises().then(function (liste) {
-      var voix = (opts.nomVoix && liste.filter(function (v) { return v.name === opts.nomVoix; })[0]) || liste[0] || null;
+      var voix = opts.langue ? voixLangue(opts.langue) : ((opts.nomVoix && liste.filter(function (v) { return v.name === opts.nomVoix; })[0]) || liste[0] || null);
       return new Promise(function (ok) {
         var u = new SpeechSynthesisUtterance(texte);
-        u.lang = voix ? voix.lang : 'fr-FR'; if (voix) u.voice = voix;
-        u.rate = Math.max(0.7, Math.min(1.3, opts.vitesse || 1)); u.pitch = 1;
+        u.lang = voix ? voix.lang : (opts.langue || 'fr-FR'); if (voix) u.voice = voix;
+        u.rate = Math.max(0.6, Math.min(1.7, (opts.vitesse || 1) * (opts.debitStyle || 1))); u.pitch = Math.max(0, Math.min(2, opts.ton == null ? 1 : opts.ton));
         u.volume = Math.max(0, Math.min(1, (volume == null ? 70 : +volume) / 100));
         var fini = false, fin = function () { if (!fini) { fini = true; ok(true); } };
         u.onend = fin; u.onerror = fin; setTimeout(fin, 20000);
@@ -1084,7 +1155,7 @@
   }
 
   return {
-    jouerCarillon: jouerCarillon, SONS: SONS, annoncer: annoncer, voixFrancaises: voixFrancaises, lirePrononciation: lirePrononciation, sonDisponible: sonDisponible, deverrouillerSon: deverrouillerSon,
+    jouerCarillon: jouerCarillon, SONS: SONS, annoncer: annoncer, annoncerStyle: annoncerStyle, phraseAnnonce: phraseAnnonce, STYLES_VOIX: STYLES_VOIX, voixFrancaises: voixFrancaises, lirePrononciation: lirePrononciation, sonDisponible: sonDisponible, deverrouillerSon: deverrouillerSon,
     JOURS: JOURS, JOURS_COURTS: JOURS_COURTS, TYPES_MAIL: TYPES_MAIL, DEROULE: DEROULE, ENTETE_STATS: ENTETE_STATS,
     PARCOURS_DEFAUT: PARCOURS_DEFAUT, CORRESPONDANCES_SUIVI: CORRESPONDANCES_SUIVI, NOMS_TRAINS: NOMS_TRAINS, nomTrain: nomTrain,
     parcoursDe: parcoursDe, parcoursEnTexte: parcoursEnTexte, texteEnParcours: texteEnParcours, prochainesNavettes: prochainesNavettes,

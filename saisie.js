@@ -946,6 +946,15 @@
     toast('Nouvelle clé d\'envoi : cliquez sur Enregistrer pour l\'activer.');
   });
   $('#pa-tx-url').addEventListener('focus', function () { this.select(); });
+  /** Style dans une autre langue : prévenir si ce PC n'a pas de voix de cette langue (l'écran parlera alors français). */
+  function noteStyle() {
+    var st = SC.STYLES_VOIX.filter(function (x) { return x.id === $('#pa-style-voix').value; })[0] || {}, n = $('#pa-style-note');
+    if (!st.langue && st.id !== 'bilingue') { n.textContent = ''; return; }
+    var lg = st.langue || 'en', ok = window.speechSynthesis && window.speechSynthesis.getVoices().some(function (v) { return v.lang.toLowerCase().indexOf(lg) === 0; });
+    n.textContent = ok ? 'Voix trouvée sur ce PC. Chaque écran doit aussi avoir une voix de cette langue (Windows : Paramètres › Heure et langue › Voix).'
+      : 'Pas de voix de cette langue sur ce PC : ajoutez-la dans Windows (Paramètres › Heure et langue › Voix), sinon l\'annonce reste en français.';
+  }
+  $('#pa-style-voix').addEventListener('change', noteStyle);
   $('#pa-volume').addEventListener('input', function () { $('#pa-volume-val').textContent = this.value + ' %'; });
   $('#pa-vitesse-voix').addEventListener('input', function () { $('#pa-vitesse-voix-val').textContent = '× ' + (+this.value).toFixed(2); });
   $$('[data-son-essai]').forEach(function (b) {
@@ -955,8 +964,8 @@
       if (t === 'voix') {
         var pr = SC.lirePrononciation($('#pa-prononciation').value), prov = pr.ATL || 'A T L';
         SC.jouerCarillon(v, $('#pa-son-ch-arrivee').value).then(function () {
-          SC.annoncer('Attention, la navette ' + (pr.LA1 || 'L A 1') + ' en provenance ' + (/^[aeiouyéèê]/i.test(prov) ? 'd\'' : 'de ') + prov + ', numéro 504930, va rentrer en Ferroviaire V F 2 avec 27 wagons.', v,
-            { nomVoix: $('#pa-nom-voix').value, vitesse: +$('#pa-vitesse-voix').value });
+          SC.annoncerStyle({ navette: true, code: pr.LA1 || 'L A 1', prov: prov, num: '504930', voie: 'Ferroviaire V F 2', voieCode: 'VF2', wagons: 27 }, v,
+            { nomVoix: $('#pa-nom-voix').value, vitesse: +$('#pa-vitesse-voix').value, style: $('#pa-style-voix').value });
         });
       }
       else SC.jouerCarillon(v, t);
@@ -1069,14 +1078,14 @@
     if (c.sens === 'A' && famille(c) === 'navette') {
       // navette : partie de son terminal, puis arrivée (les écrans suivent son parcours entre les deux)
       if (!c.partie) b.push(bouton('partie', 'Partie', 'La navette a quitté son terminal'));
-      else b.push(bouton('reel', 'Arrivée', 'La navette est arrivée') + bouton('annuler-partie', '↺', 'Retirer l\'heure de départ ' + hm(c.partie)));
+      else b.push(bouton('reel', 'Arrivée', 'La navette est arrivée', 'vert') + bouton('annuler-partie', '↺', 'Retirer l\'heure de départ ' + hm(c.partie)));
     } else if (c.sens === 'A') {
       // train : FA (arrivé au faisceau, pas chez nous) → En approche (parti de FA vers chez nous) → Arrivée (chez nous)
       b.push(bouton('fa', c.fa ? 'FA ✓ ' + hm(c.fa) : 'FA', c.fa ? 'Retirer l\'heure FA' : 'Arrivé à FA, pas encore chez nous', c.fa ? 'actif' : ''));
       b.push(bouton('deja', c.etat === 'deja' ? 'Pas là' : 'Déjà là', 'Déjà chez nous'));
       b.push(c.partie ? bouton('annuler-partie', 'Approche ✓ ' + hm(c.partie), 'Retirer l\'heure de départ de FA', 'actif')
         : bouton('partie', 'En approche', 'Parti de FA vers chez nous (délai du Suivi trains)'));
-      b.push(bouton('reel', 'Arrivée', 'Arrivé chez nous'));
+      b.push(bouton('reel', 'Arrivée', 'Arrivé chez nous', 'vert'));
     } else {
       // navette au départ : ▲ annonce le départ sur les écrans TV (« Départ imminent » en grand), un second clic le retire
       if (famille(c) === 'navette') b.push(bouton('annoncer', c.annonceTV ? '▲ ' + hm(c.annonceTV) : '▲', c.annonceTV ? 'Retirer l\'annonce de départ des écrans' : 'Annoncer le départ sur les écrans TV (Départ imminent)', 'triangle' + (c.annonceTV ? ' actif' : '')));
@@ -1084,6 +1093,7 @@
       // étape ou « calé » venus du Suivi trains : effaçables ici (ils restent effacés jusqu'à une nouvelle heure)
       if (c.etape || c.cale) b.push(bouton('effacer-etape', '↺', 'Effacer « ' + (c.cale ? 'Calé' : c.etape.lib) + ' » des écrans'));
     }
+    b.push(bouton('soucis', c.soucis ? '⚠ Retard ✓' : '⚠ Retard', c.soucis ? 'Signalé sur les écrans : ' + (c.soucis.texte || 'retard') + ' (cliquer pour modifier ou retirer)' : 'Signaler un retard ou un souci sur les écrans TV', 'rouge' + (c.soucis ? ' actif' : '')));
     b.push(bouton('nonprevu', 'Non prévue', 'Ne circule pas aujourd\'hui : retirée des écrans', 'discret'));
     return b.join('');
   }
@@ -1126,6 +1136,7 @@
     if (actif && c.partie) { etat = (famille(c) === 'navette' ? 'En route' : 'En approche') + ' · dép. ' + hm(c.partie); st = 'annonce'; }
     if (actif && c.etape) etat = c.etape.lib + ' ' + c.etape.h;
     if (actif && c.cale) { etat = 'Calé à ' + hm(c.cale); st = 'retard'; }
+    if (actif && c.soucis) { etat = '⚠ ' + (c.soucis.texte || 'Retard') + (c.soucis.min ? ' ~' + c.soucis.min + ' min' : ''); st = 'soucis'; }
     var boutons = prep ? (app.lectureSeule ? '' : bouton('nonprevu-prep', c.etat === 'nonprevu' ? 'Rétablir' : 'Non prévue', 'Retirée des écrans', 'discret') +
       (c.etat === 'nonprevu' ? '' : bouton('suppr-demain', c.etat === 'supprime' ? 'Rétablir' : 'Suppr.', '', 'danger')))
       : boutonsCirculation(c, d, st);
@@ -1406,6 +1417,63 @@
   });
 
   // Statistiques
+  // ------------------------------------------------ retard / souci signalé sur les écrans
+  var MOTIFS_SOUCIS = ['Retard', 'Attente conducteur', 'Attente machine', 'Souci technique', 'Problème de voie', 'Attente wagons', 'Attente documents', 'Météo'];
+  var soucisId = null;
+  function ouvrirSoucis(id) {
+    var c = circDe(app.journee, id); if (!c) return; soucisId = id;
+    $('#so-titre').textContent = 'Retard / souci : ' + c.code + (c.sens === 'D' ? ' (départ)' : ' (arrivée)');
+    $('#so-texte').value = c.soucis ? c.soucis.texte || '' : ''; $('#so-min').value = c.soucis && c.soucis.min ? c.soucis.min : '';
+    $('#so-retirer').hidden = !c.soucis;
+    $('#so-choix').innerHTML = MOTIFS_SOUCIS.map(function (m) { return '<button type="button" data-motif="' + esc(m) + '">' + esc(m) + '</button>'; }).join('');
+    ouvrir('#d-soucis'); $('#so-texte').focus();
+  }
+  $('#so-choix').addEventListener('click', function (e) { var b = e.target.closest('[data-motif]'); if (b) { $('#so-texte').value = b.getAttribute('data-motif'); $('#so-min').focus(); } });
+  $('#fm-soucis').addEventListener('submit', function (e) {
+    e.preventDefault(); var id = soucisId, c = circDe(app.journee, id); if (!c) return;
+    var texte = $('#so-texte').value.trim().slice(0, 60) || 'Retard', min = parseInt($('#so-min').value, 10);
+    modifier(c.code + ' : retard / souci signalé (' + texte + ')', 'circulation.soucis', function (j) { var cc = circDe(j, id); cc.soucis = { texte: texte, min: min > 0 && min < 1000 ? min : null, a: maintenant() }; });
+    $('#d-soucis').close(); F.num.focus();
+  });
+  $('#so-retirer').addEventListener('click', function () {
+    var id = soucisId, c = circDe(app.journee, id); if (!c) return;
+    modifier(c.code + ' : retard / souci retiré des écrans', 'circulation.soucis', function (j) { var cc = circDe(j, id); cc.soucis = null; });
+    $('#d-soucis').close(); F.num.focus();
+  });
+
+  // ------------------------------------------------ fin de service : PDF du jour automatique (Paramètres › Saisie)
+  var pdfAutoEnCours = false;
+  function pdfFinService(forcer) {
+    if (pdfAutoEnCours || !app.journee || !GOOGLE) return Promise.resolve(null);
+    var date = app.journee.date, cfg = app.params.finService || {};
+    pdfAutoEnCours = true;
+    // déjà fait ce jour (ici ou sur un autre poste) ?
+    return (forcer ? Promise.resolve({ status: 200, data: { existe: false } }) : api('GET', '/api/rapport/' + date)).then(function (r) {
+      if (r.status === 200 && r.data.existe) { lsEcrire('suivi:pdfAuto', date + ' (Drive)'); return null; }
+      return window.RecapPdf.produire({ journee: app.journee, planning: app.planning, params: app.params, SC: SC }).then(function (p) {
+        return api('PUT', '/api/rapport/' + date, p.base64).then(function (r2) {
+          if (r2.status !== 200) throw new Error((r2.data && r2.data.erreur) || ('erreur ' + r2.status));
+          if (cfg.telecharger) p.doc.save(p.nom);
+          lsEcrire('suivi:pdfAuto', date + ' à ' + hm(maintenant()));
+          toast('PDF de fin de service enregistré dans Google Drive (rapports).', null, r2.data.url ? { libelle: 'Ouvrir', fn: function () { window.open(r2.data.url, '_blank', 'noopener'); } } : null);
+          return r2.data;
+        });
+      });
+    }).catch(function (e) { toast('PDF de fin de service non enregistré : ' + e.message + ' (nouvel essai dans 5 min)', 'crit'); app.pdfAutoPause = Date.now() + 300000; return null; })
+      .then(function (x) { pdfAutoEnCours = false; return x; });
+  }
+  setInterval(function () {
+    var cfg = (app.params && app.params.finService) || {};
+    if (cfg.pdf === false || !app.prete || !app.journee || app.lectureSeule || !estJourActif() || (app.pdfAutoPause && Date.now() < app.pdfAutoPause)) return;
+    var h = SC.normHeure(cfg.heure || '22:00') || '22:00', fait = String(lsLire('suivi:pdfAuto') || '');
+    if (hm(maintenant()) < h || fait.indexOf(app.journee.date) === 0) return;
+    pdfFinService(false);
+  }, 60000);
+  $('#pa-fs-essai').addEventListener('click', function () {
+    $('#pa-fs-etat').textContent = 'Création du PDF…';
+    pdfFinService(true).then(function (r) { $('#pa-fs-etat').textContent = r ? 'PDF enregistré dans Google Drive : ' + r.nom + '.' : 'PDF non enregistré (version Google seulement, voir le message).'; });
+  });
+
   $('#b-pdf').addEventListener('click', function () {
     if (!app.journee) return;
     toast('Préparation du PDF du jour…');
@@ -1606,8 +1674,13 @@
     $('#pa-mr-orig').value = mr.orig || 3; $('#pa-mr-dest').value = mr.dest || 4; $('#pa-mr-site').value = mr.site || '9';
     $('#pa-mr-codes').value = Object.keys(mr.codes || { 1: 'FA', 4: 'FS', 6: 'ATL', 9: 'LHTE' }).map(function (k) { return k + '=' + (mr.codes || { 1: 'FA', 4: 'FS', 6: 'ATL', 9: 'LHTE' })[k]; }).join(', ');
     essaiMarche();
+    var fs = p.finService || {};
+    $('#pa-fs-pdf').checked = fs.pdf !== false; $('#pa-fs-heure').value = fs.heure || '22:00'; $('#pa-fs-dl').checked = !!fs.telecharger;
+    $('#pa-fs-etat').textContent = lsLire('suivi:pdfAuto') ? 'Dernier PDF de fin de service : ' + lsLire('suivi:pdfAuto') + '.' : '';
     $('#pa-plan-taille').value = pv.taille || 120; $('#pa-plan-taille-val').textContent = (pv.taille || 120) + ' %';
     $('#pa-plan-ef').value = efPlanEnTexte(Array.isArray(pv.entreprises) ? pv.entreprises : EF_PLAN_DEFAUT.map(function (e) { return { code: e[0], nom: e[1], couleur: e[2] }; })); apercuEfPlan();
+    $('#pa-style-voix').innerHTML = SC.STYLES_VOIX.map(function (x) { return '<option value="' + x.id + '">' + esc(x.nom) + '</option>'; }).join('');
+    $('#pa-style-voix').value = vis.styleVoix || 'classique'; noteStyle();
     $('#pa-vitesse-voix').value = vis.vitesseVoix == null ? 1 : vis.vitesseVoix; $('#pa-vitesse-voix-val').textContent = '× ' + (+$('#pa-vitesse-voix').value).toFixed(2);
     $('#pa-prononciation').value = vis.prononciation == null ? 'ATL=Atlantique' : vis.prononciation;
     SC.voixFrancaises().then(function (l) {
@@ -1743,7 +1816,7 @@
       saisieArrivee: $('#pa-plan-sa-arr').checked, saisieDepart: $('#pa-plan-sa-dep').checked,
       taille: +$('#pa-plan-taille').value || 120, entreprises: texteEnEfPlan($('#pa-plan-ef').value), marche: lireMarche() };
     p.visuel.sonFinTravaux = $('#pa-son-fin').checked; p.visuel.nomVoix = $('#pa-nom-voix').value;
-    p.visuel.vitesseVoix = +$('#pa-vitesse-voix').value; p.visuel.prononciation = $('#pa-prononciation').value.trim();
+    p.visuel.vitesseVoix = +$('#pa-vitesse-voix').value; p.visuel.styleVoix = $('#pa-style-voix').value; p.visuel.prononciation = $('#pa-prononciation').value.trim();
     p.visuel.sons = {};
     $$('[data-son-choix]').forEach(function (sel) { p.visuel.sons[sel.getAttribute('data-son-choix')] = sel.value; });
     p.visuel.sonFlash = $('#pa-son-flash').checked; p.visuel.sonTravaux = $('#pa-son-travaux').checked;
@@ -1763,6 +1836,9 @@
       corrST[k[0].trim().toLowerCase()] = k[1].trim().toUpperCase();
     });
     p.suiviTrains = { classeur: $('#pa-st-classeur').value.trim(), correspondances: corrST, app: $('#pa-st-app').value.trim() };
+    var fsH = SC.normHeure($('#pa-fs-heure').value || '22:00');
+    if (!fsH) err.push('Fin de service : heure invalide (ex. 22:00).');
+    p.finService = { pdf: $('#pa-fs-pdf').checked, heure: fsH || '22:00', telecharger: $('#pa-fs-dl').checked };
     lireTravauxParametres(p, err);
     try { p.parcours = SC.texteEnParcours($('#pa-st-parcours').value); } catch (ex) { err.push('Parcours : ' + ex.message); }
     // temps d'arrivée des trains : les points de passage déjà réglés pour ce train sont gardés
@@ -1966,6 +2042,7 @@
       else if (a === 'annuler-partie') marquerPartie(id, true);
       else if (a === 'fa') marquerFA(id);
       else if (a === 'annoncer') annoncerDepart(id);
+      else if (a === 'soucis') ouvrirSoucis(id);
       else if (a === 'effacer-etape') modifier(circDe(app.journee, id).code + ' : étape du Suivi trains effacée', 'circulation.etape', function (j) { var cc = circDe(j, id); cc.etape = null; cc.cale = null; });
       else if (a === 'nonprevu') basculer(id, 'etat', 'nonprevu', 'Non prévue / rétablie');
       else if (a === 'suppr') { basculer(id, 'etat', 'supprime', 'Suppression / rétablissement'); }

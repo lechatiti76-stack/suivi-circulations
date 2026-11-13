@@ -180,6 +180,22 @@
   <div class="plan-cadre"><iframe id="plan-iframe" title="Plan de voie — occupation des voies en direct"></iframe></div>
 </section>
 
+<!-- Retard / souci signalé sur les écrans -->
+<dialog id="d-soucis" style="width:min(520px, calc(100vw - 32px))">
+  <form method="dialog" id="fm-soucis">
+    <div class="dlg-tete"><h2 id="so-titre">Retard / souci</h2><button type="button" class="bouton" data-fermer>Fermer</button></div>
+    <div class="dlg-corps">
+      <p class="note">S'affiche en rouge sur les écrans TV à la place de l'état, jusqu'à l'arrivée ou au départ (ou jusqu'à ce que vous le retiriez).</p>
+      <div class="so-choix" id="so-choix"></div>
+      <div class="formgrid" style="margin-top:10px">
+        <div class="champ large"><label for="so-texte">Motif affiché sur les écrans</label><input id="so-texte" maxlength="60" placeholder="ex. attente conducteur"></div>
+        <div class="champ"><label for="so-min">Retard estimé (min, facultatif)</label><input id="so-min" class="mono" inputmode="numeric" placeholder="20"></div>
+      </div>
+    </div>
+    <div class="dlg-pied"><button type="button" class="bouton" id="so-retirer">Retirer des écrans</button><button type="submit" class="bouton danger-plein">Signaler sur les écrans</button></div>
+  </form>
+</dialog>
+
 <!-- Flash info -->
 <dialog id="d-flash">
   <form method="dialog" id="fm-flash">
@@ -296,6 +312,18 @@
           <textarea id="pa-listes" style="min-height:70px"></textarea>
         </details>
       </div>
+      <div class="section" data-pgroupe="saisie"><h4>Fin de service : PDF du jour automatique</h4>
+        <p class="note">Chaque jour à l'heure choisie, la saisie ouverte crée le récapitulatif PDF de la journée (le même que le bouton « PDF du jour ») et
+          l'enregistre dans Google Drive, dossier <span class="mono">rapports/AAAA</span> du dossier de données. Un seul PDF par jour, même avec plusieurs postes de saisie ouverts.
+          La saisie doit être ouverte à ce moment-là (sinon le PDF est fait dès sa prochaine ouverture le même jour).</p>
+        <div class="fl-coches">
+          <label><input type="checkbox" id="pa-fs-pdf"> PDF automatique en fin de service</label>
+          <label>à <input id="pa-fs-heure" class="mono" placeholder="22:00" style="width:80px"></label>
+          <label><input type="checkbox" id="pa-fs-dl"> Le télécharger aussi sur ce PC</label>
+          <button type="button" class="bouton petit" id="pa-fs-essai">Faire le PDF de fin de service maintenant</button>
+        </div>
+        <p class="note" id="pa-fs-etat"></p>
+      </div>
       <div class="section" data-pgroupe="saisie"><h4>Exploitation</h4>
         <div class="formgrid">
           <div class="champ"><label for="pa-seuil">Seuil de retard (min)</label><input id="pa-seuil" class="mono" inputmode="numeric"></div>
@@ -384,6 +412,8 @@
           <label><input type="checkbox" id="pa-son-travaux"> Avis travaux orange (maintenance)</label><select id="pa-son-ch-orange" data-son-choix="orange"></select><button type="button" class="bouton petit" data-son-essai="orange">▶ Écouter</button>
           <label class="retrait">Avis travaux rouge (hors service)</label><select id="pa-son-ch-rouge" data-son-choix="rouge"></select><button type="button" class="bouton petit" data-son-essai="rouge">▶ Écouter</button>
           <label><input type="checkbox" id="pa-son-fin"> Fin d'intervention (bandeau vert)</label><select id="pa-son-ch-fin" data-son-choix="fin"></select><button type="button" class="bouton petit" data-son-essai="fin">▶ Écouter</button>
+          <label class="retrait">Style de l'annonce</label><select id="pa-style-voix"></select><button type="button" class="bouton petit" data-son-essai="voix">▶ Écouter</button>
+          <span></span><span class="note" id="pa-style-note"></span><span></span>
           <label class="retrait">Voix des annonces</label><select id="pa-nom-voix"><option value="">Automatique : la plus naturelle de l'écran</option></select><span></span>
           <label class="retrait">Vitesse de la voix <span id="pa-vitesse-voix-val" class="mono"></span></label><input type="range" id="pa-vitesse-voix" min="0.8" max="1.2" step="0.05"><span></span>
           <label class="retrait">Mots dits autrement</label><input id="pa-prononciation" placeholder="ATL=Atlantique, TN=Terminal Nord"><span></span>

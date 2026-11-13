@@ -390,7 +390,7 @@
       flash: SON_ECRAN && s.flash !== false, travaux: SON_ECRAN && s.travaux !== false,
       choix: Object.assign({ arrivee: 'arrivee', flash: 'flash', orange: 's6_important', rouge: 's2_urgent', fin: 's12_finJoyeux' }, s.choix || {}),
       fin: SON_ECRAN && s.finTravaux !== false && s.travaux !== false,
-      voixOpts: { nomVoix: s.nomVoix || '', vitesse: s.vitesseVoix || 1 }, prononciation: s.prononciation || { ATL: 'Atlantique' } };
+      voixOpts: { nomVoix: s.nomVoix || '', vitesse: s.vitesseVoix || 1, style: s.styleVoix || 'classique' }, prononciation: s.prononciation || { ATL: 'Atlantique' } };
   }
   /** « FL1 » → « F L 1 », « VR2 » → « V R 2 » : lu lettre par lettre par la voix. */
   function epeler(s) { return String(s || '').toUpperCase().replace(/([A-Z])(?=[A-Z0-9])/g, '$1 ').replace(/(\d)(?=[A-Z])/g, '$1 '); }
@@ -416,6 +416,11 @@
    * « Attention, la navette en provenance de T D F, numéro 504930, va rentrer en Ferroviaire V F 2 avec 27 wagons. »
    * Numéro : celui du planning, sinon celui tapé dans le journal.
    */
+  /** Éléments de l'annonce, mis en phrase selon le style choisi dans la saisie (SC.phraseAnnonce). */
+  function infoArrivee(v) {
+    var l = v.l;
+    return { navette: !!v.g, code: nomParle(l.code), prov: nomParle(v.g ? v.g.libelle : (v.t.nom || v.t.code)), num: l.numero || l.numeroSaisi || '', voie: voieParlee(l.voie), voieCode: l.voie || '', wagons: l.wagons };
+  }
   function phraseArrivee(v) {
     var l = v.l, num = l.numero || l.numeroSaisi || '', voie = voieParlee(l.voie);
     var fin = (voie ? ' va rentrer en ' + voie : ' va arriver') + (l.wagons != null && l.wagons !== '' ? ' avec ' + l.wagons + ' wagons' : '') + '.';
@@ -432,7 +437,7 @@
       annVus.vus[k] = Date.now(); annVus.garder();
       // écran qui démarre : pas d'annonce pour une arrivée déjà en approche depuis plus d'une minute
       if (premier && !(v.ph.sec != null && v.ph.sec > VED.avant * 60 - 60)) return;
-      annFile.push({ type: 'arrivee', texte: phraseArrivee(v) });
+      annFile.push({ type: 'arrivee', texte: phraseArrivee(v), info: infoArrivee(v) });
     });
     suivanteAnnonce();
   }
@@ -449,7 +454,7 @@
     if (!SC.sonDisponible()) { annFile = []; majBoutonSon(); return; }
     annEnCours = true;
     // son choisi dans la saisie : arrivée, flash, travaux orange / rouge
-    SC.jouerCarillon(r.volume, motif).then(function () { return a.texte && r.voix ? SC.annoncer(a.texte, r.volume, r.voixOpts) : null; })
+    SC.jouerCarillon(r.volume, motif).then(function () { return a.texte && r.voix ? (a.info ? SC.annoncerStyle(a.info, r.volume, r.voixOpts) : SC.annoncer(a.texte, r.volume, r.voixOpts)) : null; })
       .then(function () { annEnCours = false; suivanteAnnonce(); }, function () { annEnCours = false; suivanteAnnonce(); });
   }
   /** Symbole du son, toujours visible dans l'en-tête. */

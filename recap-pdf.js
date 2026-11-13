@@ -128,6 +128,8 @@
   }
   racine.RecapPdf = {
     generer: function (o) { return charger().then(function (jsPDF) { var d = construire(jsPDF, o); d.save('recap-circulations-' + o.journee.date + '.pdf'); return d; }); },
+    /** Document sans l'enregistrer : { doc, base64, nom } (PDF de fin de service envoyé au serveur). */
+    produire: function (o) { return charger().then(function (jsPDF) { var d = construire(jsPDF, o); return { doc: d, nom: 'recap-circulations-' + o.journee.date + '.pdf', base64: d.output('datauristring') }; }); },
     construire: construire, charger: charger
   };
 })(typeof window !== 'undefined' ? window : this);

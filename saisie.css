@@ -402,6 +402,15 @@ iframe.apercu { width: 100%; height: 300px; border: 1px solid var(--trait); bord
 /* fenêtre Suivi trains : claire comme l'application, plus grande */
 .st-flottant { --pf-l: 1100px; --pf-h: 720px; background: #f3f5f9; }
 .st-flottant .plan-cadre { background: #f3f5f9; }
+/* boutons de la liste des circulations : Arrivée en vert, Retard / souci en rouge */
+.bouton.vert { background: #15803d; border-color: #15803d; color: #fff; font-weight: 700; }
+.bouton.vert:hover { background: #166534; }
+.bouton.rouge { background: #fff1f2; border-color: #dc2626; color: #b91c1c; font-weight: 700; }
+.bouton.rouge.actif, .bouton.danger-plein { background: #dc2626; border-color: #dc2626; color: #fff; font-weight: 700; }
+.puce.soucis { background: #dc2626; color: #fff; }
+.so-choix { display: flex; flex-wrap: wrap; gap: 6px; }
+.so-choix button { border: 1px solid var(--trait); background: var(--surface); color: var(--encre); border-radius: 999px; padding: 4px 11px; font: inherit; font-size: 13px; cursor: pointer; }
+.so-choix button:hover { border-color: #dc2626; color: #b91c1c; }
 /* côté du mouvement */
 .cote-tag { display: inline-block; font-size: 10.5px; font-weight: 700; letter-spacing: .04em; padding: 0 5px; border-radius: 4px; margin-left: 4px; background: #e0e7ff; color: #3730a3; vertical-align: 1px; }
 .cote-tag.h { background: #dcfce7; color: #166534; }

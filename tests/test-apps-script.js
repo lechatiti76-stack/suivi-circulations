@@ -260,6 +260,17 @@ test('saisie du contenu d\'une voie, choix de retrait, jours relus, prévisions'
   assert.deepStrictEqual(p.jours, ['2026-01-06']); assert.deepStrictEqual(p.voies, {});
 });
 
+test('PDF de fin de service : enregistré dans rapports/AAAA, remplacé, présence vérifiable', function () {
+  var g = simulateur.charger('secret-essai');
+  assert.strictEqual(g.appel('GET', '/api/rapport/2026-11-13').data.existe, false);
+  var pdf = Buffer.from('%PDF-1.4 essai').toString('base64');
+  var r = g.appel('PUT', '/api/rapport/2026-11-13', 'data:application/pdf;base64,' + pdf);
+  assert.strictEqual(r.status, 200); assert.strictEqual(r.data.nom, 'recap-circulations-2026-11-13.pdf');
+  assert.strictEqual(g.appel('PUT', '/api/rapport/2026-11-13', pdf).status, 200);
+  var e = g.appel('GET', '/api/rapport/2026-11-13'); assert.strictEqual(e.data.existe, true); assert.ok(/drive/.test(e.data.url));
+  assert.strictEqual(g.appel('PUT', '/api/rapport/2026-11-13', '').status, 400);
+});
+
 console.log('Jours préparés (samedi / dimanche)');
 test('le vendredi, Demain = lundi et Après-demain = mardi ; préparations reprises', function () {
   var SC = require('../commun.js');

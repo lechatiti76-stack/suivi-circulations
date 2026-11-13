@@ -15,7 +15,7 @@
  */
 
 const CLE = 'CHANGER-CE-MOT-DE-PASSE';
-const VERSION = '2.11.0';
+const VERSION = '2.12.0';
 const FUSEAU = 'Europe/Paris';
 const NOM_DOSSIER = 'Suivi des circulations - données';
 
@@ -54,6 +54,10 @@ function router_(m, c, corps) {
   if (m === 'GET' && c === '/api/journees') return ok_({ dates: listeJournees_() });
   if (m === 'PUT' && c === '/api/plan-voies') return ecrirePlanVoies_(corps);
   if (m === 'GET' && (r = /^\/api\/plan(?:\/(\d{4}-\d{2}-\d{2}))?$/.exec(c))) return ok_(planPublic_(r[1]));
+  if ((r = /^\/api\/rapport\/(\d{4}-\d{2}-\d{2})$/.exec(c))) {
+    if (m === 'GET') return rapportExiste_(r[1]);
+    if (m === 'PUT') return avecVerrou_(() => ecrireRapport_(r[1], corps));
+  }
   if (m === 'PUT' && c === '/api/plan-saisie') return avecVerrou_(() => ecrirePlanSaisie_(corps));
   if ((r = /^\/api\/journee\/(\d{4}-\d{2}-\d{2})$/.exec(c))) {
     if (m === 'GET') return lireJournee_(r[1]);
@@ -478,6 +482,25 @@ function ecrirePlanVoies_(corps) {
   const p = proprietes_();
   p.setProperty('version:planvoies', String(Number(p.getProperty('version:planvoies') || 0) + 1));
   return ok_({ voies: propre });
+}
+/**
+ * PDF de fin de service (récap du jour, généré par la saisie) : dossier « rapports/AAAA » du dossier de données.
+ * Corps : le PDF en base64 (data URI acceptée). Un seul fichier par jour, remplacé s'il existe.
+ */
+function nomRapport_(date) { return 'recap-circulations-' + date + '.pdf'; }
+function rapportExiste_(date) {
+  const f = fichier_(dossier_('rapports/' + date.slice(0, 4)), nomRapport_(date));
+  return ok_({ existe: !!f, url: f ? f.getUrl() : '' });
+}
+function ecrireRapport_(date, corps) {
+  const b64 = String(corps || '').replace(/^data:[^,]*,/, '').replace(/\s/g, '');
+  if (!b64 || b64.length > 15000000) return { status: 400, data: { erreur: 'PDF absent ou trop gros' } };
+  let octets;
+  try { octets = Utilities.base64Decode(b64); } catch (err) { return { status: 400, data: { erreur: 'PDF illisible' } }; }
+  const d = dossier_('rapports/' + date.slice(0, 4)), nom = nomRapport_(date), ancien = fichier_(d, nom);
+  if (ancien) ancien.setTrashed(true);
+  const f = d.createFile(Utilities.newBlob(octets, 'application/pdf', nom));
+  return ok_({ ok: true, url: f.getUrl(), nom: nom });
 }
 function lireJournee_(date) {
   const t = lireTexte_(date + '.json', 'journees');
