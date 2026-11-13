@@ -415,6 +415,18 @@
           <div class="champ"><label for="pa-plan-taille">Taille du texte du plan <span class="mono" id="pa-plan-taille-val"></span></label><input type="range" id="pa-plan-taille" min="80" max="180" step="10"></div>
         </div>
       </div>
+      <div class="section" data-pgroupe="plan"><h4>Numéros de marche des engins</h4>
+        <p class="note">Un engin haut le pied (wagons « hlp », sans « Vers ») est reconnu par son numéro à 6 chiffres : un chiffre donne l'origine, un autre la destination.
+          Exemple : <span class="mono">511911</span> arrive du FA sur le site (il reste sur sa voie) ; <span class="mono">519100</span> quitte le site vers le FA (il n'est plus sur la voie).
+          Les engins de manœuvre (locom, NRS 1 à 8…) ne sont jamais pris pour une navette ou un train.</p>
+        <div class="formgrid">
+          <div class="champ"><label for="pa-mr-orig">Chiffre de l'origine (position)</label><input id="pa-mr-orig" class="mono" inputmode="numeric" placeholder="3"></div>
+          <div class="champ"><label for="pa-mr-dest">Chiffre de la destination (position)</label><input id="pa-mr-dest" class="mono" inputmode="numeric" placeholder="4"></div>
+          <div class="champ"><label for="pa-mr-site">Code du site (LHTE)</label><input id="pa-mr-site" class="mono" inputmode="numeric" placeholder="9"></div>
+          <div class="champ large"><label for="pa-mr-codes">Codes (chiffre=lieu, séparés par des virgules)</label><input id="pa-mr-codes" class="mono" placeholder="1=FA, 4=FS, 6=ATL, 9=LHTE"></div>
+        </div>
+        <p class="note" id="pa-mr-essai"></p>
+      </div>
       <div class="section" data-pgroupe="plan"><h4>Entreprises du plan de voie</h4>
         <p class="note">Entreprises et relations proposées quand vous saisissez les wagons d'une voie dans le plan. Une par ligne :
           <span class="mono">CODE | Nom affiché | couleur</span> (ex. <span class="mono">WASCOSA | Wascosa | #0ea5e9</span>). Supprimez une ligne pour l'enlever.</p>

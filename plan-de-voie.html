@@ -1331,13 +1331,25 @@ body[data-mode="simulation"] #fiche{display:none}
     }
     /* Transforme une ligne en mouvement rejouable, ou explique pourquoi elle ne l'est pas. */
     const situation = s => (/^libre/i.test(s) ? "libre" : /^occup/i.test(s) ? "occupee" : "");
+    // engins de manœuvre du site (locom, nrs1 à nrs8…) : jamais pris pour une navette ou un train
+    const estInterne = n => internes.has(String(n || "").toLowerCase()) || /^(nrs|loco)/i.test(String(n || ""));
+    /* Numéro de marche d'un engin (réglé dans la saisie, Paramètres › Plan de voie) : 3e chiffre = origine, 4e = destination,
+     * codes 1 = FA, 4 = FS, 6 = ATL, 9 = LHTE (le site). 511911 : arrive du FA au site ; 519100 : quitte le site vers le FA. */
+    function marche(num) {
+      const R0 = (typeof window !== "undefined" && window.LHTE_MARCHE) || {}, codes = R0.codes || { 1: "FA", 4: "FS", 6: "ATL", 9: "LHTE" }, site = String(R0.site || "9");
+      const n = String(num || "").trim(); if (!/^\d{6}$/.test(n)) return null;
+      const o = n.charAt((R0.orig || 3) - 1), d = n.charAt((R0.dest || 4) - 1);
+      if (d === site && o !== site) return { sens: "A", de: codes[o] || "", vers: codes[d] || "site" };
+      if (o === site && d !== site) return { sens: "D", de: codes[o] || "site", vers: codes[d] || "" };
+      return null;
+    }
     function classer(m, choix) {
       const hlp = /^hlp$/i.test(m.compo), nb = hlp ? 0 : Math.max(0, parseInt(m.compo, 10) || 0), cv = m.cv === "/" ? "" : m.cv;
       const base = { ligne: m, n: m.n, heure: m.heure, num: m.num, ef: m.ef, nb, charge: /vide/i.test(cv) ? "vides" : "chargés", cvSaisi: /vide|charg/i.test(cv), code: code(m), groupe: relation(m), sit: situation(m.sit),
-        interne: internes.has(String(m.num).toLowerCase()) };
+        interne: estInterne(m.num) };
       const refus = (statut, motif) => Object.assign(base, { statut, motif });
       if (m.supprime) return refus("ignore", "Ligne supprimée dans le programme.");
-      const o = lireVoie(m.voie), d = lireVoie(m.vers), interne = internes.has(m.num.toLowerCase());
+      const o = lireVoie(m.voie), d = lireVoie(m.vers), interne = estInterne(m.num);
       const via = /via\s+([a-z0-9]+)/i.exec(m.comm), v = via ? lireVoie(via[1]) : null;
       // Engin moteur haut le pied sans destination ni sens : il repart du site, sauf reclassement par l'utilisateur.
     if (hlp && !m.vers && !sensDe(m)) {
@@ -1346,10 +1358,10 @@ body[data-mode="simulation"] #fiche{display:none}
       if (o.vide) return refus("incomplet", "Voie non saisie dans le programme.");
       if (o.inconnue) return refus("incomplet", `Voie « ${o.inconnue} » inconnue du simulateur.`);
       if (o.horsSite) return refus("incomplet", `« ${m.voie} » est hors site : rien à rejouer sur le site.`);
-      const arrive = c === "A", zone = m.zone ? ` (zone ${m.zone})` : "";
-      return Object.assign(base, { statut: "ok", type: arrive ? "arrivee" : "depart", em: true, parDefaut: !c, train: m.num || "em", loco: loco(m, false),
+      const mr = !c ? marche(m.num) : null, arrive = c === "A" || (mr && mr.sens === "A"), zone = m.zone ? ` (zone ${m.zone})` : "";
+      return Object.assign(base, { statut: "ok", type: arrive ? "arrivee" : "depart", em: true, parDefaut: !c && !mr, train: m.num || "em", loco: loco(m, false),
         de: arrive ? ACCES_EST : o.troncon, vers: arrive ? o.troncon : ACCES_EST, voieSite: o.voie,
-        libelle: arrive ? `Engin moteur ${m.num} arrive haut le pied sur ${o.voie}` : `Engin moteur ${m.num} quitte ${o.voie} haut le pied${zone}` });
+        libelle: arrive ? `Engin moteur ${m.num} arrive haut le pied sur ${o.voie}${mr && mr.de ? ` (du ${mr.de})` : ""}` : `Engin moteur ${m.num} quitte ${o.voie} haut le pied${mr && mr.vers ? ` vers ${mr.vers}` : zone}` });
     }
     let sens = sensDe(m), parDefaut = false;
       if (!sens && !m.vers && choix && choix[m.id]) sens = choix[m.id];
@@ -1407,7 +1419,7 @@ body[data-mode="simulation"] #fiche{display:none}
           const t = x.de, d = niv[t] || 0;
           if (!(t in cles) && !x.interne && x.nb) cles[t] = x.groupe || x.ef || "";
           if (!connu[t]) {
-            bas[t] = Math.max(bas[t] || 0, x.nb + (x.sit === "occupee" ? 1 : 0) - d);
+            bas[t] = Math.max(bas[t] || 0, x.nb + (x.sit === "occupee" && x.nb ? 1 : 0) - d); // un engin seul ne dit rien des wagons restés
             if (x.sit === "libre") { exact[t] = x.nb - d; connu[t] = true; }
           }
           niv[t] = x.sit === "libre" ? 0 : d - x.nb;
@@ -1455,7 +1467,12 @@ body[data-mode="simulation"] #fiche{display:none}
       if (!ROTATION.active) return null;
       const attente = Object.keys(etat.locos).filter(id => etat.infos[id] && etat.infos[id].em)
         .sort((a, b) => ((etat.locos[a] === x.de) === (etat.locos[b] === x.de) ? 0 : etat.locos[a] === x.de ? -1 : 1) || String(etat.infos[a].depuis).localeCompare(String(etat.infos[b].depuis)));
-      if (x.em) return attente.find(id => etat.locos[id] === x.de) || null;
+      // engin haut le pied qui repart (519100…) : celui qui attend sur sa voie, sinon tout engin de ligne qui y est (pas locom ni NRS)
+      if (x.em) return attente.find(id => etat.locos[id] === x.de) || Object.keys(etat.locos).find(id => etat.locos[id] === x.de && !/^(em\s+)?(nrs|loco)/i.test(id) && !internes.has(String(id).toLowerCase())) || null;
+      // un engin arrivé sur la voie du départ (navette ou train) est celui qui prend la rame, de préférence du même côté
+      const cote = x.ligne && x.ligne.cote, surVoie = attente.filter(id => etat.locos[id] === x.de && !etat.infos[id].interne)
+        .sort((a, b) => ((etat.infos[a].cote || "") === cote ? 0 : 1) - ((etat.infos[b].cote || "") === cote ? 0 : 1));
+      if (surVoie.length) return surVoie[0];
       return attente.find(id => { const f = etat.infos[id];
         return (!ROTATION.meme_relation || (x.groupe && f.groupe === x.groupe)) && (!ROTATION.meme_ef || !x.ef || !f.ef || f.ef === x.ef); }) || null;
     }
@@ -1465,6 +1482,8 @@ body[data-mode="simulation"] #fiche{display:none}
     function appliquer(etat, x) {
       const ecarts = []; etat.infos = etat.infos || {}; x.engin = x.approche = x.reste = null;
       if (x.type === "manoeuvre" || x.type === "sortie") {
+        const alias = "em " + x.train;
+        if (!etat.locos[x.train] && etat.locos[alias]) { etat.locos[x.train] = etat.locos[alias]; delete etat.locos[alias]; if (etat.infos) delete etat.infos[alias]; }
         const ou = etat.locos[x.train];
         if (ou && ou !== x.de) ecarts.push(`${x.train} était sur ${R.troncons[ou].voie || "l'accès"}, pas sur ${R.troncons[x.de].voie}.`);
       }
@@ -1515,7 +1534,7 @@ body[data-mode="simulation"] #fiche{display:none}
       }
       if (x.type === "arrivee") { // l'engin se dételle et attend sur la voie
         const id = "em " + (x.num || x.train); x.reste = id; etat.locos[id] = x.vers;
-        etat.infos[id] = { em: true, ef: x.ef, modele: x.loco, groupe: x.groupe || "", depuis: x.heure, train: x.train };
+        etat.infos[id] = { em: true, ef: x.ef, modele: x.loco, groupe: x.groupe || "", depuis: x.heure, train: x.train, cote: (x.ligne && x.ligne.cote) || "" };
       }
       return ecarts;
     }
@@ -1894,6 +1913,7 @@ body[data-mode="simulation"] #fiche{display:none}
       if (r && !r.erreur && conf !== confVue) { confVue = conf; window.LHTE_VOIES_CONF = r.voies || {}; Tn.changer(); }
       if (!r || r.erreur) throw new Error(r && r.erreur ? "le serveur répond : " + r.erreur : "réponse vide du serveur");
       donnees = { saisies: r.saisies || { contenus: {}, choix: {} }, previsions: r.previsions || [], date: r.date, entreprises: r.entreprises || null, taille: r.taille || 120 };
+      if (r.marche) window.LHTE_MARCHE = r.marche;
       if (!r.journee && !(SEUL && Object.keys(donnees.saisies.contenus || {}).length)) return null;
       texteServeur = JSON.stringify(r.journee || { date: d, mouvements: [], circulations: [] });
       return { title: d + ".json", id: "serveur", modifiedTime: String(r.version || 0) + "·" + (r.versionPlan || 0) + "·" + texteServeur.length };

@@ -15,7 +15,7 @@
  */
 
 const CLE = 'CHANGER-CE-MOT-DE-PASSE';
-const VERSION = '2.10.0';
+const VERSION = '2.11.0';
 const FUSEAU = 'Europe/Paris';
 const NOM_DOSSIER = 'Suivi des circulations - données';
 
@@ -382,7 +382,7 @@ function planPublic_(date) {
   const planning = lireJson_('planning.json', { groupes: [] }), groupes = {};
   (planning.groupes || []).forEach(g => { groupes[g.id] = g; });
   const out = { date: d, version: version, versionPlan: vVoies, jours: jours, voies: voies, saisies: saisies,
-    entreprises: Array.isArray(pv.entreprises) ? pv.entreprises : null, taille: Number(pv.taille) || 100,
+    entreprises: Array.isArray(pv.entreprises) ? pv.entreprises : null, taille: Number(pv.taille) || 100, marche: pv.marche || null,
     previsions: jour ? previsionsPlan_(jour, groupes, (params.visuel || {}).couleurs || {}) : [], journee: jour || fusion.mouvements.length ? fusion : null };
   // cache limité à 100 Ko par valeur : une grosse journée n'est simplement pas mise en cache
   try { const t = JSON.stringify(out); if (t.length < 95000) cache.put(cle, t, 60); } catch (err) { /* sans cache */ }

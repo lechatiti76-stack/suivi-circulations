@@ -1552,6 +1552,21 @@
     $('#pa-plan-ef-apercu').innerHTML = texteEnEfPlan($('#pa-plan-ef').value).map(function (e) { return '<span><i style="background:' + esc(e.couleur) + '"></i>' + esc(e.nom) + ' <small class="mono">' + esc(e.code) + '</small></span>'; }).join('');
   }
   $('#pa-plan-ef').addEventListener('input', apercuEfPlan);
+  /** Numéros de marche : réglages lus dans le formulaire, et exemple calculé en direct. */
+  function lireMarche() {
+    var codes = {};
+    $('#pa-mr-codes').value.split(/[,;]/).forEach(function (x) { var m = /^\s*(\d)\s*=\s*(.+?)\s*$/.exec(x); if (m) codes[m[1]] = m[2].slice(0, 20); });
+    var pos = function (v, d) { v = parseInt(v, 10); return v >= 1 && v <= 6 ? v : d; };
+    return { orig: pos($('#pa-mr-orig').value, 3), dest: pos($('#pa-mr-dest').value, 4), site: String($('#pa-mr-site').value || '9').replace(/\D/g, '').slice(0, 1) || '9', codes: codes };
+  }
+  function essaiMarche() {
+    var r = lireMarche(), lire = function (n) {
+      var o = n.charAt(r.orig - 1), d = n.charAt(r.dest - 1);
+      return n + ' : ' + (d === r.site && o !== r.site ? 'arrive du ' + (r.codes[o] || '?') + ' sur le site' : o === r.site && d !== r.site ? 'quitte le site vers ' + (r.codes[d] || '?') : 'ni arrivée ni départ du site');
+    };
+    $('#pa-mr-essai').textContent = 'Essai : ' + ['511911', '519100', '519400', '519600'].map(lire).join(' · ');
+  }
+  ['#pa-mr-orig', '#pa-mr-dest', '#pa-mr-site', '#pa-mr-codes'].forEach(function (k) { $(k).addEventListener('input', essaiMarche); });
   $('#pa-plan-ef-defaut').addEventListener('click', function () { $('#pa-plan-ef').value = efPlanEnTexte(EF_PLAN_DEFAUT.map(function (e) { return { code: e[0], nom: e[1], couleur: e[2] }; })); apercuEfPlan(); });
   $('#pa-plan-taille').addEventListener('input', function () { $('#pa-plan-taille-val').textContent = $('#pa-plan-taille').value + ' %'; });
 
@@ -1587,6 +1602,10 @@
     $('#pa-plan-url').value = pv.adresse || 'plan-de-voie.html'; $('#pa-plan-duree').value = pv.duree || 10;
     $('#pa-plan-tv-arr').checked = !!pv.tvArrivee; $('#pa-plan-tv-dep').checked = !!pv.tvDepart;
     $('#pa-plan-sa-arr').checked = !!pv.saisieArrivee; $('#pa-plan-sa-dep').checked = !!pv.saisieDepart;
+    var mr = pv.marche || {};
+    $('#pa-mr-orig').value = mr.orig || 3; $('#pa-mr-dest').value = mr.dest || 4; $('#pa-mr-site').value = mr.site || '9';
+    $('#pa-mr-codes').value = Object.keys(mr.codes || { 1: 'FA', 4: 'FS', 6: 'ATL', 9: 'LHTE' }).map(function (k) { return k + '=' + (mr.codes || { 1: 'FA', 4: 'FS', 6: 'ATL', 9: 'LHTE' })[k]; }).join(', ');
+    essaiMarche();
     $('#pa-plan-taille').value = pv.taille || 120; $('#pa-plan-taille-val').textContent = (pv.taille || 120) + ' %';
     $('#pa-plan-ef').value = efPlanEnTexte(Array.isArray(pv.entreprises) ? pv.entreprises : EF_PLAN_DEFAUT.map(function (e) { return { code: e[0], nom: e[1], couleur: e[2] }; })); apercuEfPlan();
     $('#pa-vitesse-voix').value = vis.vitesseVoix == null ? 1 : vis.vitesseVoix; $('#pa-vitesse-voix-val').textContent = '× ' + (+$('#pa-vitesse-voix').value).toFixed(2);
@@ -1722,7 +1741,7 @@
     else if (purl && !/^https?:\/\/|^[\w.\-\/]+\.html?(\?[^#]*)?(#.*)?$/i.test(purl)) err.push('Plan de voie : adresse invalide (https://… ou page.html#plan).');
     p.visuel.planVoie = { adresse: purl, duree: pdur, tvArrivee: $('#pa-plan-tv-arr').checked, tvDepart: $('#pa-plan-tv-dep').checked,
       saisieArrivee: $('#pa-plan-sa-arr').checked, saisieDepart: $('#pa-plan-sa-dep').checked,
-      taille: +$('#pa-plan-taille').value || 120, entreprises: texteEnEfPlan($('#pa-plan-ef').value) };
+      taille: +$('#pa-plan-taille').value || 120, entreprises: texteEnEfPlan($('#pa-plan-ef').value), marche: lireMarche() };
     p.visuel.sonFinTravaux = $('#pa-son-fin').checked; p.visuel.nomVoix = $('#pa-nom-voix').value;
     p.visuel.vitesseVoix = +$('#pa-vitesse-voix').value; p.visuel.prononciation = $('#pa-prononciation').value.trim();
     p.visuel.sons = {};
