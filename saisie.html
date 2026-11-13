@@ -23,11 +23,13 @@
     <button type="button" id="b-connexion" hidden>Connexion</button>
     <button type="button" id="b-installer" hidden>⬇ Installer l'application</button>
     <button type="button" id="b-raccourcis" hidden>Raccourcis ⬇</button>
+    <button type="button" id="b-st" title="Application Suivi trains (départs, mails, courbes, compo…) dans une fenêtre">Suivi trains</button>
     <button type="button" id="b-plan" hidden>Plan de voie</button>
     <button type="button" id="b-flash">Flash info</button>
     <button type="button" id="b-mails">Mails<span class="compteur" id="c-mails" hidden>0</span></button>
     <button type="button" id="b-coupons" class="b-coupons" title="Coupons navettes saisis dans le Suivi trains (onglet Coupons)">🎫 Coupons<span class="compteur" id="c-coupons" hidden>0</span></button>
     <button type="button" id="b-stats">Statistiques</button>
+    <button type="button" id="b-pdf" title="Récapitulatif de la journée en PDF">PDF du jour</button>
     <button type="button" id="b-planning">Planning</button>
     <button type="button" id="b-params">Paramètres</button>
     <button type="button" id="b-journees">Journées</button>
@@ -150,6 +152,20 @@
 </dialog>
 
 <!-- Plan de voie (page du simulateur) -->
+<!-- Suivi trains dans une fenêtre flottante (même fonctionnement que le plan de voie) -->
+<section id="d-st" class="plan-flottant st-flottant" hidden aria-label="Suivi trains">
+  <div class="pf-tete" id="st-tete" title="Glisser pour déplacer · double-clic pour réduire">
+    <span class="pf-poignee" aria-hidden="true">⠿</span><b>Suivi trains</b><span class="pf-compte" id="st-etat"></span>
+    <span class="pf-boutons">
+      <button type="button" id="st-reduire" title="Réduire" aria-label="Réduire">–</button>
+      <button type="button" id="st-agrandir" title="Agrandir / taille normale" aria-label="Agrandir">□</button>
+      <button type="button" id="st-ouvrir" title="Ouvrir dans une fenêtre séparée" aria-label="Ouvrir dans une fenêtre séparée">↗</button>
+      <button type="button" id="st-fermer" title="Fermer" aria-label="Fermer">✕</button>
+    </span>
+  </div>
+  <div class="plan-cadre"><iframe id="st-iframe" title="Suivi trains" allow="clipboard-write"></iframe></div>
+</section>
+
 <!-- fenêtre flottante : se déplace (barre de titre), se redimensionne (coin bas droit), se réduit ; la saisie reste utilisable -->
 <section id="d-plan" class="plan-flottant" hidden aria-label="Plan de voie">
   <div class="pf-tete" id="pf-tete" title="Glisser pour déplacer · double-clic pour réduire">
@@ -299,6 +315,7 @@
         <div class="formgrid">
           <div class="champ large"><label for="pa-st-classeur">Adresse du classeur Google du Suivi trains (vide = désactivé)</label><input id="pa-st-classeur" class="mono" placeholder="https://docs.google.com/spreadsheets/d/…/edit"></div>
           <div class="champ large"><label for="pa-st-corr">Arrivées fret du Suivi trains → train de ligne</label><input id="pa-st-corr" class="mono"></div>
+          <div class="champ large"><label for="pa-st-app">Adresse de l'application Suivi trains (bouton « Suivi trains » de la saisie)</label><input id="pa-st-app" class="mono" placeholder="../train-tracker/"></div>
         </div>
         <p class="note">Parcours : une ligne par groupe ou code de train, durée du trajet puis points de passage en minutes depuis le départ. <span class="mono">TDF 35 : Départ FS 2, CV 1474 5</span></p>
         <textarea id="pa-st-parcours" class="mono" style="min-height:70px"></textarea>
@@ -453,6 +470,7 @@
 
 <script src="application.js" data-appli="saisie"></script>
 <script src="commun.js"></script>
+<script src="recap-pdf.js"></script>
 <script src="saisie.js"></script>
 </body>
 </html>

@@ -732,6 +732,70 @@
     pfEtat.reduit = false; pfGarder(); PF.hidden = false; pfAppliquer();
   }
   $('#b-plan').addEventListener('click', function () { ouvrirPlanVoie(0); });
+
+  // ------------------------------------------------ Suivi trains dans une fenêtre flottante
+  /* L'application Suivi trains complète (départs, étapes, mails, courbes, compo, réglages) dans la saisie. Même site :
+     mêmes données et réglages que lorsqu'elle est ouverte seule. Chaque étape validée prévient la saisie, qui relit
+     aussitôt le classeur : journal, déroulé du départ et écrans TV suivent. */
+  var ST = $('#d-st'), stEtat = lsLire('suivi:stFlottant') || {};
+  function stAdresse() { var a = ((app.params || {}).suiviTrains || {}).app || '../train-tracker/'; return new URL(a, location.href).href; }
+  function stAppliquer() {
+    var l = Math.max(360, Math.min(window.innerWidth, stEtat.l || Math.min(1180, window.innerWidth - 40)));
+    var h = Math.max(220, Math.min(window.innerHeight, stEtat.h || Math.min(760, window.innerHeight - 60)));
+    var x = stEtat.x == null ? Math.max(0, (window.innerWidth - l) / 2) : stEtat.x, y = stEtat.y == null ? 120 : stEtat.y;
+    x = Math.max(-l + 120, Math.min(window.innerWidth - 120, x)); y = Math.max(0, Math.min(window.innerHeight - 34, y));
+    ST.style.setProperty('--pf-x', x + 'px'); ST.style.setProperty('--pf-y', y + 'px'); ST.style.setProperty('--pf-l', l + 'px'); ST.style.setProperty('--pf-h', h + 'px');
+    ST.classList.toggle('reduit', !!stEtat.reduit); ST.classList.toggle('grand', !!stEtat.grand && !stEtat.reduit);
+    $('#st-reduire').textContent = stEtat.reduit ? '▴' : '–';
+  }
+  function stGarder() { var c = Object.assign({}, stEtat); delete c._t; lsEcrire('suivi:stFlottant', c); }
+  function ouvrirSuiviTrains() {
+    var f = $('#st-iframe'), u = stAdresse();
+    if (f.getAttribute('src') !== u) f.setAttribute('src', u);
+    if (!ST.hidden && !stEtat.reduit) { ST.hidden = true; return; } // le bouton bascule
+    stEtat.reduit = false; stGarder(); ST.hidden = false; stAppliquer();
+    // la fenêtre passe au premier plan au-dessus du plan de voie
+    ST.style.zIndex = 62; $('#d-plan').style.zIndex = 60;
+  }
+  (function () {
+    var tete = $('#st-tete'), dep = null;
+    tete.addEventListener('pointerdown', function (e) {
+      if (e.target.closest('button') || stEtat.grand) return;
+      var r = ST.getBoundingClientRect(); dep = { dx: e.clientX - r.left, dy: e.clientY - r.top };
+      ST.classList.add('deplace'); tete.setPointerCapture(e.pointerId); e.preventDefault(); ST.style.zIndex = 62; $('#d-plan').style.zIndex = 60;
+    });
+    tete.addEventListener('pointermove', function (e) { if (!dep) return; stEtat.x = Math.round(e.clientX - dep.dx); stEtat.y = Math.round(e.clientY - dep.dy); stAppliquer(); });
+    var fin = function () { if (!dep) return; dep = null; ST.classList.remove('deplace'); stGarder(); };
+    tete.addEventListener('pointerup', fin); tete.addEventListener('pointercancel', fin);
+    tete.addEventListener('dblclick', function (e) { if (!e.target.closest('button')) $('#st-reduire').click(); });
+    $('#pf-tete').addEventListener('pointerdown', function () { $('#d-plan').style.zIndex = 62; ST.style.zIndex = 60; });
+    if (window.ResizeObserver) new ResizeObserver(function () {
+      if (ST.hidden || stEtat.reduit || stEtat.grand) return;
+      var l = Math.round(ST.offsetWidth), h = Math.round(ST.offsetHeight);
+      if (l > 0 && h > 0 && (l !== stEtat.l || h !== stEtat.h)) { stEtat.l = l; stEtat.h = h; ST.style.setProperty('--pf-l', l + 'px'); ST.style.setProperty('--pf-h', h + 'px'); clearTimeout(stEtat._t); stEtat._t = setTimeout(stGarder, 400); }
+    }).observe(ST);
+    window.addEventListener('resize', function () { if (!ST.hidden) stAppliquer(); });
+  })();
+  $('#st-reduire').addEventListener('click', function () { stEtat.reduit = !stEtat.reduit; stGarder(); stAppliquer(); });
+  $('#st-agrandir').addEventListener('click', function () { stEtat.grand = !stEtat.grand; stEtat.reduit = false; stGarder(); stAppliquer(); });
+  $('#st-fermer').addEventListener('click', function () { ST.hidden = true; F.num.focus(); });
+  $('#st-ouvrir').addEventListener('click', function () {
+    var w = window.open(stAdresse(), 'suiviTrains', 'popup=yes,width=1300,height=860');
+    if (w) { ST.hidden = true; try { w.focus(); } catch (e) { /* autre écran */ } } else toast('Fenêtre bloquée par le navigateur : autorisez les fenêtres pour ce site.');
+  });
+  $('#b-st').addEventListener('click', ouvrirSuiviTrains);
+  /** Une étape ou un départ vient d'être écrit dans le classeur par le Suivi trains : relecture tout de suite (puis une
+   *  seconde fois, le classeur pouvant mettre quelques secondes à l'enregistrer). */
+  var stRelire = null;
+  function suiviTrainsSignal(d) {
+    if (!d || d.type !== 'suivi-trains:maj') return;
+    $('#st-etat').textContent = '↻ ' + (d.train || 'mise à jour') + ' → saisie';
+    clearTimeout(stRelire);
+    setTimeout(function () { app.suiviEnCours = 0; suivreTrains(); }, 1200);
+    stRelire = setTimeout(function () { app.suiviEnCours = 0; suivreTrains(); $('#st-etat').textContent = ''; }, 5000);
+  }
+  window.addEventListener('message', function (e) { if (e.origin === location.origin) suiviTrainsSignal(e.data); });
+  try { var bcST = new BroadcastChannel('suivi-trains'); bcST.onmessage = function (e) { suiviTrainsSignal(e.data); }; } catch (e) { /* navigateur ancien */ }
   function majBoutonPlan() { $('#b-plan').hidden = !planVoie().adresse; }
   function annulerReel(id) {
     var c = circDe(app.journee, id); if (!c) return;
@@ -1342,6 +1406,12 @@
   });
 
   // Statistiques
+  $('#b-pdf').addEventListener('click', function () {
+    if (!app.journee) return;
+    toast('Préparation du PDF du jour…');
+    window.RecapPdf.generer({ journee: app.journee, planning: app.planning, params: app.params, SC: SC })
+      .catch(function (e) { toast('PDF non créé : ' + e.message, 'crit'); });
+  });
   $('#b-stats').addEventListener('click', function () {
     var s = SC.statistiques(app.journee, app.planning, app.params), cp = (app.params.exploitation || {}).coupurePoste || '13:30';
     var l = function (lib, o) {
@@ -1540,7 +1610,7 @@
     $('#pa-vers').value = (p.saisie || {}).versObligatoire || 'internes';
     remplirTravauxParametres(p);
     var st = p.suiviTrains || {}, corr = st.correspondances || SC.CORRESPONDANCES_SUIVI;
-    $('#pa-st-classeur').value = st.classeur || '';
+    $('#pa-st-classeur').value = st.classeur || ''; $('#pa-st-app').value = st.app || '';
     $('#pa-st-corr').value = Object.keys(corr).map(function (k) { return k + '=' + corr[k]; }).join(', ');
     // temps d'arrivée des trains de ligne : un champ par train, retirés du texte des parcours
     var trajets = p.parcours || {}, codesT = codesArriveesTrains(), parcours = Object.assign({}, SC.PARCOURS_DEFAUT, trajets);
@@ -1673,7 +1743,7 @@
       if (k.length !== 2 || !k[0].trim() || !k[1].trim()) { err.push('Suivi trains : « ' + x + ' » doit s\'écrire vignette=CODE.'); return; }
       corrST[k[0].trim().toLowerCase()] = k[1].trim().toUpperCase();
     });
-    p.suiviTrains = { classeur: $('#pa-st-classeur').value.trim(), correspondances: corrST };
+    p.suiviTrains = { classeur: $('#pa-st-classeur').value.trim(), correspondances: corrST, app: $('#pa-st-app').value.trim() };
     lireTravauxParametres(p, err);
     try { p.parcours = SC.texteEnParcours($('#pa-st-parcours').value); } catch (ex) { err.push('Parcours : ' + ex.message); }
     // temps d'arrivée des trains : les points de passage déjà réglés pour ce train sont gardés
