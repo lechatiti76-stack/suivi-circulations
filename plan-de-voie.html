@@ -1343,6 +1343,31 @@ body[data-mode="simulation"] #fiche{display:none}
       if (o === site && d !== site) return { sens: "D", de: codes[o] || "site", vers: codes[d] || "" };
       return null;
     }
+    /* Base « numéro d'engin → numéros sous lesquels il peut repartir » (saisie, Paramètres › Plan de voie), ex.
+     * 511911 = NRS1 … NRS8, 519100, 519110 (« * » = n'importe quels caractères : 5119* = NRS*). Une machine arrivée sous un
+     * numéro repart souvent sous un autre : c'est la même machine, elle quitte donc sa voie.
+     * Sans ligne pour cet engin : il peut repartir en NRS (1, 2, 3…) ou sous un numéro de marche qui quitte le site (519100). */
+    const motif = p => new RegExp("^" + String(p).trim().toLowerCase().replace(/[.+?^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*") + "$");
+    function peutDevenir(engin, num) {
+      const R0 = (typeof window !== "undefined" && window.LHTE_MARCHE) || {}, base = Array.isArray(R0.suites) ? R0.suites : [];
+      const e = String(engin || "").replace(/^em\s+/i, "").trim().toLowerCase(), n = String(num || "").trim().toLowerCase();
+      if (!e || !n || e === n) return 0;
+      const regles = base.filter(r => (r.de || []).some(p => motif(p).test(e)));
+      if (regles.length) return regles.some(r => (r.vers || []).some(p => motif(p).test(n))) ? 2 : 0;
+      if (/^(nrs|loco)/.test(e) || internes.has(e)) return 0; // engins du site : gardent leur nom
+      const mr = marche(n);
+      return /^nrs/.test(n) || (mr && mr.sens === "D") ? 1 : 0;
+    }
+    /* Engin du site qui devient le numéro de ce mouvement : de préférence sur la voie de départ ; ailleurs seulement si la
+     * base le dit expressément. */
+    function renumerote(etat, x) {
+      const num = x.num || x.train;
+      if (!num || etat.locos[x.train] || etat.locos["em " + x.train]) return null;
+      const c = Object.keys(etat.locos).map(id => ({ id, p: peutDevenir(id, num), ici: etat.locos[id] === x.de }))
+        .filter(o => o.p && (o.ici || o.p === 2))
+        .sort((a, b) => (b.ici - a.ici) || (b.p - a.p) || String((etat.infos[a.id] || {}).depuis || "").localeCompare(String((etat.infos[b.id] || {}).depuis || "")));
+      return c.length ? c[0].id : null;
+    }
     function classer(m, choix) {
       const hlp = /^hlp$/i.test(m.compo), nb = hlp ? 0 : Math.max(0, parseInt(m.compo, 10) || 0), cv = m.cv === "/" ? "" : m.cv;
       const base = { ligne: m, n: m.n, heure: m.heure, num: m.num, ef: m.ef, nb, charge: /vide/i.test(cv) ? "vides" : "chargés", cvSaisi: /vide|charg/i.test(cv), code: code(m), groupe: relation(m), sit: situation(m.sit),
@@ -1464,6 +1489,7 @@ body[data-mode="simulation"] #fiche{display:none}
     /* Engin en attente que reprend un départ : x.em (haut le pied) → celui qui attend sur sa voie ;
      * départ d'un train → le plus ancien de la même relation et de la même EF, de préférence déjà sur la voie. */
     function engin(etat, x) {
+      const rn = renumerote(etat, x); if (rn) return rn; // ex. 511911 arrivé, reparti en NRS5 ou 519100
       if (!ROTATION.active) return null;
       const attente = Object.keys(etat.locos).filter(id => etat.infos[id] && etat.infos[id].em)
         .sort((a, b) => ((etat.locos[a] === x.de) === (etat.locos[b] === x.de) ? 0 : etat.locos[a] === x.de ? -1 : 1) || String(etat.infos[a].depuis).localeCompare(String(etat.infos[b].depuis)));
@@ -1484,6 +1510,8 @@ body[data-mode="simulation"] #fiche{display:none}
       if (x.type === "manoeuvre" || x.type === "sortie") {
         const alias = "em " + x.train;
         if (!etat.locos[x.train] && etat.locos[alias]) { etat.locos[x.train] = etat.locos[alias]; delete etat.locos[alias]; if (etat.infos) delete etat.infos[alias]; }
+        // la machine change de numéro (511911 arrivé, puis NRS5 vers le FA ou vers une autre voie) : elle quitte sa voie
+        if (x.de !== ACCES_EST) { const rn = renumerote(etat, x); if (rn) { x.renumerote = rn; delete etat.locos[rn]; if (etat.infos) delete etat.infos[rn]; } }
         const ou = etat.locos[x.train];
         if (ou && ou !== x.de) ecarts.push(`${x.train} était sur ${R.troncons[ou].voie || "l'accès"}, pas sur ${R.troncons[x.de].voie}.`);
       }

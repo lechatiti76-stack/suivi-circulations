@@ -271,6 +271,31 @@ test('PDF de fin de service : enregistré dans rapports/AAAA, remplacé, présen
   assert.strictEqual(g.appel('PUT', '/api/rapport/2026-11-13', '').status, 400);
 });
 
+test('coupons saisis dans la saisie : écrits dans l\'onglet Coupons du classeur Suivi trains, relus, journée vidée', function () {
+  var g = simulateur.charger('secret-essai');
+  assert.strictEqual(g.appel('POST', '/api/coupons', JSON.stringify({ du: '2026-11-10', au: '2026-11-20' })).status, 400); // pas de classeur
+  var id = '1ZyXwVuTsRqPoNmLkJiHgFeDcBa9876543210', ss = g.creerClasseur('Suivi trains', id);
+  g.appel('PUT', '/api/parametres', JSON.stringify({ suiviTrains: { classeur: 'https://docs.google.com/spreadsheets/d/' + id + '/edit' } }));
+  var r = g.appel('PUT', '/api/coupons/2026-11-16', JSON.stringify({ misAJour: '2026-11-15T10:00:00Z', coupons: [
+    { navette: 'LF1', ligne: 1, numero: '02', site: 'LHTTDF', dateCoupon: '1311', wagons: 18 }, { navette: 'LA1', ligne: 1, numero: '7', site: 'LHTATL', dateCoupon: '1411', wagons: 13 }] }));
+  assert.strictEqual(r.status, 200); assert.strictEqual(r.data.coupons, 2);
+  g.appel('PUT', '/api/coupons/2026-11-17', JSON.stringify({ coupons: [{ navette: 'LN1', ligne: 1, numero: '5', site: 'LHTTMS', dateCoupon: '1611', wagons: 36 }] }));
+  var l = g.appel('POST', '/api/coupons', JSON.stringify({ du: '2026-11-13', au: '2026-11-19' })).data;
+  assert.strictEqual(l.jours['2026-11-16'].coupons.length, 2); assert.strictEqual(l.jours['2026-11-16'].coupons[1].wagons, '13');
+  assert.strictEqual(l.jours['2026-11-17'].coupons[0].navette, 'LN1');
+  // réécriture de la journée, puis journée vidée : une ligne « vide » sans navette
+  g.appel('PUT', '/api/coupons/2026-11-16', JSON.stringify({ misAJour: '2026-11-15T11:00:00Z', coupons: [{ navette: 'LF1', ligne: 1, numero: '02', site: 'LHTTDF', dateCoupon: '1311', wagons: 27 }] }));
+  l = g.appel('POST', '/api/coupons', JSON.stringify({ du: '2026-11-16', au: '2026-11-16' })).data;
+  assert.strictEqual(l.jours['2026-11-16'].coupons.length, 1); assert.strictEqual(l.jours['2026-11-16'].maj, '2026-11-15T11:00:00Z');
+  g.appel('PUT', '/api/coupons/2026-11-16', JSON.stringify({ misAJour: '2026-11-15T12:00:00Z', coupons: [] }));
+  l = g.appel('POST', '/api/coupons', JSON.stringify({ du: '2026-11-16', au: '2026-11-17' })).data;
+  assert.strictEqual(l.jours['2026-11-16'].coupons.length, 0); assert.strictEqual(l.jours['2026-11-16'].maj, '2026-11-15T12:00:00Z');
+  assert.strictEqual(ss.getSheetByName('Coupons').lignes.length, 3); // en-tête + LN1 + ligne vide
+  // la lecture « suivi trains » de la saisie ignore la ligne vide
+  var st = g.appel('POST', '/api/suivi-trains', JSON.stringify({ date: '2026-11-16', demain: '2026-11-17' })).data;
+  assert.strictEqual(st.coupons.length, 0); assert.strictEqual(st.couponsDemain.length, 1);
+});
+
 console.log('Jours préparés (samedi / dimanche)');
 test('le vendredi, Demain = lundi et Après-demain = mardi ; préparations reprises', function () {
   var SC = require('../commun.js');

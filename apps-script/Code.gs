@@ -15,7 +15,7 @@
  */
 
 const CLE = 'CHANGER-CE-MOT-DE-PASSE';
-const VERSION = '2.12.0';
+const VERSION = '2.13.0';
 const FUSEAU = 'Europe/Paris';
 const NOM_DOSSIER = 'Suivi des circulations - données';
 
@@ -68,6 +68,8 @@ function router_(m, c, corps) {
   if (m === 'POST' && c === '/api/mail') return avecVerrou_(() => mail_(JSON.parse(corps)));
   if (m === 'POST' && c === '/api/archives') return avecVerrou_(() => archives_(JSON.parse(corps)));
   if (m === 'POST' && c === '/api/suivi-trains') { const b = JSON.parse(corps || '{}'); return suiviTrains_(b.date, b.demain); }
+  if (m === 'POST' && c === '/api/coupons') { const b = JSON.parse(corps || '{}'); return lireCoupons_(b.du, b.au); }
+  if ((r = /^\/api\/coupons\/(\d{4}-\d{2}-\d{2})$/.exec(c)) && m === 'PUT') return avecVerrou_(() => ecrireCoupons_(r[1], JSON.parse(corps || '{}')));
   if (m === 'GET' && c === '/api/travaux') return ok_({ liste: listeTravaux_() });
   if (m === 'POST' && c === '/api/travaux') { const res = appliquerAvisTravaux_(JSON.parse(corps || '{}'), 'saisie'); return res.ok ? ok_(Object.assign(res, { liste: listeTravaux_() })) : { status: 400, data: { erreur: res.erreur } }; }
   return { status: 404, data: { erreur: 'route inconnue : ' + m + ' ' + c } };
@@ -87,7 +89,7 @@ function suiviTrains_(date, jourDemain) {
   if (!id) return { status: 400, data: { erreur: 'adresse du classeur Suivi trains absente ou invalide (Paramètres)' } };
   // « demain » = prochain jour préparé dans la saisie (le vendredi : lundi), sinon le lendemain
   const demain = /^\d{4}-\d{2}-\d{2}$/.test(String(jourDemain || '')) ? String(jourDemain) : Utilities.formatDate(new Date(new Date(date + 'T12:00:00').getTime() + 864e5), FUSEAU, 'yyyy-MM-dd');
-  const cache = CacheService.getScriptCache(), cle = 'suivi:' + id + ':' + date + ':' + demain, vu = cache.get(cle);
+  const cache = CacheService.getScriptCache(), cle = 'suivi:' + id + ':' + date + ':' + demain + ':' + (cache.get('coupons:maj') || ''), vu = cache.get(cle);
   if (vu) return ok_(JSON.parse(vu));
   let ss;
   try { ss = SpreadsheetApp.openById(id); }
@@ -99,11 +101,55 @@ function suiviTrains_(date, jourDemain) {
   // coupons navettes saisis dans le Suivi trains (onglet Coupons) : la journée et le lendemain
   const coupon = r => ({ navette: r[1], ligne: r[2], numero: r[3], site: r[4], dateCoupon: r[5], wagons: r[6], note: r[7] });
   out.dateDemain = demain;
-  lignesDuJour_(ss.getSheetByName('Coupons'), date).forEach(r => out.coupons.push(coupon(r)));
-  lignesDuJour_(ss.getSheetByName('Coupons'), demain).forEach(r => out.couponsDemain.push(coupon(r)));
+  lignesDuJour_(ss.getSheetByName('Coupons'), date).filter(r => r[1]).forEach(r => out.coupons.push(coupon(r)));
+  lignesDuJour_(ss.getSheetByName('Coupons'), demain).filter(r => r[1]).forEach(r => out.couponsDemain.push(coupon(r)));
   cache.put(cle, JSON.stringify(out), 3);
   return ok_(out);
 }
+// ------------------------------------------------------------------ coupons navettes
+/**
+ * Les coupons se saisissent dans la saisie (bouton 🎫 Coupons) et s'écrivent dans l'onglet « Coupons » du classeur
+ * Suivi trains (même format que l'application Suivi trains, qui les relit) :
+ *   Date | Navette | Ligne | N° coupon | Code site | Date coupon | Wagons | Note | Mis à jour le
+ * Une journée est réécrite en entier à chaque envoi. Une journée vidée garde une ligne sans navette (« vide ») pour que
+ * le Suivi trains sache qu'elle a été effacée.
+ */
+const COUPONS_ENTETES_ = ['Date', 'Navette', 'Ligne', 'N° coupon', 'Code site', 'Date coupon', 'Wagons', 'Note', 'Mis à jour le'];
+function classeurSuivi_() {
+  const id = idClasseur_((lireJson_('parametres.json', {}).suiviTrains || {}).classeur);
+  if (!id) return { erreur: { status: 400, data: { erreur: 'adresse du classeur Suivi trains absente ou invalide (Paramètres › Trains et planning)' } } };
+  try { return { ss: SpreadsheetApp.openById(id), id: id }; }
+  catch (e) { return { erreur: { status: 502, data: { erreur: 'classeur Suivi trains inaccessible : vérifiez l\'adresse et que ce compte Google peut l\'ouvrir' } } }; }
+}
+const dateLigne_ = v => { const d = String(v || '').trim(), fr = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(d); return fr ? fr[3] + '-' + ('0' + fr[2]).slice(-2) + '-' + ('0' + fr[1]).slice(-2) : d.slice(0, 10); };
+/** Coupons du au (inclus, 31 jours au plus) : { jours: { date: { maj, coupons: [...] } } }. */
+function lireCoupons_(du, au) {
+  const iso = /^\d{4}-\d{2}-\d{2}$/;
+  if (!iso.test(String(du || '')) || !iso.test(String(au || '')) || au < du) return { status: 400, data: { erreur: 'période invalide' } };
+  const k = classeurSuivi_(); if (k.erreur) return k.erreur;
+  const f = k.ss.getSheetByName('Coupons'), jours = {};
+  if (f) f.getDataRange().getDisplayValues().slice(1).forEach(r => {
+    const d = dateLigne_(r[0]); if (d < du || d > au) return;
+    const j = jours[d] || (jours[d] = { maj: '', coupons: [] }), maj = String(r[8] || '');
+    if (maj > j.maj) j.maj = maj;
+    if (String(r[1] || '').trim()) j.coupons.push({ navette: String(r[1]).trim(), ligne: Number(r[2]) || 0, numero: String(r[3] || '').trim(), site: String(r[4] || '').trim(), dateCoupon: String(r[5] || '').trim(), wagons: String(r[6] || '').trim(), note: String(r[7] || '').trim() });
+  });
+  return ok_({ du: du, au: au, jours: jours, lu: maintenant_() });
+}
+function ecrireCoupons_(date, b) {
+  const k = classeurSuivi_(); if (k.erreur) return k.erreur;
+  let f = k.ss.getSheetByName('Coupons');
+  if (!f) { f = k.ss.insertSheet('Coupons'); f.appendRow(COUPONS_ENTETES_); f.setFrozenRows(1); f.getRange('A2:F').setNumberFormat('@'); }
+  const maj = String(b.misAJour || new Date().toISOString()), lignes = f.getDataRange().getDisplayValues();
+  for (let i = lignes.length - 1; i >= 1; i--) if (dateLigne_(lignes[i][0]) === date) f.deleteRow(i + 1);
+  const rows = (Array.isArray(b.coupons) ? b.coupons : []).slice(0, 300).map(c => [date, String(c.navette || '').slice(0, 12), Number(c.ligne) || '', String(c.numero == null ? '' : c.numero).slice(0, 20),
+    String(c.site || '').slice(0, 12), String(c.dateCoupon == null ? '' : c.dateCoupon).slice(0, 10), c.wagons === '' || c.wagons == null || isNaN(Number(c.wagons)) ? '' : Number(c.wagons), String(c.note || '').slice(0, 80), maj]);
+  if (!rows.length) rows.push([date, '', '', '', '', '', '', 'vide', maj]);
+  f.getRange(f.getLastRow() + 1, 1, rows.length, COUPONS_ENTETES_.length).setValues(rows);
+  CacheService.getScriptCache().put('coupons:maj', String(Date.now()), 600); // la lecture « suivi trains » repart du classeur
+  return ok_({ date: date, coupons: rows.filter(r => r[1]).length, misAJour: maj });
+}
+
 /** Identifiant d'un classeur à partir de son adresse (…/spreadsheets/d/<id>/edit) ou de l'identifiant seul. */
 function idClasseur_(adresse) {
   const s = String(adresse || '').trim(), m = /\/d\/([A-Za-z0-9_-]{20,})/.exec(s);

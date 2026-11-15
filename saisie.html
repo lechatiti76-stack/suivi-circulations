@@ -9,6 +9,7 @@
 <link rel="icon" href="icones/saisie-192.png" sizes="192x192" type="image/png">
 <link rel="apple-touch-icon" href="icones/saisie-192.png">
 <link rel="stylesheet" href="saisie.css">
+<link rel="stylesheet" href="coupons.css">
 </head>
 <body>
 <header class="barre">
@@ -27,7 +28,7 @@
     <button type="button" id="b-plan" hidden>Plan de voie</button>
     <button type="button" id="b-flash">Flash info</button>
     <button type="button" id="b-mails">Mails<span class="compteur" id="c-mails" hidden>0</span></button>
-    <button type="button" id="b-coupons" class="b-coupons" title="Coupons navettes saisis dans le Suivi trains (onglet Coupons)">🎫 Coupons<span class="compteur" id="c-coupons" hidden>0</span></button>
+    <button type="button" id="b-coupons" class="b-coupons" title="Saisir les coupons navettes (copiés dans le Suivi trains, onglet Coupons)">🎫 Coupons<span class="compteur" id="c-coupons" hidden>0</span></button>
     <button type="button" id="b-stats">Statistiques</button>
     <button type="button" id="b-pdf" title="Récapitulatif de la journée en PDF">PDF du jour</button>
     <button type="button" id="b-planning">Planning</button>
@@ -297,6 +298,11 @@
           <label class="note" for="pa-vers">Voie de destination (Vers) obligatoire :</label>
           <select id="pa-vers"><option value="internes">pour les locomotives et manœuvres (locom, nrs…)</option><option value="toujours">pour tous les mouvements</option><option value="jamais">jamais</option></select></div>
       </div>
+      <div class="section" data-pgroupe="saisie"><h4>Couleurs des rubriques des paramètres</h4>
+        <p class="note">Couleur de chaque onglet de la colonne de gauche. L'aperçu change tout de suite ; « Enregistrer » la garde pour tous les postes.</p>
+        <div class="pa-onglets" id="pa-onglets"></div>
+        <button type="button" class="bouton petit" id="pa-onglets-defaut" style="margin-top:8px">Remettre les couleurs d'origine</button>
+      </div>
       <div class="section" data-pgroupe="mails"><h4>Mails automatiques</h4>
         <div class="formgrid">
           <div class="champ"><label for="pa-mode">Mode</label><select id="pa-mode"><option value="simulation">Simulation (rien n'est envoyé)</option><option value="brouillon">Brouillon Outlook à valider</option><option value="auto">Envoi automatique</option><option value="desactive">Désactivé</option></select></div>
@@ -457,6 +463,14 @@
         </div>
         <p class="note" id="pa-mr-essai"></p>
       </div>
+      <div class="section" data-pgroupe="plan"><h4>Base des engins : sous quels numéros une machine repart</h4>
+        <p class="note">Une machine qui livre un train ou une navette arrive sous un numéro et repart sous un autre : c'est la même machine, elle quitte donc sa voie.
+          Une ligne par engin : <span class="mono">numéro arrivé = numéros de départ possibles</span>, séparés par des espaces.
+          Exemple : <span class="mono">511911 = NRS1 NRS2 … NRS8 519100 519110</span>. L'étoile remplace n'importe quels caractères : <span class="mono">5119* = NRS* 5191*</span>.
+          Sans ligne pour un engin, il peut repartir en NRS ou sous un numéro de marche qui quitte le site.</p>
+        <textarea id="pa-mr-suites" class="mono" style="min-height:120px" placeholder="511911 = NRS1 NRS2 NRS3 NRS4 NRS5 NRS6 NRS7 NRS8 519100 519110"></textarea>
+        <p class="note" id="pa-mr-suites-essai"></p>
+      </div>
       <div class="section" data-pgroupe="plan"><h4>Entreprises du plan de voie</h4>
         <p class="note">Entreprises et relations proposées quand vous saisissez les wagons d'une voie dans le plan. Une par ligne :
           <span class="mono">CODE | Nom affiché | couleur</span> (ex. <span class="mono">WASCOSA | Wascosa | #0ea5e9</span>). Supprimez une ligne pour l'enlever.</p>
@@ -513,6 +527,7 @@
 <script src="application.js" data-appli="saisie"></script>
 <script src="commun.js"></script>
 <script src="recap-pdf.js"></script>
+<script src="coupons.js"></script>
 <script src="saisie.js"></script>
 </body>
 </html>

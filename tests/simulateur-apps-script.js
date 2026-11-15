@@ -55,7 +55,10 @@ function creerServices() {
       getDisplayValues: function () { return f.lignes.map(function (l) { return l.map(affiche); }); }
     };
   };
-  Feuille.prototype.getRange = function (r, c, nr, nc) { var f = this; return { setValues: function (v) { f.lignes[r - 1] = v[0].slice(); } }; };
+  Feuille.prototype.getRange = function (r, c, nr, nc) { var f = this; if (typeof r === 'string') return { setNumberFormat: function () { return this; } };
+    return { setValues: function (v) { v.forEach(function (l, i) { f.lignes[r - 1 + i] = l.slice(); }); }, setNumberFormat: function () { return this; } }; };
+  Feuille.prototype.deleteRow = function (r) { this.lignes.splice(r - 1, 1); return this; };
+  Feuille.prototype.getLastRow = function () { return this.lignes.length; };
   function Classeur(nom, id) { this.id = id || nouvelId(); this.nom = nom; this.feuilles = {}; classeurs[this.id] = this; fichiers[this.id] = new Fichier(nom, '', 'sheet', 'racine'); fichiers[this.id].id = this.id; }
   Classeur.prototype.getId = function () { return this.id; };
   Classeur.prototype.getSheetByName = function (n) { return this.feuilles[n] || null; };

@@ -307,11 +307,11 @@ iframe.apercu { width: 100%; height: 300px; border: 1px solid var(--trait); bord
 .actions .b-coupons:hover { filter: brightness(1.08); }
 .actions .b-coupons .compteur { background: #fff; color: #C2410C; }
 #d-coupons .dlg-tete .onglets { display: flex; gap: 4px; margin-left: auto; margin-right: 12px; }
-.cp-total { margin: 0 0 12px; font-size: 15px; }
-.cp-site { --g: #F28C28; margin-bottom: 16px; border: 1px solid var(--trait); border-left: 6px solid var(--g); border-radius: 8px; overflow: hidden; }
-.cp-site h4 { display: flex; align-items: baseline; gap: 10px; margin: 0; padding: 8px 12px; background: color-mix(in srgb, var(--g) 18%, var(--surface)); font-size: 15px; }
-.cp-site h4 small { font-family: var(--f-mono); font-weight: 400; color: var(--encre-2); }
-.cp-site h4 span { margin-left: auto; font-size: 13px; font-weight: 600; color: var(--encre-2); }
+#d-coupons .cp-total { margin: 0 0 12px; font-size: 15px; }
+#d-coupons .cp-site { --g: #F28C28; margin-bottom: 16px; border: 1px solid var(--trait); border-left: 6px solid var(--g); border-radius: 8px; overflow: hidden; }
+#d-coupons .cp-site h4 { display: flex; align-items: baseline; gap: 10px; margin: 0; padding: 8px 12px; background: color-mix(in srgb, var(--g) 18%, var(--surface)); font-size: 15px; }
+#d-coupons .cp-site h4 small { font-family: var(--f-mono); font-weight: 400; color: var(--encre-2); }
+#d-coupons .cp-site h4 span { margin-left: auto; font-size: 13px; font-weight: 600; color: var(--encre-2); }
 .cp-cartes { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px; padding: 10px 12px 12px; }
 .cp-carte { border: 1px solid var(--trait); border-radius: 6px; background: var(--surface); overflow: hidden; }
 .cp-tete { display: flex; justify-content: space-between; align-items: baseline; padding: 6px 10px; border-bottom: 1px solid var(--trait); }
@@ -387,10 +387,15 @@ iframe.apercu { width: 100%; height: 300px; border: 1px solid var(--trait); bord
 .params-corps { display: grid; grid-template-columns: 210px minmax(0, 1fr); gap: 0; padding: 0 !important; }
 .params-nav { position: sticky; top: 0; align-self: start; display: flex; flex-direction: column; gap: 3px; padding: 14px 10px; border-right: 1px solid var(--trait); min-height: 100%; background: var(--surface-2, #f4f6f8); }
 .params-nav button { display: flex; align-items: center; gap: 10px; text-align: left; border: 0; background: transparent; color: var(--encre); font: inherit; font-size: 14px; font-weight: 500; padding: 9px 12px; border-radius: 8px; cursor: pointer; }
-.params-nav button span { width: 20px; text-align: center; opacity: .75; }
 .params-nav button:hover { background: #0001; }
-.params-nav button[aria-current="true"] { background: var(--accent); color: var(--accent-encre); }
-.params-nav button[aria-current="true"] span { opacity: 1; }
+.params-nav button { --oc: var(--accent); border-left: 4px solid var(--oc); }
+.params-nav button span { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; border-radius: 7px; background: color-mix(in srgb, var(--oc) 16%, transparent); color: var(--oc); opacity: 1 !important; }
+.params-nav button:hover { background: color-mix(in srgb, var(--oc) 10%, transparent); }
+.params-nav button[aria-current="true"] { background: var(--oc); color: #fff; font-weight: 700; }
+.params-nav button[aria-current="true"] span { background: #ffffff2e; color: #fff; }
+.pa-onglets { display: flex; flex-wrap: wrap; gap: 8px 16px; }
+.pa-onglet-c { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; }
+.pa-onglet-c input[type="color"] { width: 34px; height: 26px; padding: 0; border: 1px solid var(--trait); border-radius: 5px; background: none; cursor: pointer; }
 .params-pages { padding: 16px 22px 22px; min-width: 0; }
 .params-pages .section[hidden] { display: none; }
 .params-pages .section { margin-bottom: 18px; }

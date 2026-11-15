@@ -909,7 +909,14 @@
     $('#cp-corps').innerHTML = (liste.length ? '<p class="cp-total">Total ' + (demain ? 'de demain' : 'du jour') + ' : <b>' + liste.length + '</b> coupons · <b>' + totalWagons(liste) + '</b> wagons</p>' : '<p class="note">Aucun coupon saisi pour ' + (demain ? 'demain' : 'aujourd\'hui') + ' dans le Suivi trains.</p>') + blocs;
     $('#cp-pied').textContent = 'Repris du Suivi trains (bouton 🎫 Coupons), relu toutes les 10 secondes · dernière lecture ' + hm(SC.iso(app.coupons.a)) + '.';
   }
-  $('#b-coupons').addEventListener('click', function () { rendreCoupons(); ouvrir('#d-coupons'); });
+  // saisie des coupons ici (mise en forme du Suivi trains) ; le serveur les écrit dans l'onglet Coupons du classeur Suivi trains
+  $('#b-coupons').addEventListener('click', function () {
+    var cfg = app.params && app.params.suiviTrains;
+    if (!GOOGLE || !window.CouponsSaisie) { rendreCoupons(); ouvrir('#d-coupons'); return; }
+    if (!cfg || !cfg.classeur) { toast('Renseignez l\'adresse du classeur Suivi trains (Paramètres › Trains et planning) : les coupons y sont enregistrés.'); return; }
+    window.CouponsSaisie.ouvrir({ api: api, lectureSeule: !!app.lectureSeule, jour: app.journee && app.journee.date,
+      surFermeture: function () { app.suiviEnCours = 0; suivreTrains(); } });
+  });
   $$('#d-coupons [data-cp]').forEach(function (b) { b.addEventListener('click', function () { app.ongletCoupons = b.getAttribute('data-cp'); rendreCoupons(); }); });
 
   // ------------------------------------------------ travaux (avis envoyés par un autre service)
@@ -1604,6 +1611,25 @@
     var c = $('#fm-params .params-pages'); if (c) c.scrollTop = 0;
   }
   $$('#pa-nav [data-pnav]').forEach(function (b) { b.addEventListener('click', function () { rubrique(b.getAttribute('data-pnav')); }); });
+  // couleur de chaque rubrique (onglets de gauche), réglable dans Paramètres › Saisie
+  var COULEURS_ONGLETS = { saisie: '#1B4E8E', trains: '#0E8A5F', plan: '#7C3AED', ecrans: '#0891B2', sons: '#D97706', mails: '#DB2777', travaux: '#DC2626' };
+  var NOMS_ONGLETS = { saisie: 'Saisie', trains: 'Trains et planning', plan: 'Plan de voie', ecrans: 'Écrans TV', sons: 'Sons et voix', mails: 'Mails', travaux: 'Travaux' };
+  function couleursOnglets(c) {
+    c = Object.assign({}, COULEURS_ONGLETS, c || {});
+    $$('#pa-nav [data-pnav]').forEach(function (b) { b.style.setProperty('--oc', c[b.getAttribute('data-pnav')] || '#1B4E8E'); });
+    return c;
+  }
+  function remplirCouleursOnglets(c) {
+    c = couleursOnglets(c);
+    $('#pa-onglets').innerHTML = Object.keys(COULEURS_ONGLETS).map(function (k) {
+      return '<label class="pa-onglet-c"><input type="color" data-onglet="' + k + '" value="' + esc(c[k]) + '"> ' + esc(NOMS_ONGLETS[k]) + '</label>'; }).join('');
+  }
+  function lireCouleursOnglets() {
+    var c = {}; $$('#pa-onglets [data-onglet]').forEach(function (i) { if (/^#[0-9a-f]{6}$/i.test(i.value)) c[i.getAttribute('data-onglet')] = i.value; }); return c;
+  }
+  $('#pa-onglets').addEventListener('input', function () { couleursOnglets(lireCouleursOnglets()); });
+  $('#pa-onglets-defaut').addEventListener('click', function () { remplirCouleursOnglets(COULEURS_ONGLETS); });
+  couleursOnglets();
   /** Entreprises proposées dans le plan de voie (modifiable : Paramètres › Plan de voie). */
   var EF_PLAN_DEFAUT = [['TDF', 'TDF', '#F28C28'], ['TN', 'TN', '#2D8CFF'], ['ATL', 'ATL', '#F2C230'], ['NAVILAND', 'Naviland', '#8E5CF7'], ['FEROVERGNE', 'Ferovergne', '#22B573'],
     ['DELTA', 'Delta', '#0EA5E9'], ['FORWARDIS', 'Forwardis', '#EC4899'], ['ARMEE', 'Armée', '#8D9EAF'], ['LHTE', 'LHTE', '#2E9E4F'], ['NRS', 'NRS', '#E07B00'],
@@ -1625,8 +1651,26 @@
     var codes = {};
     $('#pa-mr-codes').value.split(/[,;]/).forEach(function (x) { var m = /^\s*(\d)\s*=\s*(.+?)\s*$/.exec(x); if (m) codes[m[1]] = m[2].slice(0, 20); });
     var pos = function (v, d) { v = parseInt(v, 10); return v >= 1 && v <= 6 ? v : d; };
-    return { orig: pos($('#pa-mr-orig').value, 3), dest: pos($('#pa-mr-dest').value, 4), site: String($('#pa-mr-site').value || '9').replace(/\D/g, '').slice(0, 1) || '9', codes: codes };
+    return { orig: pos($('#pa-mr-orig').value, 3), dest: pos($('#pa-mr-dest').value, 4), site: String($('#pa-mr-site').value || '9').replace(/\D/g, '').slice(0, 1) || '9', codes: codes,
+      suites: texteEnSuites($('#pa-mr-suites').value) };
   }
+  /** Base des engins : « 511911 = NRS1 NRS2 … 519100 » (une ligne par engin ou groupe d'engins, « * » = n'importe quoi). */
+  var SUITES_DEFAUT = '511911 = NRS1 NRS2 NRS3 NRS4 NRS5 NRS6 NRS7 NRS8 519100 519110';
+  function texteEnSuites(t) {
+    var mots = function (x) { return String(x || '').toUpperCase().split(/[\s,;]+/).map(function (m) { return m.replace(/[^A-Z0-9*]/g, '').slice(0, 20); }).filter(Boolean); };
+    return String(t || '').split(/\n/).map(function (l) {
+      var i = l.indexOf('='); if (i < 0) return null;
+      var r = { de: mots(l.slice(0, i)).slice(0, 30), vers: mots(l.slice(i + 1).replace(/#.*$/, '')).slice(0, 60) };
+      return r.de.length && r.vers.length ? r : null;
+    }).filter(Boolean).slice(0, 80);
+  }
+  function suitesEnTexte(l) { return (l || []).map(function (r) { return r.de.join(' ') + ' = ' + r.vers.join(' '); }).join('\n'); }
+  function essaiSuites() {
+    var base = texteEnSuites($('#pa-mr-suites').value);
+    $('#pa-mr-suites-essai').textContent = base.length ? base.length + ' ligne' + (base.length > 1 ? 's' : '') + ' : ' + base.slice(0, 3).map(function (r) { return r.de.join('/') + ' repart en ' + r.vers.slice(0, 4).join(', ') + (r.vers.length > 4 ? '…' : ''); }).join(' · ') :
+      'Base vide : un engin arrivé peut repartir en NRS (1, 2, 3…) ou sous un numéro qui quitte le site (519100…).';
+  }
+  $('#pa-mr-suites').addEventListener('input', essaiSuites);
   function essaiMarche() {
     var r = lireMarche(), lire = function (n) {
       var o = n.charAt(r.orig - 1), d = n.charAt(r.dest - 1);
@@ -1671,6 +1715,7 @@
     $('#pa-plan-tv-arr').checked = !!pv.tvArrivee; $('#pa-plan-tv-dep').checked = !!pv.tvDepart;
     $('#pa-plan-sa-arr').checked = !!pv.saisieArrivee; $('#pa-plan-sa-dep').checked = !!pv.saisieDepart;
     var mr = pv.marche || {};
+    $('#pa-mr-suites').value = Array.isArray(mr.suites) ? suitesEnTexte(mr.suites) : SUITES_DEFAUT; essaiSuites();
     $('#pa-mr-orig').value = mr.orig || 3; $('#pa-mr-dest').value = mr.dest || 4; $('#pa-mr-site').value = mr.site || '9';
     $('#pa-mr-codes').value = Object.keys(mr.codes || { 1: 'FA', 4: 'FS', 6: 'ATL', 9: 'LHTE' }).map(function (k) { return k + '=' + (mr.codes || { 1: 'FA', 4: 'FS', 6: 'ATL', 9: 'LHTE' })[k]; }).join(', ');
     essaiMarche();
@@ -1700,6 +1745,7 @@
     var base = p.correspondancesEF || {};
     $('#pa-base').innerHTML = Object.keys(base).sort().map(function (k) { return ligneBase(k, base[k]); }).join('');
     $('#pa-vers').value = (p.saisie || {}).versObligatoire || 'internes';
+    remplirCouleursOnglets((p.saisie || {}).couleursOnglets);
     remplirTravauxParametres(p);
     var st = p.suiviTrains || {}, corr = st.correspondances || SC.CORRESPONDANCES_SUIVI;
     $('#pa-st-classeur').value = st.classeur || ''; $('#pa-st-app').value = st.app || '';
@@ -1761,7 +1807,7 @@
       base[n] = ef;
     });
     p.correspondancesEF = base;
-    p.saisie = p.saisie || {}; p.saisie.versObligatoire = $('#pa-vers').value;
+    p.saisie = p.saisie || {}; p.saisie.versObligatoire = $('#pa-vers').value; p.saisie.couleursOnglets = lireCouleursOnglets();
     p.mails = p.mails || {};
     p.mails.mode = $('#pa-mode').value; p.mails.signature = $('#pa-signature').value.trim();
     var adresses = function (texte, quoi) {
