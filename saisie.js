@@ -1661,7 +1661,7 @@
     $('#pa-mr-codes').value.split(/[,;]/).forEach(function (x) { var m = /^\s*(\d)\s*=\s*(.+?)\s*$/.exec(x); if (m) codes[m[1]] = m[2].slice(0, 20); });
     var pos = function (v, d) { v = parseInt(v, 10); return v >= 1 && v <= 6 ? v : d; };
     return { orig: pos($('#pa-mr-orig').value, 3), dest: pos($('#pa-mr-dest').value, 4), site: String($('#pa-mr-site').value || '9').replace(/\D/g, '').slice(0, 1) || '9', codes: codes,
-      suites: texteEnSuites($('#pa-mr-suites').value), typeAuto: $('#pa-plan-type-auto').checked };
+      suites: texteEnSuites($('#pa-mr-suites').value), typeAuto: $('#pa-plan-type-auto').checked, longueurs: lireLongueurs() };
   }
   /** Base des engins : « 511911 = NRS1 NRS2 … 519100 » (une ligne par engin ou groupe d'engins, « * » = n'importe quoi). */
   var SUITES_DEFAUT = '511911 = NRS1 NRS2 NRS3 NRS4 NRS5 NRS6 NRS7 NRS8 519100 519110';
@@ -1673,6 +1673,16 @@
       return r.de.length && r.vers.length ? r : null;
     }).filter(Boolean).slice(0, 80);
   }
+  /** Longueur d'un wagon de 60' et de 80' (mètres) : capacité des voies en 80' = capacité en 60' × L60 / L80. */
+  function lireLongueurs() {
+    var n = function (v, d) { v = parseFloat(String(v).replace(',', '.')); return v >= 5 && v <= 60 ? Math.round(v * 10) / 10 : d; };
+    return { l60: n($('#pa-lg-60').value, 20), l80: n($('#pa-lg-80').value, 28) };
+  }
+  function essaiLongueurs() {
+    var l = lireLongueurs();
+    $('#pa-lg-essai').textContent = 'Exemple : une voie de 36 wagons de 60\' tient ' + Math.floor(36 * l.l60 / l.l80 + 1e-9) + ' wagons de 80\' (un 80\' compte ' + (l.l80 / l.l60).toFixed(2).replace('.', ',') + ' fois un 60\').';
+  }
+  ['#pa-lg-60', '#pa-lg-80'].forEach(function (k) { $(k).addEventListener('input', essaiLongueurs); });
   function suitesEnTexte(l) { return (l || []).map(function (r) { return r.de.join(' ') + ' = ' + r.vers.join(' '); }).join('\n'); }
   function essaiSuites() {
     var base = texteEnSuites($('#pa-mr-suites').value);
@@ -1726,6 +1736,7 @@
     var mr = pv.marche || {};
     $('#pa-mr-suites').value = Array.isArray(mr.suites) ? suitesEnTexte(mr.suites) : SUITES_DEFAUT; essaiSuites();
     $('#pa-plan-type-auto').checked = mr.typeAuto !== false;
+    var lgw = mr.longueurs || {}; $('#pa-lg-60').value = lgw.l60 || 20; $('#pa-lg-80').value = lgw.l80 || 28; essaiLongueurs();
     $('#pa-mr-orig').value = mr.orig || 3; $('#pa-mr-dest').value = mr.dest || 4; $('#pa-mr-site').value = mr.site || '9';
     $('#pa-mr-codes').value = Object.keys(mr.codes || { 1: 'FA', 4: 'FS', 6: 'ATL', 9: 'LHTE' }).map(function (k) { return k + '=' + (mr.codes || { 1: 'FA', 4: 'FS', 6: 'ATL', 9: 'LHTE' })[k]; }).join(', ');
     essaiMarche();
