@@ -914,15 +914,18 @@ body[data-mode="simulation"] #fiche{display:none}
       const conf = (racine.LHTE_VOIES_CONF || {})[voie] || {}, impose = Number(conf.type) === 80 ? 80 : Number(conf.type) === 60 ? 60 : 0, hs = Math.max(0, Number(conf.hs) || 0);
       const wagons = presents.reduce((s, t) => s + t.nb, 0) + hs, locos = presents.filter(t => t.loco).length;
       let type = impose || 60, cap = v.capacite_wagons, mixte = false;
-      // longueurs réglées dans la saisie (Paramètres › Plan de voie) : 60' = 20 m, 80' = 28 m par défaut
-      const LG = (racine.LHTE_MARCHE && racine.LHTE_MARCHE.longueurs) || {}, r80 = (Number(LG.l80) || 28) / (Number(LG.l60) || 20);
-      if (impose === 80 && cap) cap = Math.floor(cap / r80 + 1e-9);
+      // capacité en 80' : longueur de la voie ÷ longueur d'un wagon 80' (Paramètres › Plan de voie, 28 m par défaut) ;
+      // capacité en 60' : celle du plan. Mélange : la longueur restante, comptée en wagons de la composition actuelle.
+      const LG = (racine.LHTE_MARCHE && racine.LHTE_MARCHE.longueurs) || {}, l80 = Number(LG.l80) || 28, l60 = Number(LG.l60) || 20;
+      const longueur = cap ? (Number(v.longueur_m) || cap * l60) : 0, lg60 = cap ? longueur / cap : l60;
+      const cap80 = () => Math.floor(longueur / l80 + 1e-9);
+      if (impose === 80 && cap) cap = cap80();
       else if (!impose && cap) {
         const auto = racine.LHTE_TYPE_EF || {}, lg = t => (auto[String(t.ef || "").toUpperCase()] === 80 ? 80 : 60);
         const n80 = presents.reduce((s, t) => s + (lg(t) === 80 ? t.nb : 0), 0), n60 = wagons - n80; // HS : 60 pieds
-        if (n80 && !n60) { type = 80; cap = Math.floor(cap / r80 + 1e-9); }
-        else if (n80 && n60) { // mélange : place restante comptée en wagons de la composition actuelle
-          mixte = true; const unites = n60 + n80 * r80, moyenne = unites / wagons; cap = wagons + Math.floor(Math.max(0, cap - unites) / moyenne + 1e-9); }
+        if (n80 && !n60) { type = 80; cap = cap80(); }
+        else if (n80 && n60) {
+          mixte = true; const pris = n60 * lg60 + n80 * l80, moyenne = pris / wagons; cap = wagons + Math.floor(Math.max(0, longueur - pris) / moyenne + 1e-9); }
       }
       let code;
       if (m.indisponible) code = "indisponible";
@@ -2394,7 +2397,7 @@ body[data-mode="simulation"] #fiche{display:none}
   }
   const SEUL = !!(window.LHTE_PLAN && window.LHTE_PLAN.seul);
   const capType = (v, type) => { const c = R.voies[v].capacite_wagons, LG = (window.LHTE_MARCHE && window.LHTE_MARCHE.longueurs) || {};
-    return c ? (type === 80 ? Math.floor(c * (Number(LG.l60) || 20) / (Number(LG.l80) || 28) + 1e-9) : c) : null; };
+    return c ? (type === 80 ? Math.floor((Number(R.voies[v].longueur_m) || c * (Number(LG.l60) || 20)) / (Number(LG.l80) || 28) + 1e-9) : c) : null; };
   const typeChoisi = () => { const n = Number((document.querySelector('input[name="pe-type"]:checked') || {}).value); return n === 80 ? 80 : n === 60 ? 60 : 0; };
   function majCap() {
     if (!edite) return; const ty = typeChoisi();

@@ -1680,7 +1680,8 @@
   }
   function essaiLongueurs() {
     var l = lireLongueurs();
-    $('#pa-lg-essai').textContent = 'Exemple : une voie de 36 wagons de 60\' tient ' + Math.floor(36 * l.l60 / l.l80 + 1e-9) + ' wagons de 80\' (un 80\' compte ' + (l.l80 / l.l60).toFixed(2).replace('.', ',') + ' fois un 60\').';
+    $('#pa-lg-essai').textContent = 'Wagons de 80\' : longueur de la voie ÷ ' + String(l.l80).replace('.', ',') + ' m. Exemples : VR6 (990 m) → ' + Math.floor(990 / l.l80 + 1e-9) +
+      ' wagons, VF3 (817 m) → ' + Math.floor(817 / l.l80 + 1e-9) + ' wagons. Wagons de 60\' : capacité du plan (VR6 46, VF3 36). La longueur d\'un 60\' sert seulement aux voies sans longueur connue.';
   }
   ['#pa-lg-60', '#pa-lg-80'].forEach(function (k) { $(k).addEventListener('input', essaiLongueurs); });
   function suitesEnTexte(l) { return (l || []).map(function (r) { return r.de.join(' ') + ' = ' + r.vers.join(' '); }).join('\n'); }
