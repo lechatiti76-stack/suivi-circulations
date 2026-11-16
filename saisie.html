@@ -407,8 +407,15 @@
       <div class="section" data-pgroupe="sons"><h4>Écrans TV : affichage et sons</h4>
         <div class="fl-coches">
           <label><input type="checkbox" id="pa-complet"> Tableau complet : toutes les navettes de chaque groupe en grand (pas de colonne réduite ni « terminé »)</label>
-          <label><input type="checkbox" id="pa-vedettes"> Animations en grand (arrivées, départs imminents)</label>
         </div>
+        <h4 style="margin-top:14px">Animations d'une arrivée (ou d'un départ) imminente</h4>
+        <div class="fl-coches anim-coches">
+          <label><input type="checkbox" id="pa-vedettes"> <b>En haut</b> : grand bandeau de la navette (carré à la couleur du groupe)</label>
+          <label><input type="checkbox" id="pa-vedettes-trains"> <b>En bas</b> : bande animée du train de ligne (train qui entre ou qui sort)</label>
+          <label><input type="checkbox" id="pa-anim"> <b>Moitié basse</b> : animation « alerte train » (page <span class="mono">alerte-train.html</span>)</label>
+          <label class="retrait">Adresse de l'animation <input id="pa-anim-url" class="mono" placeholder="alerte-train.html" style="width:260px"></label>
+        </div>
+        <p class="note">Chaque animation se coupe séparément ; les sons et l'annonce vocale restent, même animations coupées.</p>
         <p class="note" style="margin-top:12px">Sons joués par les écrans (mélodies propres à l'application). Sur chaque écran, cliquer une fois sur le symbole du son au démarrage.
           Voix : la liste montre les voix de ce PC ; un écran qui n'a pas la voix choisie prend sa voix la plus naturelle (les voix « Natural » de Microsoft Edge sont les plus fluides).</p>
         <div class="sons-grille">
@@ -430,10 +437,7 @@
         <p class="note">Arrivée imminente : le grand bandeau s'affiche 2 s, se réduit de moitié pendant que l'animation « alerte train » passe dans la moitié basse,
           puis revient en grand jusqu'à l'arrivée. L'animation est la page <span class="mono">alerte-train.html</span> (et son fichier <span class="mono">alerte-train.config.js</span>)
           à déposer dans le dépôt GitHub, à côté de <span class="mono">visuel.html</span> ; sans elle, rien ne change.</p>
-        <div class="fl-coches">
-          <label><input type="checkbox" id="pa-anim"> Animation train aux arrivées imminentes</label>
-          <label>Adresse <input id="pa-anim-url" class="mono" placeholder="alerte-train.html" style="width:260px"></label>
-        </div>
+        <p class="note">Ces animations s'activent ou se coupent dans Paramètres › Sons et voix › « Animations d'une arrivée ».</p>
       </div>
       <div class="section" data-pgroupe="plan"><h4>Plan de voie</h4>
         <p class="note">Occupation des voies en direct : bouton « Plan de voie » de la saisie, et affichage quelques secondes après une arrivée ou un départ.</p>
@@ -471,9 +475,12 @@
         <textarea id="pa-mr-suites" class="mono" style="min-height:120px" placeholder="511911 = NRS1 NRS2 NRS3 NRS4 NRS5 NRS6 NRS7 NRS8 519100 519110"></textarea>
         <p class="note" id="pa-mr-suites-essai"></p>
       </div>
-      <div class="section" data-pgroupe="plan"><h4>Entreprises du plan de voie</h4>
+      <div class="section" data-pgroupe="plan"><h4>Entreprises du plan de voie et type de wagons</h4>
         <p class="note">Entreprises et relations proposées quand vous saisissez les wagons d'une voie dans le plan. Une par ligne :
-          <span class="mono">CODE | Nom affiché | couleur</span> (ex. <span class="mono">WASCOSA | Wascosa | #0ea5e9</span>). Supprimez une ligne pour l'enlever.</p>
+          <span class="mono">CODE | Nom affiché | couleur | 60 ou 80</span> (ex. <span class="mono">WASCOSA | Wascosa | #0ea5e9 | 80</span>). Supprimez une ligne pour l'enlever.
+          Cliquez sur <b>60'</b> / <b>80'</b> d'une entreprise pour changer le type de ses wagons.</p>
+        <label class="fl-coches" style="display:flex;margin:6px 0"><span><input type="checkbox" id="pa-plan-type-auto"> <b>Capacité automatique</b> : chaque voie compte ses wagons en 60 ou 80 pieds selon l'entreprise
+          (une voie de 36 wagons de 60' tient 27 wagons de 80' ; un mélange est calculé au prorata). Une voie réglée à la main sur 60' ou 80' dans le plan garde son réglage.</span></label>
         <div class="pv-ef" id="pa-plan-ef-apercu"></div>
         <textarea id="pa-plan-ef" class="mono" style="min-height:220px"></textarea>
         <div style="display:flex;gap:8px;margin-top:6px"><button type="button" class="bouton petit" id="pa-plan-ef-defaut">Remettre la liste d'origine</button></div>

@@ -256,6 +256,8 @@ test('saisie du contenu d\'une voie, choix de retrait, jours relus, prévisions'
   assert.deepStrictEqual(p.saisies.choix.m1, [{ cle: 'TDF', nb: 9, charge: 'chargés' }]);
   assert.deepStrictEqual(p.previsions.map(function (x) { return x.date + ' ' + x.code + ' ' + x.voie + ' ' + x.wagons; }), ['2026-01-06 LF1 VF1 2', '2026-01-07 LF1 VF1 27']);
   g.appel('PUT', '/api/plan-saisie', JSON.stringify({ voie: 'Vr5', parts: null, type: 60, hs: 0 }));
+  assert.deepStrictEqual(JSON.parse(g.doGet({ action: 'plan', date: '2026-01-07' }).getContent()).voies.Vr5, { type: 60, hs: 0 }); // 60 pieds imposé
+  g.appel('PUT', '/api/plan-saisie', JSON.stringify({ voie: 'Vr5', parts: null, type: 0, hs: 0 }));
   p = JSON.parse(g.doGet({ action: 'plan', date: '2026-01-06' }).getContent());
   assert.deepStrictEqual(p.jours, ['2026-01-06']); assert.deepStrictEqual(p.voies, {});
 });

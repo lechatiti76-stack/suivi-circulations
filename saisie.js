@@ -1635,16 +1635,25 @@
     ['DELTA', 'Delta', '#0EA5E9'], ['FORWARDIS', 'Forwardis', '#EC4899'], ['ARMEE', 'Armée', '#8D9EAF'], ['LHTE', 'LHTE', '#2E9E4F'], ['NRS', 'NRS', '#E07B00'],
     ['NVL', 'Naviland (NVL)', '#7A3FB5'], ['REGIORAIL', 'Regiorail', '#1F9D8F'], ['DB', 'DB', '#D4202A'], ['Captrain', 'Captrain', '#0A8FB8'], ['VFLI', 'VFLI', '#C9A200'],
     ['SNCF', 'SNCF', '#5A6570'], ['WASCOSA', 'Wascosa', '#0891B2']];
-  function efPlanEnTexte(l) { return l.map(function (e) { return e.code + ' | ' + e.nom + ' | ' + e.couleur; }).join('\n'); }
+  // 4e colonne : type de wagons de l'entreprise (60 ou 80 pieds) pour la capacité automatique des voies
+  function efPlanEnTexte(l) { return l.map(function (e) { return e.code + ' | ' + e.nom + ' | ' + e.couleur + ' | ' + (Number(e.wagons) === 80 ? 80 : 60); }).join('\n'); }
   function texteEnEfPlan(t) {
     return String(t || '').split(/\n/).map(function (l) { return l.trim(); }).filter(Boolean).map(function (l) {
       var c = l.split('|').map(function (x) { return x.trim(); });
-      return { code: c[0].replace(/[^A-Za-z0-9 _.()-]/g, '').slice(0, 40), nom: (c[1] || c[0]).slice(0, 40), couleur: /^#[0-9a-f]{3,8}$/i.test(c[2] || '') ? c[2] : '#8a97a3' };
+      return { code: c[0].replace(/[^A-Za-z0-9 _.()-]/g, '').slice(0, 40), nom: (c[1] || c[0]).slice(0, 40), couleur: /^#[0-9a-f]{3,8}$/i.test(c[2] || '') ? c[2] : '#8a97a3', wagons: /80/.test(c[3] || '') ? 80 : 60 };
     }).filter(function (e) { return e.code; });
   }
   function apercuEfPlan() {
-    $('#pa-plan-ef-apercu').innerHTML = texteEnEfPlan($('#pa-plan-ef').value).map(function (e) { return '<span><i style="background:' + esc(e.couleur) + '"></i>' + esc(e.nom) + ' <small class="mono">' + esc(e.code) + '</small></span>'; }).join('');
+    $('#pa-plan-ef-apercu').innerHTML = texteEnEfPlan($('#pa-plan-ef').value).map(function (e, i) {
+      return '<span><i style="background:' + esc(e.couleur) + '"></i>' + esc(e.nom) + ' <small class="mono">' + esc(e.code) + '</small>' +
+        '<button type="button" class="pv-type' + (e.wagons === 80 ? ' p80' : '') + '" data-ef-type="' + i + '" title="Type de wagons de ' + esc(e.nom) + ' : cliquer pour changer">' + e.wagons + '\'</button></span>'; }).join('');
   }
+  // clic sur 60' / 80' d'une entreprise : change son type de wagons
+  $('#pa-plan-ef-apercu').addEventListener('click', function (ev) {
+    var b = ev.target.closest('[data-ef-type]'); if (!b) return;
+    var l = texteEnEfPlan($('#pa-plan-ef').value), e = l[+b.getAttribute('data-ef-type')]; if (!e) return;
+    e.wagons = e.wagons === 80 ? 60 : 80; $('#pa-plan-ef').value = efPlanEnTexte(l); apercuEfPlan();
+  });
   $('#pa-plan-ef').addEventListener('input', apercuEfPlan);
   /** Numéros de marche : réglages lus dans le formulaire, et exemple calculé en direct. */
   function lireMarche() {
@@ -1652,7 +1661,7 @@
     $('#pa-mr-codes').value.split(/[,;]/).forEach(function (x) { var m = /^\s*(\d)\s*=\s*(.+?)\s*$/.exec(x); if (m) codes[m[1]] = m[2].slice(0, 20); });
     var pos = function (v, d) { v = parseInt(v, 10); return v >= 1 && v <= 6 ? v : d; };
     return { orig: pos($('#pa-mr-orig').value, 3), dest: pos($('#pa-mr-dest').value, 4), site: String($('#pa-mr-site').value || '9').replace(/\D/g, '').slice(0, 1) || '9', codes: codes,
-      suites: texteEnSuites($('#pa-mr-suites').value) };
+      suites: texteEnSuites($('#pa-mr-suites').value), typeAuto: $('#pa-plan-type-auto').checked };
   }
   /** Base des engins : « 511911 = NRS1 NRS2 … 519100 » (une ligne par engin ou groupe d'engins, « * » = n'importe quoi). */
   var SUITES_DEFAUT = '511911 = NRS1 NRS2 NRS3 NRS4 NRS5 NRS6 NRS7 NRS8 519100 519110';
@@ -1716,6 +1725,7 @@
     $('#pa-plan-sa-arr').checked = !!pv.saisieArrivee; $('#pa-plan-sa-dep').checked = !!pv.saisieDepart;
     var mr = pv.marche || {};
     $('#pa-mr-suites').value = Array.isArray(mr.suites) ? suitesEnTexte(mr.suites) : SUITES_DEFAUT; essaiSuites();
+    $('#pa-plan-type-auto').checked = mr.typeAuto !== false;
     $('#pa-mr-orig').value = mr.orig || 3; $('#pa-mr-dest').value = mr.dest || 4; $('#pa-mr-site').value = mr.site || '9';
     $('#pa-mr-codes').value = Object.keys(mr.codes || { 1: 'FA', 4: 'FS', 6: 'ATL', 9: 'LHTE' }).map(function (k) { return k + '=' + (mr.codes || { 1: 'FA', 4: 'FS', 6: 'ATL', 9: 'LHTE' })[k]; }).join(', ');
     essaiMarche();
@@ -1738,7 +1748,7 @@
       sel.value = choix[sel.getAttribute('data-son-choix')];
     });
     $('#pa-son-flash').checked = vis.sonFlash !== false; $('#pa-son-travaux').checked = vis.sonTravaux !== false;
-    $('#pa-complet').checked = !!vis.tableauComplet; $('#pa-vedettes').checked = vis.vedettes !== false;
+    $('#pa-complet').checked = !!vis.tableauComplet; $('#pa-vedettes').checked = vis.vedettes !== false; $('#pa-vedettes-trains').checked = vis.vedettesTrains !== false;
     $('#pa-volume').value = vis.volumeSon == null ? 70 : vis.volumeSon; $('#pa-volume-val').textContent = $('#pa-volume').value + ' %';
     var noms = Object.assign({}, SC.NOMS_TRAINS, (p.visuel || {}).nomsTrains || {});
     $('#pa-noms').value = Object.keys(noms).map(function (k) { return k + '=' + noms[k]; }).join(', ');
@@ -1866,7 +1876,7 @@
     p.visuel.sons = {};
     $$('[data-son-choix]').forEach(function (sel) { p.visuel.sons[sel.getAttribute('data-son-choix')] = sel.value; });
     p.visuel.sonFlash = $('#pa-son-flash').checked; p.visuel.sonTravaux = $('#pa-son-travaux').checked;
-    p.visuel.tableauComplet = $('#pa-complet').checked; p.visuel.vedettes = $('#pa-vedettes').checked;
+    p.visuel.tableauComplet = $('#pa-complet').checked; p.visuel.vedettes = $('#pa-vedettes').checked; p.visuel.vedettesTrains = $('#pa-vedettes-trains').checked;
     p.visuel.phrasesFlash = $('#pa-phrases').value.split(/\r?\n/).map(function (x) { return x.trim(); }).filter(Boolean);
     var nomsTrains = {};
     $('#pa-noms').value.split(/[,;]+/).forEach(function (x) {

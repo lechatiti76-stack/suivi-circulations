@@ -478,14 +478,17 @@
   function majVedettes() {
     var d = etat.d, cNav = $('#v-ved-nav'), cTr = $('#v-ved-trains'), grille = $('#v-grille');
     if (!cNav || !cTr) return;
-    if (!d || !VED.actif || d.vedettes === false) {
+    if (!d || !VED.actif || (d.vedettes === false && d.vedettesTrains === false)) {
       // sans animations en grand, les annonces sonores restent
-      if (d) annoncerArrivees(vue === 'trains' ? [] : vedettesNavettes(d), vue === 'navettes' ? [] : vedettesTrains(d));
+      if (d) { var vn0 = vue === 'trains' ? [] : vedettesNavettes(d), vt0 = vue === 'navettes' ? [] : vedettesTrains(d); annoncerArrivees(vn0, vt0); if (VED.actif) { try { animerArrivees(vn0, vt0); } catch (e) { signaler(e); } } }
       cNav.hidden = cTr.hidden = true; grille.classList.remove('ved-nav-on', 'ved-trains-on'); return;
     }
     var vn = vue === 'trains' ? [] : vedettesNavettes(d), vt = vue === 'navettes' ? [] : vedettesTrains(d);
     annoncerArrivees(vn, vt);
     try { animerArrivees(vn, vt); } catch (e) { signaler(e); }
+    // chaque animation se coupe à part (Paramètres › Sons et voix) : en haut les navettes, en bas les trains de ligne
+    if (d.vedettes === false) vn = [];
+    if (d.vedettesTrains === false) vt = [];
     // navettes : 4 carrés au plus côte à côte (les plus proches) ; le reste est compté
     var htmlNav = vn.length ? '<div class="ved-tuiles" style="--n:' + Math.min(4, vn.length) + '">' + vn.slice(0, 4).map(tuileNavette).join('') + '</div>' +
       (vn.length > 4 ? '<div class="ved-plus">+ ' + (vn.length - 4) + ' autre(s)</div>' : '') : '';

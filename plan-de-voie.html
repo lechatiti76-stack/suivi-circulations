@@ -194,7 +194,7 @@ body[data-mode="simulation"] #fiche{display:none}
 #sim-direct{pointer-events:auto}
 #sim-direct button{color:#fff;border-color:rgba(255,255,255,.35);background:transparent;margin-left:6px;padding:3px 9px;font-size:12.5px}
 #plan-svg{flex:1;min-height:0;width:100%;display:block}
-#plan-svg .t-ligne{fill:none;stroke:var(--p-voie);stroke-width:2.8;stroke-linecap:round;stroke-linejoin:round}
+#plan-svg .t-ligne{fill:none;stroke:#2e9e4f;stroke-opacity:.7;stroke-width:4;stroke-linecap:round;stroke-linejoin:round}
 #plan-svg .v-lit{fill:none;stroke:#1a242c;stroke-width:16;stroke-linecap:round;stroke-linejoin:round}
 #plan-svg .v-etat{fill:none;stroke-width:10;stroke-linecap:round;stroke-linejoin:round;transition:stroke .4s}
 #plan-svg .v-rempl{fill:none;stroke-width:10;stroke-linecap:butt;stroke-linejoin:round;opacity:.95}
@@ -203,9 +203,10 @@ body[data-mode="simulation"] #fiche{display:none}
 #plan-svg .pastille rect.fond{fill:#0c1217;stroke-width:1.2;rx:4}
 #plan-svg{--pt:15px}
 #plan-svg text{font-family:var(--sans);fill:var(--p-encre);font-size:var(--pt);dominant-baseline:middle}
-#plan-svg .nom{font-weight:800;font-size:calc(var(--pt) * 1.08)}
-#plan-svg .nb{font-family:var(--mono);font-weight:800;font-size:calc(var(--pt) * 1.4)}
-#plan-svg .cap{font-family:var(--mono);font-size:calc(var(--pt) * .9);fill:var(--p-encre2)}
+#plan-svg .nom{font-weight:800;font-size:calc(var(--pt) * 1.28)}
+#plan-svg .nb{font-family:var(--mono);font-weight:800;font-size:calc(var(--pt) * 1.65)}
+#plan-svg .ef{font-weight:700;font-size:calc(var(--pt) * 1.15)}
+#plan-svg .cap{font-family:var(--mono);font-size:calc(var(--pt) * 1.02);fill:var(--p-encre2)}
 #plan-svg .pv-chip rect{stroke:#0008;stroke-width:1}
 #plan-svg .pv-chip text{font-weight:700;font-size:calc(var(--pt) * .92)}
 #plan-svg .em-chip rect{fill:#052e16;stroke:#22c55e;stroke-width:2}
@@ -367,7 +368,7 @@ body[data-mode="simulation"] #fiche{display:none}
    <div id="plan-edition" hidden role="dialog" aria-labelledby="pe-titre">
     <h3 id="pe-titre"></h3><p class="note" id="pe-note"></p>
     <div id="pe-conf" hidden>
-     <span>Wagons</span><div class="seg" role="radiogroup" aria-label="Type de wagons"><label><input type="radio" name="pe-type" value="60" checked> 60 pieds</label><label><input type="radio" name="pe-type" value="80"> 80 pieds</label></div>
+     <span>Wagons</span><div class="seg" role="radiogroup" aria-label="Type de wagons"><label title="Selon l'entreprise des wagons (Paramètres › Plan de voie)"><input type="radio" name="pe-type" value="0" checked> Auto</label><label><input type="radio" name="pe-type" value="60"> 60 pieds</label><label><input type="radio" name="pe-type" value="80"> 80 pieds</label></div>
      <span>Capacité</span><b id="pe-cap"></b>
      <label for="pe-hs">Wagons HS</label><input type="number" id="pe-hs" min="0" max="80" step="1" value="0" style="width:6em">
      <span>Engins</span><div id="pe-engins"></div>
@@ -909,16 +910,25 @@ body[data-mode="simulation"] #fiche{display:none}
     function etat(voie, trains, marques, mouvement) {
       const v = R.voies[voie], m = (marques && marques[voie]) || {}, presents = trains.filter(t => t.troncon === v.troncon);
       // réglages de la voie (serveur de la saisie) : wagons de 80 pieds = capacité × 60/80 ; wagons HS stationnés
-      const conf = (racine.LHTE_VOIES_CONF || {})[voie] || {}, type = Number(conf.type) === 80 ? 80 : 60, hs = Math.max(0, Number(conf.hs) || 0);
-      const wagons = presents.reduce((s, t) => s + t.nb, 0) + hs, locos = presents.filter(t => t.loco).length,
-        cap = v.capacite_wagons ? (type === 80 ? Math.floor(v.capacite_wagons * 60 / 80) : v.capacite_wagons) : v.capacite_wagons;
+      // type de la voie : 60 ou 80 pieds imposé dans le plan, sinon automatique selon l'EF des wagons (Paramètres › Plan de voie)
+      const conf = (racine.LHTE_VOIES_CONF || {})[voie] || {}, impose = Number(conf.type) === 80 ? 80 : Number(conf.type) === 60 ? 60 : 0, hs = Math.max(0, Number(conf.hs) || 0);
+      const wagons = presents.reduce((s, t) => s + t.nb, 0) + hs, locos = presents.filter(t => t.loco).length;
+      let type = impose || 60, cap = v.capacite_wagons, mixte = false;
+      if (impose === 80 && cap) cap = Math.floor(cap * 60 / 80);
+      else if (!impose && cap) {
+        const auto = racine.LHTE_TYPE_EF || {}, lg = t => (auto[String(t.ef || "").toUpperCase()] === 80 ? 80 : 60);
+        const n80 = presents.reduce((s, t) => s + (lg(t) === 80 ? t.nb : 0), 0), n60 = wagons - n80; // HS : 60 pieds
+        if (n80 && !n60) { type = 80; cap = Math.floor(cap * 60 / 80); }
+        else if (n80 && n60) { // mélange : place restante comptée en wagons de la composition actuelle
+          mixte = true; const unites = n60 + n80 * 80 / 60, moyenne = unites / wagons; cap = wagons + Math.floor(Math.max(0, cap - unites) / moyenne + 1e-9); }
+      }
       let code;
       if (m.indisponible) code = "indisponible";
       else if (mouvement && (mouvement.origine === v.troncon || mouvement.destination === v.troncon)) code = "manoeuvre";
       else if (!presents.length && !hs) code = m.reservee ? "reservee" : "libre";
       else code = cap ? (wagons >= cap ? "occupee" : "partielle") : "occupee";
       return { code, libelle: ETATS[code].libelle, couleur: ETATS[code].couleur, wagons, locos, capacite: cap, reste: cap ? Math.max(0, cap - wagons) : null,
-        taux: cap ? Math.round(100 * wagons / cap) : null, hs, type, trains: presents.map(t => t.id), reservee: !!m.reservee, indisponible: !!m.indisponible };
+        taux: cap ? Math.round(100 * wagons / cap) : null, hs, type, mixte, auto: !impose, trains: presents.map(t => t.id), reservee: !!m.reservee, indisponible: !!m.indisponible };
     }
     function bilan(trains, marques, mouvement) {
       const b = { wagons: 0, voies: 0 }; for (const k in ETATS) b[k] = 0;
@@ -2282,11 +2292,11 @@ body[data-mode="simulation"] #fiche{display:none}
       }
       // pastille : nom, 80', wagons / capacité (en gros), entreprises, HS
       const morceaux = [`<tspan class="nom">${echap(v)}</tspan>`];
-      if (e.type === 80) morceaux.push(`<tspan dx="5" class="cap">80'</tspan>`);
+      if (e.type === 80 || e.mixte) morceaux.push(`<tspan dx="5" class="cap">${e.mixte ? "60'/80'" : "80'"}</tspan>`);
       if (!e.wagons) morceaux.push(`<tspan dx="7" fill="${coul}" font-weight="600">${code === "libre" ? "libre" : LIBELLES[code].toLowerCase()}</tspan>`);
       else {
         morceaux.push(`<tspan dx="7" class="nb">${e.wagons}</tspan>${e.capacite ? `<tspan class="cap">/${e.capacite}</tspan>` : `<tspan class="cap"> wg</tspan>`}`);
-        const vus = c.parts.slice(0, 3); vus.forEach(([k, n]) => morceaux.push(`<tspan dx="8" fill="${couleurQui(k)}">●</tspan><tspan dx="3" font-weight="600">${echap(nomQui(k))}${c.parts.length > 1 ? " " + n : ""}</tspan>`));
+        const vus = c.parts.slice(0, 3); vus.forEach(([k, n]) => morceaux.push(`<tspan dx="8" fill="${couleurQui(k)}">●</tspan><tspan dx="3" class="ef">${echap(nomQui(k))}${c.parts.length > 1 ? " " + n : ""}</tspan>`));
         if (c.parts.length > 3) morceaux.push(`<tspan dx="5" class="cap">+${c.parts.length - 3}</tspan>`);
         if (e.hs) morceaux.push(`<tspan dx="8" fill="#e5e7eb" font-weight="800">HS ${e.hs}</tspan>`);
       }
@@ -2294,6 +2304,7 @@ body[data-mode="simulation"] #fiche{display:none}
       f.texte.innerHTML = morceaux.join("");
       f.texte.setAttribute("x", 0); const l = largeur(f.texte, f.texte.textContent);
       f.texte.setAttribute("x", (-l / 2).toFixed(1)); f.fondP.setAttribute("x", (-l / 2 - 8).toFixed(1)); f.fondP.setAttribute("width", (l + 16).toFixed(1));
+      const hP = Math.max(26, TAILLE() * (e.wagons ? 1.95 : 1.6)); f.fondP.setAttribute("height", hP.toFixed(1)); f.fondP.setAttribute("y", (-hP / 2).toFixed(1));
       // avec une affectation ou un engin : étiquette calée au début de la partie droite de la voie, l'engin à l'autre bout
       const g0 = bout(f.pts, cote === "H" && c.engins ? "P" : "H"), cale = (prevs[v] || c.engins) && !(cote === "H" && c.engins);
       const px = cale ? g0.x + 14 + l / 2 : cote === "H" && c.engins && (prevs[v]) ? g0.x - 14 - l / 2 : f.m.x, py = cale ? g0.y : f.m.y;
@@ -2381,7 +2392,12 @@ body[data-mode="simulation"] #fiche{display:none}
   }
   const SEUL = !!(window.LHTE_PLAN && window.LHTE_PLAN.seul);
   const capType = (v, type) => { const c = R.voies[v].capacite_wagons; return c ? (type === 80 ? Math.floor(c * 60 / 80) : c) : null; };
-  function majCap() { if (!edite) return; const ty = Number((document.querySelector('input[name="pe-type"]:checked') || {}).value) || 60, c = capType(edite, ty); $("pe-cap").textContent = c ? `${c} wagons de ${ty} pieds` : "non connue"; }
+  const typeChoisi = () => { const n = Number((document.querySelector('input[name="pe-type"]:checked') || {}).value); return n === 80 ? 80 : n === 60 ? 60 : 0; };
+  function majCap() {
+    if (!edite) return; const ty = typeChoisi();
+    if (!ty) { const e = Tn.etatVoie(edite); $("pe-cap").textContent = e.capacite ? `${e.capacite} wagons (automatique : ${e.mixte ? "60 et 80 pieds" : e.type + " pieds"} selon l'entreprise)` : "non connue"; return; }
+    const c = capType(edite, ty); $("pe-cap").textContent = c ? `${c} wagons de ${ty} pieds` : "non connue";
+  }
   document.querySelectorAll('input[name="pe-type"]').forEach(r => r.addEventListener("change", majCap));
   if (SEUL) { // textes de la vue seule : les wagons viennent de la saisie
     const lg = [...document.querySelectorAll("#plan-cote p")].find(p => /Cliquez sur une voie/.test(p.textContent)); if (lg) lg.textContent = "Une voie qui change d'état clignote. Cliquez sur une voie pour saisir ses wagons (entreprise, 60 ou 80 pieds, HS).";
@@ -2391,7 +2407,7 @@ body[data-mode="simulation"] #fiche{display:none}
     edite = v; const e = Tn.etatVoie(v), t = R.voies[v].troncon, q = {};
     $("pe-conf").hidden = !SEUL; pDonnees.sale = false;
     pDonnees.engins = compo(v).ids.slice(); pDonnees.enginsSale = false; rendreEngins(); $("pe-calcul").hidden = !(SEUL && pDonnees.contenus[v]);
-    if (SEUL) { const cf = (window.LHTE_VOIES_CONF || {})[v] || {}; document.querySelectorAll('input[name="pe-type"]').forEach(r => { r.checked = Number(r.value) === (Number(cf.type) === 80 ? 80 : 60); }); $("pe-hs").value = cf.hs || 0; }
+    if (SEUL) { const cf = (window.LHTE_VOIES_CONF || {})[v] || {}; const tc = Number(cf.type) === 80 ? 80 : Number(cf.type) === 60 ? 60 : 0; document.querySelectorAll('input[name="pe-type"]').forEach(r => { r.checked = Number(r.value) === tc; }); $("pe-hs").value = cf.hs || 0; }
     Tn.liste().forEach(x => { if (x.troncon === t && x.nb) { const k = (x.ef || "") + "|" + x.charge; q[k] = (q[k] || 0) + x.nb; } });
     $("pe-titre").textContent = `Voie ${v}`; $("pe-note").textContent = `${LIBELLES[e.code]} · ${e.wagons} wagon${pl(e.wagons)}${e.capacite ? ` sur ${e.capacite}` : ""}. Saisissez ce qui s'y trouve réellement.`;
     $("pe-lignes").innerHTML = ""; $("pe-msg").textContent = ""; if (SEUL) { $("pe-note").textContent = `${LIBELLES[e.code]} · ${e.wagons} wagon${pl(e.wagons)}${e.capacite ? ` sur ${e.capacite}` : ""}${e.hs ? ` (dont ${e.hs} HS)` : ""}. Indiquez ce qui s'y trouve réellement (entreprise, nombre) : les mouvements de la saisie partiront de là.${pDonnees.contenus[v] ? ` Contenu saisi le ${pDonnees.contenus[v].t.slice(8, 10)}/${pDonnees.contenus[v].t.slice(5, 7)} à ${pDonnees.contenus[v].t.slice(11, 16)}.` : ""}`; majCap(); }
@@ -2443,7 +2459,11 @@ body[data-mode="simulation"] #fiche{display:none}
   function donnees(o) {
     Object.assign(pDonnees, o);
     if (Array.isArray(o.entreprises) && o.entreprises.length) { // liste de la saisie : elle remplace la liste d'origine
-      EFS = {}; o.entreprises.forEach(e => { if (e && e.code) EFS[String(e.code).toUpperCase()] = { nom: e.nom || e.code, couleur: e.couleur || "#8a97a3" }; });
+      EFS = {}; o.entreprises.forEach(e => { if (e && e.code) EFS[String(e.code).toUpperCase()] = { nom: e.nom || e.code, couleur: e.couleur || "#8a97a3", wagons: Number(e.wagons) === 80 ? 80 : 60 }; });
+      // type de wagons par entreprise (code et nom) pour le calcul automatique de la capacité ; désactivable dans la saisie
+      const auto = !(window.LHTE_MARCHE && window.LHTE_MARCHE.typeAuto === false), ty = {};
+      if (auto) o.entreprises.forEach(e => { if (e && e.code && Number(e.wagons) === 80) { ty[String(e.code).toUpperCase()] = 80; ty[String(e.nom || "").toUpperCase()] = 80; } });
+      const avantTy = JSON.stringify(window.LHTE_TYPE_EF || {}); window.LHTE_TYPE_EF = ty; if (avantTy !== JSON.stringify(ty) && Tn.changer) Tn.changer();
       CHOIX = [["", "Sans entreprise"]].concat(o.entreprises.filter(e => e && e.code).map(e => [e.code, e.nom || e.code]));
     }
     rendreVerif(); rendrePrev(); dessinerEtats(false);
@@ -2500,13 +2520,13 @@ body[data-mode="simulation"] #fiche{display:none}
   $("pe-ok").addEventListener("click", () => {
     if (!edite) return;
     if (SEUL) {
-      const v = edite, ty = Number((document.querySelector('input[name="pe-type"]:checked') || {}).value) === 80 ? 80 : 60, hs = Math.max(0, Math.min(80, parseInt($("pe-hs").value, 10) || 0));
+      const v = edite, ty = typeChoisi(), hs = Math.max(0, Math.min(80, parseInt($("pe-hs").value, 10) || 0));
       const corps = { voie: v, type: ty, hs };
       if (pDonnees.enginsSale && !pDonnees.sale) { pDonnees.sale = true; } // engin effacé : la voie est ressaisie telle quelle, sans lui
       if (pDonnees.sale) {
         const parts = [...$("pe-lignes").querySelectorAll(".pe-ligne")].map(d => { const [s1, n, s2] = d.querySelectorAll("select,input"); return { cle: s1.value, nb: Math.max(0, Math.min(120, parseInt(n.value, 10) || 0)), charge: s2.value }; }).filter(p => p.nb > 0);
-        const tot = parts.reduce((k, p) => k + p.nb, 0) + hs, cap = capType(v, ty);
-        if (cap && tot > cap) { $("pe-msg").textContent = `${tot} wagons (HS compris) dépassent la capacité de ${v} : ${cap} wagons de ${ty} pieds.`; return; }
+        const tot = parts.reduce((k, p) => k + p.nb, 0) + hs, cap = capType(v, ty || 60);
+        if (cap && tot > cap) { $("pe-msg").textContent = `${tot} wagons (HS compris) dépassent la capacité de ${v} : ${cap} wagons de ${ty || 60} pieds.`; return; }
         corps.parts = parts; corps.t = isoLocal(); if (pDonnees.enginsSale) corps.engins = pDonnees.engins.slice();
       }
       $("pe-msg").textContent = "Enregistrement…"; $("pe-ok").disabled = true;

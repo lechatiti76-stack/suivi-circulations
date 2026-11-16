@@ -419,3 +419,8 @@ iframe.apercu { width: 100%; height: 300px; border: 1px solid var(--trait); bord
 /* côté du mouvement */
 .cote-tag { display: inline-block; font-size: 10.5px; font-weight: 700; letter-spacing: .04em; padding: 0 5px; border-radius: 4px; margin-left: 4px; background: #e0e7ff; color: #3730a3; vertical-align: 1px; }
 .cote-tag.h { background: #dcfce7; color: #166534; }
+
+/* type de wagons par entreprise (Paramètres › Plan de voie) */
+.pv-type { margin-left: 4px; border: 1px solid var(--trait); background: var(--surface-2); border-radius: 999px; font: 600 11px var(--f-mono); padding: 1px 6px; cursor: pointer; color: var(--encre-2); }
+.pv-type.p80 { background: #7C3AED; border-color: #7C3AED; color: #fff; }
+.anim-coches b { font-weight: 700; }

@@ -15,7 +15,7 @@
  */
 
 const CLE = 'CHANGER-CE-MOT-DE-PASSE';
-const VERSION = '2.13.0';
+const VERSION = '2.14.0';
 const FUSEAU = 'Europe/Paris';
 const NOM_DOSSIER = 'Suivi des circulations - données';
 
@@ -489,9 +489,10 @@ function ecrirePlanSaisie_(corps) {
       if (Array.isArray(o.engins)) s.contenus[v].engins = enginsPlan_(o.engins); // engins gardés sur la voie (les autres sont effacés)
     }
     if (o.type !== undefined || o.hs !== undefined) {
-      const avant = voies[v] || {}, type = Number(o.type !== undefined ? o.type : avant.type) === 80 ? 80 : 60;
+      // type : 0 = automatique (selon l'EF des wagons), 60 ou 80 = imposé pour la voie
+      const avant = voies[v] || {}, t0 = Number(o.type !== undefined ? o.type : avant.type), type = t0 === 80 ? 80 : t0 === 60 ? 60 : 0;
       const hs = Math.max(0, Math.min(80, Math.floor(Number(o.hs !== undefined ? o.hs : avant.hs) || 0)));
-      if (type !== 60 || hs) voies[v] = { type: type, hs: hs }; else delete voies[v];
+      if (type || hs) voies[v] = type ? { type: type, hs: hs } : { hs: hs }; else delete voies[v];
       ecrireTexte_('plan-voies.json', JSON.stringify(voies, null, 2));
     }
   }
