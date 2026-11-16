@@ -424,3 +424,9 @@ iframe.apercu { width: 100%; height: 300px; border: 1px solid var(--trait); bord
 .pv-type { margin-left: 4px; border: 1px solid var(--trait); background: var(--surface-2); border-radius: 999px; font: 600 11px var(--f-mono); padding: 1px 6px; cursor: pointer; color: var(--encre-2); }
 .pv-type.p80 { background: #7C3AED; border-color: #7C3AED; color: #fff; }
 .anim-coches b { font-weight: 700; }
+
+/* longueur des voies (Paramètres › Plan de voie) */
+.lgv-tableau { max-height: 340px; }
+.lgv-tableau input { width: 90px; text-align: right; }
+.lgv-tableau td[data-c60], .lgv-tableau td[data-c80] { text-align: center; font-weight: 600; color: var(--encre-3); }
+.lgv-tableau tr.lg-ok td[data-c60], .lgv-tableau tr.lg-ok td[data-c80] { color: var(--accent); font-weight: 800; }

@@ -1661,7 +1661,7 @@
     $('#pa-mr-codes').value.split(/[,;]/).forEach(function (x) { var m = /^\s*(\d)\s*=\s*(.+?)\s*$/.exec(x); if (m) codes[m[1]] = m[2].slice(0, 20); });
     var pos = function (v, d) { v = parseInt(v, 10); return v >= 1 && v <= 6 ? v : d; };
     return { orig: pos($('#pa-mr-orig').value, 3), dest: pos($('#pa-mr-dest').value, 4), site: String($('#pa-mr-site').value || '9').replace(/\D/g, '').slice(0, 1) || '9', codes: codes,
-      suites: texteEnSuites($('#pa-mr-suites').value), typeAuto: $('#pa-plan-type-auto').checked, longueurs: lireLongueurs() };
+      suites: texteEnSuites($('#pa-mr-suites').value), typeAuto: $('#pa-plan-type-auto').checked, longueurs: lireLongueurs(), longueursVoies: lireLongueursVoies() };
   }
   /** Base des engins : « 511911 = NRS1 NRS2 … 519100 » (une ligne par engin ou groupe d'engins, « * » = n'importe quoi). */
   var SUITES_DEFAUT = '511911 = NRS1 NRS2 NRS3 NRS4 NRS5 NRS6 NRS7 NRS8 519100 519110';
@@ -1678,10 +1678,32 @@
     var n = function (v, d) { v = parseFloat(String(v).replace(',', '.')); return v >= 5 && v <= 60 ? Math.round(v * 10) / 10 : d; };
     return { l60: n($('#pa-lg-60').value, 20), l80: n($('#pa-lg-80').value, 28) };
   }
-  function essaiLongueurs() {
+  // tableau des voies : longueur utile saisie (m) → capacités en wagons de 60' et de 80' ; vide = capacité du plan
+  var VOIES_PLAN = [["Vf1",881,36],["Vf2",817,36],["Vf3",817,36],["Vf4",853,36],["Vf5",853,36],["Vf6",817,36],["Vf7",817,36],["Vf8",881,36],["Vr5",922,42],["Vr6",990,46],["Vr7",990,46],["Vr8",918,42],["Vr9",917,42],["Vr10",930,43],["Vr11",906,41],["Vr12",880,40],["Vext1",1170,36],["Vext2",1470,36],["Vfl1",438,19],["Vfl2",438,19],["Vfl3",435,19],["Vfl4",528,24],["Cv5003",750,35],["Fosse1",null,null],["Fosse2",null,null],["Garage",null,null],["Hangar",null,null],["Tiroir",null,null]];
+  function remplirLongueursVoies(lv) {
+    $('#pa-lgv').innerHTML = VOIES_PLAN.map(function (v) {
+      return '<tr data-voie="' + v[0] + '"><td><b>' + v[0].toUpperCase() + '</b></td><td><input class="mono" inputmode="numeric" data-lgv="' + v[0] + '" value="' + (lv[v[0]] || '') + '" placeholder="' + (v[1] || '') + '"></td>' +
+        '<td class="mono" data-c60></td><td class="mono" data-c80></td><td class="note">' + (v[2] ? 'plan : ' + v[2] + ' wg' + (v[1] ? ' · ' + v[1] + ' m' : '') : 'longueur non indiquée sur le plan') + '</td></tr>'; }).join('');
+    calculerLongueursVoies();
+  }
+  function lireLongueursVoies() {
+    var o = {}; $$('#pa-lgv [data-lgv]').forEach(function (i) { var n = parseInt(i.value, 10); if (n >= 20 && n <= 5000) o[i.getAttribute('data-lgv')] = n; }); return o;
+  }
+  function calculerLongueursVoies() {
     var l = lireLongueurs();
-    $('#pa-lg-essai').textContent = 'Wagons de 80\' : longueur de la voie ÷ ' + String(l.l80).replace('.', ',') + ' m. Exemples : VR6 (990 m) → ' + Math.floor(990 / l.l80 + 1e-9) +
-      ' wagons, VF3 (817 m) → ' + Math.floor(817 / l.l80 + 1e-9) + ' wagons. Wagons de 60\' : capacité du plan (VR6 46, VF3 36). La longueur d\'un 60\' sert seulement aux voies sans longueur connue.';
+    VOIES_PLAN.forEach(function (v) {
+      var tr = $('#pa-lgv tr[data-voie="' + v[0] + '"]'); if (!tr) return;
+      var n = parseInt(tr.querySelector('[data-lgv]').value, 10), lg = n >= 20 ? n : 0;
+      var c60 = lg ? Math.floor(lg / l.l60 + 1e-9) : v[2], c80 = lg ? Math.floor(lg / l.l80 + 1e-9) : (v[2] ? Math.floor((v[1] || v[2] * l.l60) / l.l80 + 1e-9) : null);
+      tr.querySelector('[data-c60]').textContent = c60 == null ? '—' : c60; tr.querySelector('[data-c80]').textContent = c80 == null ? '—' : c80;
+      tr.classList.toggle('lg-ok', !!lg);
+    });
+  }
+  $('#pa-lgv').addEventListener('input', calculerLongueursVoies);
+  function essaiLongueurs() {
+    calculerLongueursVoies();
+    var l = lireLongueurs();
+    $('#pa-lg-essai').textContent = 'Exemple : une voie de 990 m tient ' + Math.floor(990 / l.l60 + 1e-9) + ' wagons de 60\' et ' + Math.floor(990 / l.l80 + 1e-9) + ' wagons de 80\'.';
   }
   ['#pa-lg-60', '#pa-lg-80'].forEach(function (k) { $(k).addEventListener('input', essaiLongueurs); });
   function suitesEnTexte(l) { return (l || []).map(function (r) { return r.de.join(' ') + ' = ' + r.vers.join(' '); }).join('\n'); }
@@ -1737,7 +1759,7 @@
     var mr = pv.marche || {};
     $('#pa-mr-suites').value = Array.isArray(mr.suites) ? suitesEnTexte(mr.suites) : SUITES_DEFAUT; essaiSuites();
     $('#pa-plan-type-auto').checked = mr.typeAuto !== false;
-    var lgw = mr.longueurs || {}; $('#pa-lg-60').value = lgw.l60 || 20; $('#pa-lg-80').value = lgw.l80 || 28; essaiLongueurs();
+    var lgw = mr.longueurs || {}; $('#pa-lg-60').value = lgw.l60 || 20; $('#pa-lg-80').value = lgw.l80 || 28; remplirLongueursVoies(mr.longueursVoies || {}); essaiLongueurs();
     $('#pa-mr-orig').value = mr.orig || 3; $('#pa-mr-dest').value = mr.dest || 4; $('#pa-mr-site').value = mr.site || '9';
     $('#pa-mr-codes').value = Object.keys(mr.codes || { 1: 'FA', 4: 'FS', 6: 'ATL', 9: 'LHTE' }).map(function (k) { return k + '=' + (mr.codes || { 1: 'FA', 4: 'FS', 6: 'ATL', 9: 'LHTE' })[k]; }).join(', ');
     essaiMarche();

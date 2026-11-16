@@ -917,7 +917,10 @@ body[data-mode="simulation"] #fiche{display:none}
       // capacité en 80' : longueur de la voie ÷ longueur d'un wagon 80' (Paramètres › Plan de voie, 28 m par défaut) ;
       // capacité en 60' : celle du plan. Mélange : la longueur restante, comptée en wagons de la composition actuelle.
       const LG = (racine.LHTE_MARCHE && racine.LHTE_MARCHE.longueurs) || {}, l80 = Number(LG.l80) || 28, l60 = Number(LG.l60) || 20;
-      const longueur = cap ? (Number(v.longueur_m) || cap * l60) : 0, lg60 = cap ? longueur / cap : l60;
+      // longueur saisie dans le tableau des voies (Paramètres › Plan de voie) : capacités 60' et 80' = longueur ÷ longueur d'un wagon
+      const lv = Number(((racine.LHTE_MARCHE && racine.LHTE_MARCHE.longueursVoies) || {})[voie]) || 0;
+      if (lv) cap = Math.floor(lv / l60 + 1e-9);
+      const longueur = cap ? (lv || Number(v.longueur_m) || cap * l60) : 0, lg60 = lv ? l60 : cap ? longueur / cap : l60;
       const cap80 = () => Math.floor(longueur / l80 + 1e-9);
       if (impose === 80 && cap) cap = cap80();
       else if (!impose && cap) {
@@ -2396,8 +2399,10 @@ body[data-mode="simulation"] #fiche{display:none}
     d.querySelector("button").addEventListener("click", () => d.remove()); $("pe-lignes").appendChild(d);
   }
   const SEUL = !!(window.LHTE_PLAN && window.LHTE_PLAN.seul);
-  const capType = (v, type) => { const c = R.voies[v].capacite_wagons, LG = (window.LHTE_MARCHE && window.LHTE_MARCHE.longueurs) || {};
-    return c ? (type === 80 ? Math.floor((Number(R.voies[v].longueur_m) || c * (Number(LG.l60) || 20)) / (Number(LG.l80) || 28) + 1e-9) : c) : null; };
+  const capType = (v, type) => {
+    const M = window.LHTE_MARCHE || {}, LG = M.longueurs || {}, l60 = Number(LG.l60) || 20, l80 = Number(LG.l80) || 28, lv = Number((M.longueursVoies || {})[v]) || 0;
+    const c = lv ? Math.floor(lv / l60 + 1e-9) : R.voies[v].capacite_wagons; if (!c) return null;
+    return type === 80 ? Math.floor((lv || Number(R.voies[v].longueur_m) || c * l60) / l80 + 1e-9) : c; };
   const typeChoisi = () => { const n = Number((document.querySelector('input[name="pe-type"]:checked') || {}).value); return n === 80 ? 80 : n === 60 ? 60 : 0; };
   function majCap() {
     if (!edite) return; const ty = typeChoisi();
