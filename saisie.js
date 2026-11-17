@@ -1487,22 +1487,11 @@
     window.RecapPdf.generer({ journee: app.journee, planning: app.planning, params: app.params, SC: SC })
       .catch(function (e) { toast('PDF non créé : ' + e.message, 'crit'); });
   });
+  // statistiques : tableau de bord (stats-saisie.js), recalculé à l'ouverture et toutes les 30 s tant qu'il est ouvert
+  function rendreStats() { if (app.journee && window.StatsSaisie) window.StatsSaisie.rendre($('#st-corps'), { journee: app.journee, planning: app.planning, params: app.params, SC: SC }); }
   $('#b-stats').addEventListener('click', function () {
-    var s = SC.statistiques(app.journee, app.planning, app.params), cp = (app.params.exploitation || {}).coupurePoste || '13:30';
-    var l = function (lib, o) {
-      var m = o.matin.hlp + o.matin.charge, a = o.apresMidi.hlp + o.apresMidi.charge;
-      return '<tr><td>' + lib + '</td><td>' + o.matin.hlp + '</td><td>' + o.matin.charge + '</td><td><b>' + m + '</b></td><td>' + o.apresMidi.hlp + '</td><td>' + o.apresMidi.charge + '</td><td><b>' + a + '</b></td>' +
-        '<td>' + (o.matin.hlp + o.apresMidi.hlp) + '</td><td>' + (o.matin.charge + o.apresMidi.charge) + '</td><td><b>' + (m + a) + '</b></td></tr>';
-    };
-    // LHTE (locom, loco), locosup et manœuvres NRS : HLP ou chargé, matin ou après-midi, puis la journée
-    $('#st-corps').innerHTML = '<div class="section"><h4>Mouvements de locomotive (coupure ' + esc(cp) + ')</h4><div class="tableau"><table class="stats"><thead><tr><th></th><th>Matin HLP</th><th>Matin chargé</th><th>Matin total</th><th>Après-midi HLP</th><th>Après-midi chargé</th><th>Après-midi total</th><th>Jour HLP</th><th>Jour chargé</th><th>Jour total</th></tr></thead><tbody>' +
-      l('LHTE (locom, loco)', s.locom) + l('Locosup', s.locosup) + l('NRS (nrs1, nrs2…)', s.nrs) + '</tbody></table></div></div>' +
-      '<div class="section"><h4>Journée</h4><div class="tableau"><table class="stats"><tbody>' +
-      [['Mouvements saisis', s.mouvements], ['Trains numérotés', s.trainsNumerotes], ['Manœuvres NRS', s.manoeuvresNrs], ['Mouvements HLP', s.hlp],
-        ['Circulations prévues', s.circulationsPrevues], ['Réalisées', s.realisees], ['Supprimées', s.supprimees], ['Déjà là', s.dejaLa],
-        ['Écart moyen des navettes (min)', s.retardMoyenNavettes == null ? '—' : s.retardMoyenNavettes], ['Écart maximal des navettes (min)', s.retardMaxNavettes == null ? '—' : s.retardMaxNavettes]]
-        .map(function (r) { return '<tr><td>' + r[0] + '</td><td><b>' + r[1] + '</b></td></tr>'; }).join('') + '</tbody></table></div></div>';
-    ouvrir('#d-stats');
+    rendreStats(); ouvrir('#d-stats');
+    clearInterval(app.statsMaj); app.statsMaj = setInterval(function () { if ($('#d-stats').open) rendreStats(); else clearInterval(app.statsMaj); }, 30000);
   });
 
   // Planning

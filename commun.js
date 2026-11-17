@@ -588,12 +588,95 @@
     return String(modele || '').replace(/\{(\w+)\}/g, function (_, k) { return v[k] == null ? '' : (html ? esc(v[k]) : String(v[k])); });
   }
   var DEROULE = [
-    ['conducteur', 'Arrivée du conducteur sur le terminal à'],
-    ['miseEnTete', 'Mise en tête à'],
-    ['bonDepart', 'Annonce « Bon au départ » à'],
-    ['retourRegulateur', 'Retour du régulateur à'],
-    ['ouvertureSignal', 'Ouverture du signal à']
+    ['conducteur', 'Arrivée du conducteur sur le terminal à', 'Arrivée du conducteur'],
+    ['miseEnTete', 'Mise en tête à', 'Mise en tête'],
+    ['bonDepart', 'Annonce « Bon au départ » à', 'Bon au départ'],
+    ['retourRegulateur', 'Retour du régulateur à', 'Retour du régulateur'],
+    ['ouvertureSignal', 'Ouverture du signal à', 'Ouverture du signal']
   ];
+  // Mise en page des mails : tableaux et styles en ligne (seule mise en forme respectée par Outlook), fond clair,
+  // l'essentiel en haut (heure réelle, écart, voie, wagons). Départ d'un train de ligne : même présentation que le
+  // message du Suivi trains (séquence opérationnelle heure par heure), sans légende.
+  var MF = "font-family:'Segoe UI',Calibri,Arial,Helvetica,sans-serif;", M_ENCRE = '#0f2a5f', M_GRIS = '#5b6577', M_TRAIT = '#d7dce6', M_BLEU = '#1d4ed8';
+  function ecartMail(reel, theo) {
+    if (!reel || !theo) return null;
+    var e = minutesEntre(reel, theo);
+    if (e === 0) return { e: 0, txt: "à l'heure", court: "À l'heure", fg: '#334155', bg: '#e2e8f0', heure: '#15803d' };
+    if (e < 0) return { e: e, txt: 'en avance de ' + (-e) + ' min', court: '−' + (-e) + ' min', fg: '#ffffff', bg: '#15803d', heure: '#15803d' };
+    return { e: e, txt: 'en retard de ' + e + ' min', court: '+' + e + ' min', fg: '#ffffff', bg: '#dc2626', heure: '#dc2626' };
+  }
+  function pastilleMail(x, taille) {
+    return x ? '<span style="display:inline-block;padding:4px 10px;border-radius:6px;background:' + x.bg + ';color:' + x.fg + ';' + MF + 'font-size:' + (taille || 13) + 'px;font-weight:700;white-space:nowrap;">' + esc(x.court) + '</span>' : '';
+  }
+  function caseMail(titre, valeur, sous, couleur, bord) {
+    return '<td valign="top" style="padding:12px 14px;' + (bord ? 'border-left:1px solid ' + M_TRAIT + ';' : '') + '">' +
+      '<div style="' + MF + 'font-size:11px;font-weight:700;letter-spacing:.06em;color:' + M_GRIS + ';">' + titre + '</div>' +
+      '<div style="' + MF + 'font-size:22px;font-weight:800;color:' + (couleur || M_ENCRE) + ';margin-top:2px;white-space:nowrap;">' + valeur + '</div>' +
+      (sous ? '<div style="' + MF + 'font-size:12px;color:' + M_GRIS + ';margin-top:2px;">' + sous + '</div>' : '') + '</td>';
+  }
+  function cadreMail(o) {
+    return '<table role="presentation" width="640" cellpadding="0" cellspacing="0" border="0" style="width:640px;max-width:100%;border:1px solid ' + M_TRAIT + ';border-radius:12px;border-collapse:separate;background:#ffffff;' + MF + '">' +
+      '<tr><td style="padding:12px 18px;background:' + o.fond + ';border-radius:12px 12px 0 0;">' +
+        '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>' +
+        '<td style="' + MF + 'font-size:12px;font-weight:800;letter-spacing:.06em;color:#ffffff;">' + o.bandeau + '</td>' +
+        '<td align="right" style="' + MF + 'font-size:12px;color:#ffffff;opacity:.9;white-space:nowrap;">' + esc(o.date) + '</td></tr></table></td></tr>' +
+      '<tr><td style="padding:16px 18px 8px;' + MF + 'font-size:14px;line-height:1.6;color:#1f2937;">Bonjour,<br>' + o.phrase + '</td></tr>' +
+      '<tr><td style="padding:8px 18px 14px;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border:1px solid ' + M_TRAIT + ';border-radius:10px;border-collapse:separate;"><tr>' + o.cases + '</tr></table></td></tr>' +
+      (o.suite || '') +
+      '<tr><td style="padding:4px 18px 16px;' + MF + 'font-size:13px;line-height:1.6;color:#1f2937;">Cordialement,</td></tr>' +
+      '<tr><td style="padding:12px 18px;background:#f6f8fc;border-top:1px solid ' + M_TRAIT + ';border-radius:0 0 12px 12px;">' +
+        '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>' +
+        '<td style="' + MF + 'font-size:12px;color:' + M_GRIS + ';"><strong style="color:' + M_BLEU + ';letter-spacing:.04em;">' + esc(o.site) + ' · Régulation terminal</strong><br>Message automatique : merci de ne pas y répondre directement.</td>' +
+        '</tr></table></td></tr></table>';
+  }
+  /** Corps HTML d'un mail : départ navette, arrivée ou départ d'un train de ligne. */
+  function corpsMail(type, x) {
+    var e = ecartMail(x.reel, x.theo), h = hm(x.reel), prevu = x.theo ? hm(x.theo) : '';
+    var heureHTML = '<strong style="color:' + (e ? e.heure : M_ENCRE) + ';">' + esc(h.replace(':', 'h')) + '</strong>';
+    var ecartTxt = e ? (e.e === 0 ? ", à l'heure prévue" : ', ' + (e.e > 0 ? 'soit un retard de ' : 'soit une avance de ') + pastilleMail(e, 12) + (prevu ? ' (prévu à ' + esc(prevu.replace(':', 'h')) + ')' : '')) : '';
+    var wg = x.wagons != null ? x.wagons + ' wagon' + (x.wagons > 1 ? 's' : '') + (x.cv ? ' ' + esc(x.cv) : '') : '';
+    var base = { date: x.date + ' · ' + h, site: x.site };
+    if (type === 'navetteDepart') {
+      return cadreMail(Object.assign(base, {
+        fond: x.couleur || M_BLEU, bandeau: '🚆 INFORMATION CIRCULATION · DÉPART NAVETTE',
+        phrase: 'Nous vous informons du départ de la navette <strong style="color:' + M_ENCRE + ';">' + esc(x.code) + '</strong>' + (x.numero ? ' (N° ' + esc(x.numero) + ')' : '') +
+          (x.dest ? ' à destination de <strong style="color:' + M_BLEU + ';">' + esc(x.dest) + '</strong>' : '') + ' à ' + heureHTML + ecartTxt + '.' +
+          (wg || x.voie ? '<br>Composition : ' + [wg, x.voie ? 'au départ de la voie ' + esc(String(x.voie).toUpperCase()) : ''].filter(Boolean).join(', ') + '.' : ''),
+        cases: caseMail('NAVETTE', esc(x.code), x.dest ? '→ ' + esc(x.dest.toUpperCase()) : '') + caseMail('DÉPART RÉEL', esc(h) + ' ' + pastilleMail(e, 13), prevu ? 'PRÉVU : ' + esc(prevu) : '', e ? e.heure : '', true) +
+          caseMail('WAGONS', x.wagons != null ? esc(String(x.wagons)) : '—', x.cv ? esc(x.cv) : '', '', true) + caseMail('VOIE', x.voie ? esc(String(x.voie).toUpperCase()) : '—', '', '', true)
+      }));
+    }
+    if (type === 'ligneArrivee') {
+      return cadreMail(Object.assign(base, {
+        fond: '#0f766e', bandeau: '🚆 INFORMATION CIRCULATION · ARRIVÉE TRAIN',
+        phrase: "Nous vous informons de l'arrivée sur le terminal " + esc(x.site) + ' du train <strong style="color:' + M_ENCRE + ';">N° ' + esc(x.numero || x.code) + '</strong>' +
+          (x.prov ? ' en provenance de <strong style="color:' + M_BLEU + ';">' + esc(x.prov) + '</strong>' : '') + ' à ' + heureHTML + ecartTxt + '.' +
+          (wg || x.voie ? '<br>Le train est reçu ' + [x.voie ? 'sur la voie ' + esc(String(x.voie).toUpperCase()) : '', wg ? 'avec ' + wg : ''].filter(Boolean).join(' ') + '.' : ''),
+        cases: caseMail('TRAIN', 'N° ' + esc(x.numero || x.code), x.prov ? 'DE ' + esc(x.prov.toUpperCase()) : '') + caseMail('ARRIVÉE RÉELLE', esc(h) + ' ' + pastilleMail(e, 13), prevu ? 'PRÉVUE : ' + esc(prevu) : '', e ? e.heure : '', true) +
+          caseMail('VOIE', x.voie ? esc(String(x.voie).toUpperCase()) : '—', '', '', true) + caseMail('WAGONS', x.wagons != null ? esc(String(x.wagons)) : '—', x.ef ? esc(x.ef) : '', '', true)
+      }));
+    }
+    // départ d'un train de ligne : séquence opérationnelle
+    var etapes = DEROULE.map(function (d) { return { lib: d[2], h: x.deroule && x.deroule[d[0]] ? normHeure(x.deroule[d[0]]) : '' }; });
+    etapes.push({ lib: 'Départ du train', h: h, fin: true });
+    var lignes = etapes.map(function (t) {
+      var fait = !!t.h, coul = t.fin ? (e ? e.heure : '#15803d') : fait ? M_ENCRE : '#94a3b8';
+      return '<tr style="background:' + (t.fin ? '#f3f7ff' : '#ffffff') + ';">' +
+        '<td width="20" style="padding:9px 0 9px 14px;border-bottom:1px solid #eef1f6;' + MF + 'font-size:15px;color:' + (fait ? '#16a34a' : '#cbd5e1') + ';">●</td>' +
+        '<td style="padding:9px 8px;border-bottom:1px solid #eef1f6;' + MF + 'font-size:13px;font-weight:' + (t.fin ? 800 : 600) + ';color:' + (t.fin ? M_ENCRE : '#1f2937') + ';text-transform:uppercase;letter-spacing:.02em;">' + esc(t.lib) + '</td>' +
+        '<td align="center" style="padding:7px 14px 7px 8px;border-bottom:1px solid #eef1f6;"><span style="display:inline-block;min-width:58px;padding:4px 10px;border:1px solid ' + (fait ? '#86efac' : '#c7cfdc') + ';border-radius:6px;background:' + (fait ? '#f0fdf4' : '#ffffff') + ';' + MF + 'font-size:15px;font-weight:800;color:' + coul + ';">' + esc(t.h || '--:--') + '</span>' + (t.fin && e ? ' ' + pastilleMail(e, 12) : '') + '</td></tr>';
+    }).join('');
+    return cadreMail(Object.assign(base, {
+      fond: M_BLEU, bandeau: '📡 MESSAGE DE RÉGULATION · DÉPART TRAIN',
+      phrase: 'Nous vous annonçons le départ du train <strong style="color:' + M_ENCRE + ';">N° ' + esc(x.numero || x.code) + '</strong>' +
+        (x.dest ? ' à destination de <strong style="color:' + M_BLEU + ';">' + esc(x.dest) + '</strong>' : '') + ' à ' + heureHTML + ecartTxt + '.',
+      cases: caseMail('TRAIN', 'N° ' + esc(x.numero || x.code), x.dest ? '→ ' + esc(x.dest.toUpperCase()) : '') + caseMail('DÉPART EFFECTIF', esc(h) + ' ' + pastilleMail(e, 13), prevu ? 'PRÉVU : ' + esc(prevu) : '', e ? e.heure : '', true) +
+        caseMail('COMPOSITION', x.wagons != null ? esc(String(x.wagons)) + ' wg' : '—', [x.voie ? 'voie ' + esc(String(x.voie).toUpperCase()) : '', x.ef ? esc(x.ef) : ''].filter(Boolean).join(' · '), '', true),
+      suite: '<tr><td style="padding:0 18px 14px;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border:1px solid ' + M_TRAIT + ';border-radius:10px;border-collapse:separate;">' +
+        '<tr style="background:#f6f8fc;"><td colspan="2" style="padding:10px 14px;border-bottom:1px solid ' + M_TRAIT + ';' + MF + 'font-size:12px;font-weight:800;letter-spacing:.05em;color:' + M_BLEU + ';">📋 SÉQUENCE OPÉRATIONNELLE</td>' +
+        '<td align="center" style="padding:10px 14px 10px 8px;border-bottom:1px solid ' + M_TRAIT + ';' + MF + 'font-size:11px;font-weight:700;color:' + M_GRIS + ';">HEURE CONSTATÉE</td></tr>' + lignes + '</table></td></tr>'
+    }));
+  }
   /** Construit le mail d'une circulation réalisée, ou null si aucun destinataire ou envoi désactivé. */
   function construireMail(j, c, planning, params, suffixe) {
     var type = typeMail(c, planning);
@@ -608,30 +691,26 @@
     if (!to.length) return null;
     var d = etatCirculation(c, j);
     if (!d.reel) return null;
+    var site = (params && params.site) || 'LHTE', ville = g.famille === 'navette' ? '' : nomTrain(c.code, params);
     var v = {
       code: c.code, sillon: c.sillon || c.numero, numero: c.numero || c.sillon, destinataire: g.destinataire || g.libelle || '',
-      heure: hhmm(d.reel), date: libelleDateCourte(j.date), jj: j.date.slice(8, 10), site: (params && params.site) || ''
+      heure: hhmm(d.reel), date: libelleDateCourte(j.date), jj: j.date.slice(8, 10), site: site
     };
     var mod = (m.modeles && m.modeles[type]) || {};
-    var deroule = '';
-    if (type === 'ligneDepart') {
-      var renseigne = DEROULE.filter(function (e) { return c.deroule && c.deroule[e[0]]; });
-      if (renseigne.length || mode === 'brouillon') {
-        deroule = '<p><u>Déroulé des évènements :</u></p><ul>' + DEROULE.map(function (e) {
-          return '<li>' + esc(e[1]) + ' ' + esc((c.deroule && c.deroule[e[0]]) ? c.deroule[e[0]].replace(':', 'h') : '') + '</li>';
-        }).join('') + '</ul>';
-      }
-    }
-    var html = '<html><body style="font-family:Calibri,Arial,sans-serif;font-size:12pt;">' +
-      '<p>' + remplir(mod.intro, v, true) + '</p>' +
-      '<p style="font-size:15pt;margin:10px 0;"><strong><span style="color:#483D8B;">' + remplir(mod.ligne, v, true) + '</span></strong></p>' +
-      deroule + '<br><!--signature--></body></html>';
+    var x = { code: c.code, numero: c.numero || c.sillon || d.num || '', reel: d.reel, theo: c.theo || null, voie: d.voie || c.voiePrevue || '', wagons: d.wagons != null ? d.wagons : null,
+      cv: d.cv && d.cv !== '/' ? d.cv : '', date: libelleDateCourte(j.date), site: site, ef: g.libelle || '', deroule: c.deroule || {},
+      dest: g.famille === 'navette' ? (g.destinataire || g.libelle || '') : ville, prov: ville, couleur: g.famille === 'navette' ? couleurGroupe(g, params && params.visuel) : '' };
+    // sujet : modèle des Paramètres s'il existe, sinon un sujet clair (type, train, date, heure)
+    var sujetDefaut = type === 'navetteDepart' ? site + ' · Départ navette ' + c.code + (x.dest ? ' → ' + x.dest : '') + ' · ' + v.date + ' · ' + v.heure
+      : type === 'ligneArrivee' ? site + ' · Arrivée train ' + (x.numero || c.code) + (ville ? ' (' + ville + ')' : '') + ' · ' + v.date + ' · ' + v.heure
+        : site + ' · Départ train ' + (x.numero || c.code) + (ville ? ' → ' + ville : '') + ' · ' + v.date + ' · ' + v.heure;
+    var html = '<html><body style="margin:0;padding:12px;background:#ffffff;">' + corpsMail(type, x) + '<br><!--signature--></body></html>';
     return {
       id: (j.date + '_' + c.id + '_' + type + (suffixe ? '_' + suffixe : '')).replace(/[^A-Za-z0-9_.-]/g, '-'),
       type: type, mode: mode,
       to: to, cc: type === 'navetteDepart' ? (m.copieNavettes || []) : [],
       bcc: type !== 'navetteDepart' && m.listeCopieCacheeLignes ? (listes[m.listeCopieCacheeLignes] || []) : [],
-      sujet: remplir(mod.sujet, v, false), html: html
+      sujet: mod.sujet ? remplir(mod.sujet, v, false) : sujetDefaut, html: html
     };
   }
   var STATUTS_MAIL_OK = ['envoye', 'brouillon', 'simule', 'deja'];
