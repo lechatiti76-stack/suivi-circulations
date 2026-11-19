@@ -194,7 +194,7 @@ body[data-mode="simulation"] #fiche{display:none}
 #sim-direct{pointer-events:auto}
 #sim-direct button{color:#fff;border-color:rgba(255,255,255,.35);background:transparent;margin-left:6px;padding:3px 9px;font-size:12.5px}
 #plan-svg{flex:1;min-height:0;width:100%;display:block}
-#plan-svg .t-ligne{fill:none;stroke:#2e9e4f;stroke-opacity:.7;stroke-width:4;stroke-linecap:round;stroke-linejoin:round}
+#plan-svg .t-ligne{fill:none;stroke:#2e9e4f;stroke-opacity:.6;stroke-width:10;stroke-linecap:round;stroke-linejoin:round}
 #plan-svg .v-lit{fill:none;stroke:#1a242c;stroke-width:16;stroke-linecap:round;stroke-linejoin:round}
 #plan-svg .v-etat{fill:none;stroke-width:10;stroke-linecap:round;stroke-linejoin:round;transition:stroke .4s}
 #plan-svg .v-rempl{fill:none;stroke-width:10;stroke-linecap:butt;stroke-linejoin:round;opacity:.95}
@@ -208,10 +208,10 @@ body[data-mode="simulation"] #fiche{display:none}
 #plan-svg .ef{font-weight:700;font-size:calc(var(--pt) * 1.15)}
 #plan-svg .cap{font-family:var(--mono);font-size:calc(var(--pt) * 1.02);fill:var(--p-encre2)}
 #plan-svg .pv-chip rect{stroke:#0008;stroke-width:1}
-#plan-svg .pv-chip text{font-weight:700;font-size:calc(var(--pt) * .92)}
+#plan-svg .pv-chip text{font-weight:700;font-size:calc(var(--pt) * .74)}
 #plan-svg .em-chip rect{fill:#052e16;stroke:#22c55e;stroke-width:2}
 #plan-svg .em-chip text{fill:#4ade80;font-weight:900;font-size:calc(var(--pt) * 1.02);letter-spacing:.02em}
-#plan-svg .v-resa{fill:none;stroke:#3b82f6;stroke-width:5;stroke-linecap:butt;opacity:.95}
+#plan-svg .v-resa{fill:none;stroke:#3b82f6;stroke-width:3.5;stroke-linecap:butt;opacity:.95;transform:translateY(-10px)}
 #plan-svg .v-cours{fill:none;stroke:#a855f7;stroke-width:10;stroke-linecap:butt;animation:cours 1.4s ease-in-out infinite}
 @keyframes cours{50%{opacity:.35}}
 @media (prefers-reduced-motion:reduce){#plan-svg .v-cours{animation:none}}
@@ -2221,7 +2221,9 @@ body[data-mode="simulation"] #fiche{display:none}
   // ---------------------------------------------------------------- plan : dessin du schéma
   // Abscisses du schéma resserrées aux deux extrémités (accès ouest, Cv5003 et limite est) pour agrandir les faisceaux ;
   // ordonnées étirées pour laisser la place aux étiquettes entre deux voies voisines.
-  const X0 = 250, X1 = 1330, SY = 1.95, sx = x => (x < X0 ? X0 - (X0 - x) * 0.18 : x > X1 ? X1 + (x - X1) * 0.2 : x);
+  // KX : étirement horizontal pour occuper toute la largeur de la fenêtre (recalculé quand elle change de taille)
+  let KX = 1;
+  const X0 = 250, X1 = 1330, SY = 1.95, sx = x => KX * (x < X0 ? X0 - (X0 - x) * 0.18 : x > X1 ? X1 + (x - X1) * 0.2 : x);
   const pts = t => { const d = R.troncons[t], o = R.noeuds[d.ouest.noeud], e = R.noeuds[d.est.noeud]; return [[o.x, o.y], ...d.trace, [e.x, e.y]].map(q => [sx(q[0]), q[1] * SY]); };
   const chemin = p => "M" + p.map(q => q[0].toFixed(1) + " " + q[1].toFixed(1)).join("L");
   function milieu(p) { // point au milieu de la longueur, et sa direction
@@ -2230,23 +2232,25 @@ body[data-mode="simulation"] #fiche{display:none}
     return { x: a[0] + (b[0] - a[0]) * f, y: a[1] + (b[1] - a[1]) * f, long: s };
   }
   const svg = $("plan-svg"), VOIES = Object.keys(R.voies), formes = {};
-  (function construire() {
+  function construire() {
+    svg.innerHTML = "";
     let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
     for (const t in R.troncons) pts(t).forEach(([x, y]) => { x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); });
     svg.setAttribute("viewBox", `${x0 - 50} ${y0 - 26} ${x1 - x0 + 110} ${y1 - y0 + 52}`); svg.setAttribute("preserveAspectRatio", "xMidYMid meet");
-    const fond = el("g", {}, svg), voiesG = el("g", {}, svg), pastilles = el("g", {}, svg);
+    // couches : d'abord le lit sombre de TOUTES les voies et liaisons (pas de coupure aux raccords), puis les liaisons, puis les voies
+    const lit = el("g", {}, svg), fond = el("g", {}, svg), voiesG = el("g", {}, svg), pastilles = el("g", {}, svg), affect = el("g", {}, svg);
+    for (const t in R.troncons) el("path", { d: chemin(pts(t)), class: "v-lit" }, lit);
     for (const t in R.troncons) if (!R.troncons[t].voie) el("path", { d: chemin(pts(t)), class: "t-ligne" }, fond);
     const e = R.noeuds.LIM_E; el("text", { x: sx(e.x) + 6, y: e.y * SY, class: "acces", "text-anchor": "start" }, fond).textContent = "→ Paris";
     const o = R.noeuds.LIM_O; el("text", { x: sx(o.x) - 6, y: o.y * SY, class: "acces", "text-anchor": "end" }, fond).textContent = "C RFP ←";
     for (const v of VOIES) {
       const t = R.voies[v].troncon, p = pts(t), d = chemin(p), g = el("g", { "data-voie": v }, voiesG);
-      el("path", { d, class: "v-lit" }, g);
       const clic = el("path", { d, class: "v-clic", tabindex: "0", role: "button", "aria-label": "Voie " + v }, g);
       const etat = el("path", { d, class: "v-etat", pathLength: "100" }, g), rempl = el("path", { d, class: "v-rempl", pathLength: "100" }, g);
       const resa = el("path", { d, class: "v-resa", pathLength: "100", "stroke-dasharray": "0 100" }, g), cours = el("path", { d, class: "v-cours", pathLength: "100", "stroke-dasharray": "0 100" }, g);
       const m = milieu(p), pa = el("g", { class: "pastille", transform: `translate(${m.x.toFixed(1)} ${m.y.toFixed(1)})` }, pastilles);
       const fondP = el("rect", { class: "fond", y: -13, height: 26, rx: 6 }, pa), texte = el("text", { y: 0.5 }, pa);
-      const chip = el("g", { class: "pv-chip" }, pa), chipR = el("rect", { y: -12, height: 24, rx: 6 }, chip), chipT = el("text", { y: 0.5 }, chip);
+      const chip = el("g", { class: "pv-chip" }, affect), chipR = el("rect", { y: -12, height: 24, rx: 6 }, chip), chipT = el("text", { y: 0.5 }, chip);
       const em = el("g", { class: "em-chip" }, pastilles), emR = el("rect", { y: -13, height: 26, rx: 6 }, em), emT = el("text", { y: 0.5, "text-anchor": "middle" }, em);
       formes[v] = { m, g, etat, rempl, resa, cours, pa, fondP, texte, chip, chipR, chipT, em, emR, emT, pts: p, long: m.long, avant: null, flash: 0 };
       em.style.cursor = "pointer"; em.addEventListener("click", ev => ouvrirEdition(v, ev));
@@ -2254,7 +2258,18 @@ body[data-mode="simulation"] #fiche{display:none}
       pa.style.cursor = "pointer"; pa.addEventListener("click", ouvrir);
     }
     $("plan-legende").innerHTML = ["libre", "partielle", "occupee", "manoeuvre", "reservee", "indisponible"].map(k => `<span><i style="background:${COUL[k]}"></i>${LIBELLES[k]}</span>`).join("");
-  })();
+  }
+  construire();
+  // largeur de la fenêtre : le plan s'étire en largeur (les textes gardent leur taille)
+  function ajusterLargeur() {
+    const r = svg.getBoundingClientRect(); if (!r.width || !r.height) return;
+    const vb = svg.viewBox.baseVal, nat = (vb.width / KX) / vb.height, cible = Math.max(1, Math.min(2.2, (r.width / r.height) / nat));
+    if (Math.abs(cible - KX) < 0.04) return;
+    KX = cible; construire(); if (typeof dessinerEtats === "function") dessinerEtats(false);
+  }
+  let tLarg = null; window.addEventListener("resize", () => { clearTimeout(tLarg); tLarg = setTimeout(ajusterLargeur, 150); });
+  setTimeout(ajusterLargeur, 50);
+
 
   // ---------------------------------------------------------------- plan : état des voies
   function compo(v) { // wagons de la voie par relation ou EF, engins présents
@@ -2325,7 +2340,11 @@ body[data-mode="simulation"] #fiche{display:none}
         f.chipT.textContent = `${quand} ${pv.code} ${pv.libelle || pv.groupe} ${pv.sens === "A" ? "arrivée" : "départ"}${pv.wagons != null ? " " + pv.wagons + " wg" : ""}`.replace(/\s+/g, " ").trim();
         f.chipT.setAttribute("fill", contraste(cc)); f.chipR.setAttribute("fill", cc);
         f.chipT.setAttribute("x", 0); const lc = largeur(f.chipT, f.chipT.textContent);
-        f.chipT.setAttribute("x", (l / 2 + 18).toFixed(1)); f.chipR.setAttribute("x", (l / 2 + 10).toFixed(1)); f.chipR.setAttribute("width", (lc + 16).toFixed(1));
+        // en petit, posée au-dessus de la voie (la voie reste visible), dans la partie droite, loin des étiquettes des voies voisines
+        const hc = Math.max(16, TAILLE() * 1.1), pt = pointA(f.pts, cote === "P" ? 0.3 : 0.68), cx0 = pt.x - (lc + 12) / 2, cy0 = pt.y - 7 - hc;
+        f.chip.setAttribute("transform", `translate(${cx0.toFixed(1)} ${cy0.toFixed(1)})`);
+        f.chipR.setAttribute("x", 0); f.chipR.setAttribute("y", 0); f.chipR.setAttribute("width", (lc + 12).toFixed(1)); f.chipR.setAttribute("height", hc.toFixed(1));
+        f.chipT.setAttribute("x", 6); f.chipT.setAttribute("y", (hc / 2 + 0.5).toFixed(1));
         f.chip.style.display = "";
       } else f.chip.style.display = "none";
       // engins : en gros, en vert, toujours à l'extrémité de la voie (côté Paris par défaut)
