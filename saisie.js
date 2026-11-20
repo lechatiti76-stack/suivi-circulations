@@ -1653,7 +1653,7 @@
     $('#pa-mr-codes').value.split(/[,;]/).forEach(function (x) { var m = /^\s*(\d)\s*=\s*(.+?)\s*$/.exec(x); if (m) codes[m[1]] = m[2].slice(0, 20); });
     var pos = function (v, d) { v = parseInt(v, 10); return v >= 1 && v <= 6 ? v : d; };
     return { orig: pos($('#pa-mr-orig').value, 3), dest: pos($('#pa-mr-dest').value, 4), site: String($('#pa-mr-site').value || '9').replace(/\D/g, '').slice(0, 1) || '9', codes: codes,
-      suites: texteEnSuites($('#pa-mr-suites').value), typeAuto: $('#pa-plan-type-auto').checked, longueurs: lireLongueurs(), longueursVoies: lireLongueursVoies() };
+      suites: texteEnSuites($('#pa-mr-suites').value), typeAuto: $('#pa-plan-type-auto').checked, animation: $('#pa-plan-anim').checked, longueurs: lireLongueurs(), longueursVoies: lireLongueursVoies() };
   }
   /** Base des engins : « 511911 = NRS1 NRS2 … 519100 » (une ligne par engin ou groupe d'engins, « * » = n'importe quoi). */
   var SUITES_DEFAUT = '511911 = NRS1 NRS2 NRS3 NRS4 NRS5 NRS6 NRS7 NRS8 519100 519110';
@@ -1750,7 +1750,7 @@
     $('#pa-plan-sa-arr').checked = !!pv.saisieArrivee; $('#pa-plan-sa-dep').checked = !!pv.saisieDepart;
     var mr = pv.marche || {};
     $('#pa-mr-suites').value = Array.isArray(mr.suites) ? suitesEnTexte(mr.suites) : SUITES_DEFAUT; essaiSuites();
-    $('#pa-plan-type-auto').checked = mr.typeAuto !== false;
+    $('#pa-plan-type-auto').checked = mr.typeAuto !== false; $('#pa-plan-anim').checked = mr.animation !== false;
     var lgw = mr.longueurs || {}; $('#pa-lg-60').value = lgw.l60 || 20; $('#pa-lg-80').value = lgw.l80 || 28; remplirLongueursVoies(mr.longueursVoies || {}); essaiLongueurs();
     $('#pa-mr-orig').value = mr.orig || 3; $('#pa-mr-dest').value = mr.dest || 4; $('#pa-mr-site').value = mr.site || '9';
     $('#pa-mr-codes').value = Object.keys(mr.codes || { 1: 'FA', 4: 'FS', 6: 'ATL', 9: 'LHTE' }).map(function (k) { return k + '=' + (mr.codes || { 1: 'FA', 4: 'FS', 6: 'ATL', 9: 'LHTE' })[k]; }).join(', ');

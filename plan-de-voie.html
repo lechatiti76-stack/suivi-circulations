@@ -195,6 +195,17 @@ body[data-mode="simulation"] #fiche{display:none}
 #sim-direct button{color:#fff;border-color:rgba(255,255,255,.35);background:transparent;margin-left:6px;padding:3px 9px;font-size:12.5px}
 #plan-svg{flex:1;min-height:0;width:100%;display:block}
 #plan-svg .t-ligne{fill:none;stroke:#2e9e4f;stroke-opacity:.6;stroke-width:10;stroke-linecap:round;stroke-linejoin:round}
+/* petites lumières qui circulent sur les accès (depuis Paris et depuis C RFP) et sur les voies libres */
+#plan-svg .flux path{fill:none;stroke-linecap:round;pointer-events:none}
+#plan-svg .flux .halo{stroke:#86efac;stroke-width:14;stroke-opacity:.18;stroke-dasharray:3 97}
+#plan-svg .flux .trainee{stroke:#bbf7d0;stroke-width:5;stroke-opacity:.55;stroke-dasharray:2.2 97.8}
+#plan-svg .flux .coeur{stroke:#ffffff;stroke-width:5;stroke-dasharray:.25 99.75}
+#plan-svg .flux .o{animation:flux-o var(--d,6s) linear infinite;animation-delay:var(--r,0s)}
+#plan-svg .flux .e{animation:flux-e var(--d,6s) linear infinite;animation-delay:var(--r,0s)}
+@keyframes flux-o{from{stroke-dashoffset:0}to{stroke-dashoffset:-100}}
+@keyframes flux-e{from{stroke-dashoffset:0}to{stroke-dashoffset:100}}
+#plan-svg.sans-flux .flux{display:none}
+@media (prefers-reduced-motion:reduce){#plan-svg .flux{display:none}}
 #plan-svg .v-lit{fill:none;stroke:#1a242c;stroke-width:16;stroke-linecap:round;stroke-linejoin:round}
 #plan-svg .v-etat{fill:none;stroke-width:10;stroke-linecap:round;stroke-linejoin:round;transition:stroke .4s}
 #plan-svg .v-rempl{fill:none;stroke-width:10;stroke-linecap:butt;stroke-linejoin:round;opacity:.95}
@@ -2240,9 +2251,20 @@ body[data-mode="simulation"] #fiche{display:none}
     for (const t in R.troncons) pts(t).forEach(([x, y]) => { x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); });
     svg.setAttribute("viewBox", `${x0 - 50} ${y0 - 26} ${x1 - x0 + 110} ${y1 - y0 + 52}`); svg.setAttribute("preserveAspectRatio", "xMidYMid meet");
     // couches : d'abord le lit sombre de TOUTES les voies et liaisons (pas de coupure aux raccords), puis les liaisons, puis les voies
-    const lit = el("g", {}, svg), fond = el("g", {}, svg), voiesG = el("g", {}, svg), pastilles = el("g", {}, svg), affect = el("g", {}, svg);
+    const lit = el("g", {}, svg), fond = el("g", {}, svg), voiesG = el("g", {}, svg), fluxG = el("g", { class: "flux" }, svg), pastilles = el("g", {}, svg), affect = el("g", {}, svg);
     for (const t in R.troncons) el("path", { d: chemin(pts(t)), class: "v-lit" }, lit);
     for (const t in R.troncons) if (!R.troncons[t].voie) el("path", { d: chemin(pts(t)), class: "t-ligne" }, fond);
+    // lumières : sur un accès, elles vont de Paris (à droite) vers les voies, ou de C RFP (à gauche) vers les voies
+    const xMil = (x0 + x1) / 2, lumiere = (parent, p, sens, long) => {
+      const g = el("g", {}, parent), d = chemin(p), duree = Math.max(4, Math.min(16, long / 60)), r = -(Math.random() * duree);
+      g.style.setProperty("--d", duree.toFixed(2) + "s"); g.style.setProperty("--r", r.toFixed(2) + "s");
+      // halo, traînée et point lumineux : la traînée est derrière le point (décalée dans le sens de la marche)
+      el("path", { d, pathLength: "100", class: "halo " + sens }, g);
+      const tr = el("path", { d, pathLength: "100", class: "trainee " + sens }, g); tr.style.animationDelay = (r + duree * 0.012).toFixed(2) + "s";
+      el("path", { d, pathLength: "100", class: "coeur " + sens }, g);
+      return g;
+    };
+    for (const t in R.troncons) if (!R.troncons[t].voie) { const p = pts(t), m = milieu(p); lumiere(fluxG, p, m.x > xMil ? "e" : "o", m.long); }
     const e = R.noeuds.LIM_E; el("text", { x: sx(e.x) + 6, y: e.y * SY, class: "acces", "text-anchor": "start" }, fond).textContent = "→ Paris";
     const o = R.noeuds.LIM_O; el("text", { x: sx(o.x) - 6, y: o.y * SY, class: "acces", "text-anchor": "end" }, fond).textContent = "C RFP ←";
     for (const v of VOIES) {
@@ -2254,7 +2276,9 @@ body[data-mode="simulation"] #fiche{display:none}
       const fondP = el("rect", { class: "fond", y: -13, height: 26, rx: 6 }, pa), texte = el("text", { y: 0.5 }, pa);
       const chip = el("g", { class: "pv-chip" }, affect), chipR = el("rect", { class: "fond", y: -12, height: 24, rx: 5 }, chip), chipB = el("rect", { width: 4, rx: 2 }, chip), chipL = el("path", { "stroke-width": 2, fill: "none" }, chip), chipT = el("text", { y: 0.5 }, chip);
       const em = el("g", { class: "em-chip" }, pastilles), emR = el("rect", { y: -13, height: 26, rx: 6 }, em), emT = el("text", { y: 0.5, "text-anchor": "middle" }, em);
-      formes[v] = { m, g, etat, rempl, resa, cours, pa, fondP, texte, chip, chipR, chipB, chipL, chipT, em, emR, emT, pts: p, long: m.long, avant: null, flash: 0 };
+      // voie libre : une lumière entre par chaque bout (côté Paris et côté C RFP)
+      const flux = el("g", {}, fluxG); lumiere(flux, p, "e", m.long); lumiere(flux, p, "o", m.long);
+      formes[v] = { flux, m, g, etat, rempl, resa, cours, pa, fondP, texte, chip, chipR, chipB, chipL, chipT, em, emR, emT, pts: p, long: m.long, avant: null, flash: 0 };
       em.style.cursor = "pointer"; em.addEventListener("click", ev => ouvrirEdition(v, ev));
       const ouvrir = ev => ouvrirEdition(v, ev); clic.addEventListener("click", ouvrir); clic.addEventListener("keydown", ev => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); ouvrir(ev); } });
       pa.style.cursor = "pointer"; pa.addEventListener("click", ouvrir);
@@ -2296,6 +2320,7 @@ body[data-mode="simulation"] #fiche{display:none}
   function dessinerEtats(clignoter) {
     const maintenant = Date.now(), totaux = {}, prevs = previsionsVoie(), resas = reservationsVoie(); let wagons = 0; const nb = { libre: 0, partielle: 0, occupee: 0 };
     svg.style.setProperty("--pt", TAILLE().toFixed(1) + "px");
+    svg.classList.toggle("sans-flux", !!(window.LHTE_MARCHE && window.LHTE_MARCHE.animation === false));
     for (const v of VOIES) {
       const f = formes[v], e = Tn.etatVoie(v), c = compo(v), code = e.code, coul = COUL[code] || "#888", cote = (pDonnees.cotes || {})[v] || "";
       c.parts.forEach(([k, n]) => { totaux[k] = (totaux[k] || 0) + n; }); if (e.hs) totaux["~HS"] = (totaux["~HS"] || 0) + e.hs; wagons += e.wagons; if (code in nb) nb[code]++;
@@ -2305,6 +2330,7 @@ body[data-mode="simulation"] #fiche{display:none}
       f.g.classList.toggle("clignote", f.flash > maintenant); f.g.classList.toggle("manoeuvre", code === "manoeuvre");
       f.g.style.setProperty("--flash", coul);
       const taux = e.capacite ? Math.min(100, 100 * e.wagons / e.capacite) : e.wagons ? 100 : 0;
+      f.flux.style.display = code === "libre" ? "" : "none";
       f.etat.setAttribute("stroke", coul); f.etat.setAttribute("stroke-opacity", code === "partielle" ? 0.35 : code === "libre" ? 0.6 : 0.95);
       // wagons rangés du côté où ils ont été posés (Le Havre à gauche par défaut, Paris à droite)
       f.rempl.setAttribute("stroke", coul); f.rempl.setAttribute("stroke-dasharray", code === "partielle" ? demi(cote === "P" ? "P" : "H", taux.toFixed(1)) : "0 100");
