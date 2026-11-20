@@ -590,9 +590,12 @@
     if (app.edition) {
       var id = app.edition, n = mouvDe(app.journee, id).n;
       modifier('Ligne ' + n + ' modifiée', 'mouvement.modification', function (j) {
-        var x = mouvDe(j, id);
+        var x = mouvDe(j, id), reelAvant = x.reel;
         Object.keys(m).forEach(function (k) { x[k] = m[k]; });
         x.lien = lier(j, x); x.modifieA = maintenant();
+        // heure réelle corrigée dans le journal : la circulation rattachée (déjà validée) prend la même heure
+        var cl = x.lien && circDe(j, x.lien);
+        if (cl && cl.reel && x.reel && x.reel !== reelAvant) cl.reel = x.reel;
       });
       app.selection = id;
     } else {
@@ -1722,7 +1725,7 @@
     var trainsM = listesMailGroupes('ligne'), navettesM = listesMailGroupes('navette');
     trainsM.concat(navettesM).forEach(function (x) { utilisees[x.nom] = true; });
     if (nomCci) utilisees[nomCci] = true;
-    $('#pa-mails-trains').innerHTML = trainsM.map(function (x) { return ligneMail(x.libelles.join(' · '), 'data-liste="' + esc(x.nom) + '"', listes[x.nom]); }).join('') +
+    $('#pa-mails-trains').innerHTML = trainsM.map(function (x) { return ligneMail(x.libelles.join(' · '), 'data-liste="' + esc(x.nom) + '"', listes[x.nom], x.sous ? 'sous-liste' : '', x.sous ? 'vide = mêmes adresses que ' + x.sous : ''); }).join('') +
       ligneMail('Copie cachée de tous les mails trains', 'data-copie="cci"', nomCci ? listes[nomCci] : [], 'copie');
     $('#pa-mails-navettes').innerHTML = navettesM.map(function (x) { return ligneMail(x.libelles.join(' · '), 'data-liste="' + esc(x.nom) + '"', listes[x.nom]); }).join('') +
       ligneMail('Copie de tous les mails navettes', 'data-copie="navettes"', m.copieNavettes, 'copie');
@@ -1803,15 +1806,26 @@
     (app.planning.groupes || []).forEach(function (g) {
       if (g.famille !== fam) return;
       var nom = g.listeMail || g.id;
-      if (!parNom[nom]) { parNom[nom] = { nom: nom, libelles: [] }; lignes.push(parNom[nom]); }
+      if (!parNom[nom]) { parNom[nom] = { nom: nom, libelles: [], codes: [] }; lignes.push(parNom[nom]); }
       parNom[nom].libelles.push(g.libelle || g.id);
+      // trains de ligne : codes des trains de cette EF (ex. Ferovergne : Vierzon, Clermont-Ferrand)
+      if (fam === 'ligne') (app.planning.circulations || []).forEach(function (c) {
+        var k = String(c.code || '').toUpperCase(); if (c.groupe === g.id && k && parNom[nom].codes.indexOf(k) < 0) parNom[nom].codes.push(k);
+      });
     });
-    return lignes;
+    if (fam !== 'ligne') return lignes;
+    // une EF qui a plusieurs trains : une ligne par train, sous la sienne (vide = la liste de l'EF)
+    var out = [];
+    lignes.forEach(function (x) {
+      out.push(x);
+      if (x.codes.length > 1) x.codes.sort().forEach(function (k) { out.push({ nom: x.nom + ':' + k, libelles: ['   ↳ ' + SC.nomTrain(k, app.params) + ' (' + k + ')'], sous: x.nom }); });
+    });
+    return out;
   }
-  function ligneMail(libelle, attr, adresses, classe) {
+  function ligneMail(libelle, attr, adresses, classe, indice) {
     // toutes les adresses visibles : la case s'agrandit selon leur nombre
     var texte = (adresses || []).join('; '), lignes = Math.max(1, Math.min(4, Math.ceil(texte.length / 95)));
-    return '<tr' + (classe ? ' class="' + classe + '"' : '') + '><th>' + esc(libelle) + '</th><td><textarea class="mono" ' + attr + ' rows="' + lignes + '" placeholder="adresse@exemple.fr; …" spellcheck="false">' + esc(texte) + '</textarea></td></tr>';
+    return '<tr' + (classe ? ' class="' + classe + '"' : '') + '><th>' + esc(libelle) + '</th><td><textarea class="mono" ' + attr + ' rows="' + lignes + '" placeholder="' + esc(indice || 'adresse@exemple.fr; …') + '" spellcheck="false">' + esc(texte) + '</textarea></td></tr>';
   }
   /** Codes des trains de ligne qui arrivent ici (planning), pour régler leur temps d'arrivée. */
   function codesArriveesTrains() {
@@ -2173,8 +2187,7 @@
       if (k === 'theo') modifier(c.code + ' : heure prévue ' + (hh || 'retirée'), 'circulation.modification', function (j) { circDe(j, id).theo = hh ? SC.combiner(j.date, hh) : null; });
       else if (k === 'hlr') modifier(c.code + ' : HLR', 'circulation.modification', function (j) { circDe(j, id).hlr = hh || ''; });
       else modifier(c.code + ' : heure réelle ' + (hh || 'retirée'), 'circulation.reel', function (j) {
-        var cc = circDe(j, id); cc.reel = hh ? SC.heureProche(j.date, hh, cc.theo || SC.iso(new Date())) : null;
-        if (!hh) SC.mouvementsActifs(j).forEach(function (m) { if (m.lien === id) m.reel = null; });
+        var cc = circDe(j, id); SC.fixerReel(j, cc, hh ? SC.heureProche(j.date, hh, cc.theo || SC.iso(new Date())) : null);
       });
       return;
     }

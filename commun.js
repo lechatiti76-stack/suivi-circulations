@@ -283,6 +283,15 @@
     j.mouvements.push(m);
     return m;
   }
+  /** Heure réelle d'une circulation corrigée (saisie ou Suivi trains) : la circulation ET ses mouvements rattachés prennent
+   *  la nouvelle heure, pour que statistiques, PDF, mails, écrans et plan de voie disent tous la même chose. */
+  function fixerReel(j, c, t) {
+    c.reel = t || null;
+    var liens = mouvementsActifs(j).filter(function (m) { return m.lien === c.id; });
+    if (!t) { liens.forEach(function (m) { m.reel = null; }); return; }
+    var avecReel = liens.filter(function (m) { return m.reel; });
+    (avecReel.length ? avecReel.slice(-1) : liens.slice(-1)).forEach(function (m) { m.reel = t; });
+  }
   /** Mouvement interne (locomotive, manœuvre NRS) : pas un numéro de train. */
   function estMouvementInterne(num, params) {
     var s = norm(num), internes = (params && params.mouvementsInternes) || {};
@@ -687,7 +696,9 @@
     var m = (params && params.mails) || {};
     var listes = m.listes || {};
     // liste du groupe (Planning), sinon celle qui porte son identifiant (Paramètres › Mails, une ligne par EF ou groupe)
-    var to = listes[g.listeMail || g.id] || [];
+    // une liste propre à ce train (ex. FEROVERGNE:VIERZN pour Vierzon, FEROVERGNE:CLERMT pour Clermont-Ferrand), sinon celle de l'EF
+    var cleListe = g.listeMail || g.id, propre = listes[cleListe + ':' + String(c.code || '').toUpperCase()];
+    var to = (propre && propre.length ? propre : listes[cleListe]) || [];
     if (!to.length) return null;
     var d = etatCirculation(c, j);
     if (!d.reel) return null;
@@ -906,7 +917,8 @@
       if (!h) { if (avant && actuel === avant) { cible[k] = null; changes.push(texte + ' retiré'); } return; }
       var nouveau = champ.indexOf('deroule.') === 0 ? valeur : h;
       if (cible[k] === nouveau) return;
-      cible[k] = nouveau; changes.push(texte + ' ' + valeur);
+      if (champ === 'reel') fixerReel(j, c, nouveau); else cible[k] = nouveau;
+      changes.push(texte + ' ' + valeur);
     };
     // heure d'arrivée estimée envoyée par le Suivi trains avec le départ (colonne Heure théorique)
     var majEta = function (c, h, theo, nom) {
@@ -1238,7 +1250,7 @@
     JOURS: JOURS, JOURS_COURTS: JOURS_COURTS, TYPES_MAIL: TYPES_MAIL, DEROULE: DEROULE, ENTETE_STATS: ENTETE_STATS,
     PARCOURS_DEFAUT: PARCOURS_DEFAUT, CORRESPONDANCES_SUIVI: CORRESPONDANCES_SUIVI, NOMS_TRAINS: NOMS_TRAINS, nomTrain: nomTrain,
     parcoursDe: parcoursDe, parcoursEnTexte: parcoursEnTexte, texteEnParcours: texteEnParcours, prochainesNavettes: prochainesNavettes,
-    assurerSurlendemain: assurerSurlendemain, recalerPreps: recalerPreps, jourPrep: jourPrep, libellePrep: libellePrep, regler: regler, REGLAGES: REGLAGES, journaliserCirculation: journaliserCirculation,
+    assurerSurlendemain: assurerSurlendemain, recalerPreps: recalerPreps, jourPrep: jourPrep, libellePrep: libellePrep, regler: regler, REGLAGES: REGLAGES, journaliserCirculation: journaliserCirculation, fixerReel: fixerReel,
     appliquerSuiviTrains: appliquerSuiviTrains, heureSuivi: heureSuivi,
     p2: p2, lireDate: lireDate, iso: iso, cleDate: cleDate, ajouterJours: ajouterJours, jourSemaine: jourSemaine,
     libelleJour: libelleJour, libelleDateCourte: libelleDateCourte, hm: hm, hhmm: hhmm, normHeure: normHeure, combiner: combiner,

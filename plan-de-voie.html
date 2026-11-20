@@ -207,8 +207,10 @@ body[data-mode="simulation"] #fiche{display:none}
 #plan-svg .nb{font-family:var(--mono);font-weight:800;font-size:calc(var(--pt) * 1.65)}
 #plan-svg .ef{font-weight:700;font-size:calc(var(--pt) * 1.15)}
 #plan-svg .cap{font-family:var(--mono);font-size:calc(var(--pt) * 1.02);fill:var(--p-encre2)}
-#plan-svg .pv-chip rect{stroke:#0008;stroke-width:1}
-#plan-svg .pv-chip text{font-weight:700;font-size:calc(var(--pt) * .74)}
+#plan-svg .pv-chip rect.fond{fill:#0c1217;fill-opacity:.92;stroke-width:1.2}
+#plan-svg .pv-chip text{font-weight:600;font-size:calc(var(--pt) * .78);fill:#cbd5e1}
+#plan-svg .pv-chip .code{font-weight:800}
+#plan-svg .pv-chip .wg{font-family:var(--mono);fill:#94a3b8;font-size:calc(var(--pt) * .7)}
 #plan-svg .em-chip rect{fill:#052e16;stroke:#22c55e;stroke-width:2}
 #plan-svg .em-chip text{fill:#4ade80;font-weight:900;font-size:calc(var(--pt) * 1.02);letter-spacing:.02em}
 #plan-svg .v-resa{fill:none;stroke:#3b82f6;stroke-width:3.5;stroke-linecap:butt;opacity:.95;transform:translateY(-10px)}
@@ -2250,9 +2252,9 @@ body[data-mode="simulation"] #fiche{display:none}
       const resa = el("path", { d, class: "v-resa", pathLength: "100", "stroke-dasharray": "0 100" }, g), cours = el("path", { d, class: "v-cours", pathLength: "100", "stroke-dasharray": "0 100" }, g);
       const m = milieu(p), pa = el("g", { class: "pastille", transform: `translate(${m.x.toFixed(1)} ${m.y.toFixed(1)})` }, pastilles);
       const fondP = el("rect", { class: "fond", y: -13, height: 26, rx: 6 }, pa), texte = el("text", { y: 0.5 }, pa);
-      const chip = el("g", { class: "pv-chip" }, affect), chipR = el("rect", { y: -12, height: 24, rx: 6 }, chip), chipT = el("text", { y: 0.5 }, chip);
+      const chip = el("g", { class: "pv-chip" }, affect), chipR = el("rect", { class: "fond", y: -12, height: 24, rx: 5 }, chip), chipB = el("rect", { width: 4, rx: 2 }, chip), chipL = el("path", { "stroke-width": 2, fill: "none" }, chip), chipT = el("text", { y: 0.5 }, chip);
       const em = el("g", { class: "em-chip" }, pastilles), emR = el("rect", { y: -13, height: 26, rx: 6 }, em), emT = el("text", { y: 0.5, "text-anchor": "middle" }, em);
-      formes[v] = { m, g, etat, rempl, resa, cours, pa, fondP, texte, chip, chipR, chipT, em, emR, emT, pts: p, long: m.long, avant: null, flash: 0 };
+      formes[v] = { m, g, etat, rempl, resa, cours, pa, fondP, texte, chip, chipR, chipB, chipL, chipT, em, emR, emT, pts: p, long: m.long, avant: null, flash: 0 };
       em.style.cursor = "pointer"; em.addEventListener("click", ev => ouvrirEdition(v, ev));
       const ouvrir = ev => ouvrirEdition(v, ev); clic.addEventListener("click", ouvrir); clic.addEventListener("keydown", ev => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); ouvrir(ev); } });
       pa.style.cursor = "pointer"; pa.addEventListener("click", ouvrir);
@@ -2311,7 +2313,7 @@ body[data-mode="simulation"] #fiche{display:none}
       if (r && r.enCours) { f.cours.setAttribute("stroke-dasharray", r.cote ? demi(r.cote, 50) : "100 0"); f.resa.setAttribute("stroke-dasharray", "0 100"); }
       else {
         f.cours.setAttribute("stroke-dasharray", "0 100");
-        f.resa.setAttribute("stroke-dasharray", r ? demi(r.cote || (e.wagons ? (cote === "P" ? "H" : "P") : "P"), 50) : "0 100");
+        f.resa.setAttribute("stroke-dasharray", "0 100"); // la prochaine affectation est montrée par sa petite étiquette
       }
       // pastille : nom, 80', wagons / capacité (en gros), entreprises, HS
       const morceaux = [`<tspan class="nom">${echap(v)}</tspan>`];
@@ -2329,22 +2331,30 @@ body[data-mode="simulation"] #fiche{display:none}
       f.texte.setAttribute("x", (-l / 2).toFixed(1)); f.fondP.setAttribute("x", (-l / 2 - 8).toFixed(1)); f.fondP.setAttribute("width", (l + 16).toFixed(1));
       const hP = Math.max(26, TAILLE() * (e.wagons ? 1.95 : 1.6)); f.fondP.setAttribute("height", hP.toFixed(1)); f.fondP.setAttribute("y", (-hP / 2).toFixed(1));
       // avec une affectation ou un engin : étiquette calée au début de la partie droite de la voie, l'engin à l'autre bout
-      const g0 = bout(f.pts, cote === "H" && c.engins ? "P" : "H"), cale = (prevs[v] || c.engins) && !(cote === "H" && c.engins);
+      const g0 = bout(f.pts, cote === "H" && c.engins ? "P" : "H"), cale = c.engins && !(cote === "H" && c.engins);
       const px = cale ? g0.x + 14 + l / 2 : cote === "H" && c.engins && (prevs[v]) ? g0.x - 14 - l / 2 : f.m.x, py = cale ? g0.y : f.m.y;
       f.pa.setAttribute("transform", `translate(${px.toFixed(1)} ${py.toFixed(1)})`);
-      f.fondP.setAttribute("stroke", r && r.enCours ? COUL.manoeuvre : r ? COUL.reservee : coul);
+      f.fondP.setAttribute("stroke", r && r.enCours ? COUL.manoeuvre : coul);
       // prochaine affectation, aux couleurs de sa destination : « 18:00 VNX Naviland départ 22 wg »
       const pv = prevs[v];
       if (pv) {
         const cc = pv.couleur || couleurQui(pv.groupe), quand = pv.date === pDonnees.date ? (pv.heure || "").slice(11, 16) : jourCourt(pv.date).split(" ")[0] + " " + (pv.heure || "").slice(11, 16);
-        f.chipT.textContent = `${quand} ${pv.code} ${pv.libelle || pv.groupe} ${pv.sens === "A" ? "arrivée" : "départ"}${pv.wagons != null ? " " + pv.wagons + " wg" : ""}`.replace(/\s+/g, " ").trim();
-        f.chipT.setAttribute("fill", contraste(cc)); f.chipR.setAttribute("fill", cc);
+        // étiquette sobre : flèche (↑ départ, ↓ arrivée), heure, code de la navette ou du train à sa couleur, wagons
+        const sens = pv.sens === "A" ? "↓" : "↑", wgT = pv.wagons != null ? `<tspan dx="6" class="wg">${pv.wagons} wg</tspan>` : "";
+        f.chipT.innerHTML = `<tspan>${sens} ${echap(quand)}</tspan><tspan dx="6" class="code" fill="${cc}">${echap(pv.code)}</tspan>${wgT}`;
+        f.chipR.setAttribute("stroke", cc); f.chipR.setAttribute("stroke-opacity", .55); f.chipB.setAttribute("fill", cc);
         f.chipT.setAttribute("x", 0); const lc = largeur(f.chipT, f.chipT.textContent);
-        // en petit, posée au-dessus de la voie (la voie reste visible), dans la partie droite, loin des étiquettes des voies voisines
-        const hc = Math.max(16, TAILLE() * 1.1), pt = pointA(f.pts, cote === "P" ? 0.3 : 0.68), cx0 = pt.x - (lc + 12) / 2, cy0 = pt.y - 7 - hc;
+        // au-dessus de la voie, dans sa partie droite (la voie et les étiquettes voisines restent visibles)
+        const hc = Math.max(15, TAILLE() * 1.05), pt = pointA(f.pts, cote === "P" ? 0.24 : 0.78), w = lc + 18, cx0 = pt.x - 10, cy0 = pt.y - 7 - hc;
         f.chip.setAttribute("transform", `translate(${cx0.toFixed(1)} ${cy0.toFixed(1)})`);
-        f.chipR.setAttribute("x", 0); f.chipR.setAttribute("y", 0); f.chipR.setAttribute("width", (lc + 12).toFixed(1)); f.chipR.setAttribute("height", hc.toFixed(1));
-        f.chipT.setAttribute("x", 6); f.chipT.setAttribute("y", (hc / 2 + 0.5).toFixed(1));
+        f.chipR.setAttribute("x", 0); f.chipR.setAttribute("y", 0); f.chipR.setAttribute("width", w.toFixed(1)); f.chipR.setAttribute("height", hc.toFixed(1));
+        f.chipB.setAttribute("x", 0); f.chipB.setAttribute("y", 0); f.chipB.setAttribute("height", hc.toFixed(1));
+        // petit trait qui rattache l'étiquette à sa voie
+        f.chipL.setAttribute("d", `M10 ${hc.toFixed(1)} L10 ${(hc + 7).toFixed(1)}`); f.chipL.setAttribute("stroke", cc);
+        f.chipT.setAttribute("x", 10); f.chipT.setAttribute("y", (hc / 2 + 0.5).toFixed(1));
+        f.chip.setAttribute("aria-label", `${pv.sens === "A" ? "Arrivée" : "Départ"} ${pv.code} ${quand} ${pv.libelle || pv.groupe || ""}${pv.wagons != null ? " " + pv.wagons + " wagons" : ""}`);
+        let ti = f.chip.querySelector("title"); if (!ti) { ti = document.createElementNS("http://www.w3.org/2000/svg", "title"); f.chip.appendChild(ti); }
+        ti.textContent = `${pv.sens === "A" ? "Arrivée" : "Départ"} ${pv.code} (${pv.libelle || pv.groupe || ""}) ${quand}${pv.wagons != null ? " · " + pv.wagons + " wagons" : ""}`;
         f.chip.style.display = "";
       } else f.chip.style.display = "none";
       // engins : en gros, en vert, toujours à l'extrémité de la voie (côté Paris par défaut)

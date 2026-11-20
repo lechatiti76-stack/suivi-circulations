@@ -489,3 +489,6 @@ iframe.apercu { width: 100%; height: 300px; border: 1px solid var(--trait); bord
 .stx-vide { color: var(--encre-3); font-size: 13px; margin: 6px 0; }
 .stx-vide.stx-ok { color: #16a34a; font-weight: 600; }
 @media (max-width: 1100px) { .stx-kpi { grid-template-columns: repeat(3, minmax(0, 1fr)); } .stx-grille { grid-template-columns: 1fr; } .stx-carte.large { grid-column: auto; } }
+
+/* mails : liste propre à un train d'une EF (ex. Ferovergne › Vierzon) */
+.mails-ef tr.sous-liste th { font-weight: 500; color: var(--encre-2); padding-left: 18px; white-space: pre; }
