@@ -30,7 +30,7 @@
         var ef = String(m.ef || 'Sans EF').toUpperCase(); efs[ef] = efs[ef] || { mouvements: 0, wagons: 0 }; efs[ef].mouvements++; efs[ef].wagons += w;
       }
     });
-    var groupes = {}, retards = [], supprimees = [], realisees = 0, prevues = 0, ecarts = [], bandes = { ok: 0, leger: 0, retard: 0 };
+    var groupes = {}, arriveesTrains = [], retards = [], supprimees = [], realisees = 0, prevues = 0, ecarts = [], bandes = { ok: 0, leger: 0, retard: 0 };
     (j.circulations || []).forEach(function (c) {
       if (c.etat === 'nonprevu') return;
       prevues++;
@@ -41,6 +41,8 @@
       if (c.etat === 'supprime') { G.supprimees++; supprimees.push({ c: c, g: g }); return; }
       if (!d.reel) return;
       realisees++; G.realisees++;
+      // arrivée d'un train de ligne : on note seulement son heure (pas de retard, il ne dépend pas du terminal)
+      if (g.famille !== 'navette' && c.sens === 'A') { arriveesTrains.push({ c: c, g: g, reel: d.reel, voie: d.voie, wagons: d.wagons }); return; }
       if (!c.theo) return;
       var e = SC.minutesEntre(d.reel, c.theo), b = e <= 5 ? 'ok' : e <= 15 ? 'leger' : 'retard';
       ecarts.push(e); G.ecarts.push(e); bandes[b]++; G.bandes[b]++;
@@ -54,7 +56,7 @@
       base: base, coupure: coupure, heures: heures, mouvements: mv.length, wagons: wagons, charges: charges, vides: vides,
       voies: Object.keys(voies).map(function (v) { return [v, voies[v]]; }).sort(function (a, b) { return b[1] - a[1]; }),
       efs: Object.keys(efs).map(function (e) { return [e, efs[e]]; }).sort(function (a, b) { return b[1].wagons - a[1].wagons; }),
-      groupes: groupes, prevues: prevues, realisees: realisees, supprimees: supprimees, retards: retards,
+      arriveesTrains: arriveesTrains.sort(function (a, b) { return a.reel < b.reel ? -1 : 1; }), groupes: groupes, prevues: prevues, realisees: realisees, supprimees: supprimees, retards: retards,
       mesurees: ecarts.length, bandes: bandes, moy: moy(ecarts), med: med(ecarts), max: ecarts.length ? Math.max.apply(null, ecarts) : null,
       ponct: pct(bandes.ok, ecarts.length)
     };
@@ -124,6 +126,11 @@
     var ef = S.efs.slice(0, 8), efs = '<section class="stx-carte"><h5>Wagons par entreprise</h5>' + barresH(ef.map(function (e) { return [e[0], e[1].wagons, SC.couleurGroupe({ id: e[0] }, (o.params || {}).visuel)]; }), ef.length ? ef[0][1].wagons : 1, '#7c3aed',
       function (r) { return r[1] + ' <small>wg</small>'; }) + '</section>';
     // ----- retards et suppressions
+    // arrivées des trains de ligne : l'heure seulement (leur retard n'entre pas dans les statistiques)
+    var arr = '<section class="stx-carte large"><h5>Arrivées des trains de ligne <small>' + S.arriveesTrains.length + ' arrivée' + (S.arriveesTrains.length > 1 ? 's' : '') + ' · heure d\'arrivée seulement, sans calcul de retard</small></h5>' +
+      (S.arriveesTrains.length ? '<div class="stx-arrivees">' + S.arriveesTrains.map(function (a) {
+        return '<div class="stx-arr"><b class="mono">' + SC.hm(a.reel) + '</b><span><b>' + esc(a.c.numero || a.c.sillon || a.c.code) + '</b> ' + esc(SC.nomTrain(a.c.code, o.params)) + '</span><small>' + esc(a.g.libelle || '') + (a.voie ? ' · voie ' + esc(String(a.voie).toUpperCase()) : '') + (a.wagons != null ? ' · ' + a.wagons + ' wg' : '') + '</small></div>';
+      }).join('') + '</div>' : '<p class="stx-vide">Aucune arrivée de train de ligne pour l\'instant.</p>') + '</section>';
     var lr = S.retards.slice(0, 12), ret = '<section class="stx-carte large"><h5>Retards de plus de 5 min et suppressions <small>' + (S.retards.length + S.supprimees.length ? S.retards.length + ' retard' + (S.retards.length > 1 ? 's' : '') + ' · ' + S.supprimees.length + ' suppression' + (S.supprimees.length > 1 ? 's' : '') : '') + '</small></h5>' +
       (lr.length || S.supprimees.length ? '<table class="stx-table"><thead><tr><th>Circulation</th><th>Sens</th><th>Prévu</th><th>Réel</th><th>Écart</th><th>Voie</th></tr></thead><tbody>' +
         lr.map(function (r) {
@@ -133,7 +140,7 @@
         '</tbody></table>' : '<p class="stx-vide stx-ok">✓ Aucun retard de plus de 5 minutes ni aucune suppression.</p>') + '</section>';
     el.innerHTML = '<div class="stx">' +
       '<div class="stx-tete"><div><b>' + esc(SC.libelleJour(j.date)) + '</b><span>' + (jourMeme ? 'Journée en cours · chiffres à ' + SC.p2(maintenant.getHours()) + ':' + SC.p2(maintenant.getMinutes()) : 'Journée terminée') + '</span></div></div>' +
-      kpi + '<div class="stx-grille">' + ponct + act + loco + voies + efs + ret + '</div></div>';
+      kpi + '<div class="stx-grille">' + ponct + arr + act + loco + voies + efs + ret + '</div></div>';
   }
   racine.StatsSaisie = { rendre: rendre, calculer: calculer };
 })(typeof window !== 'undefined' ? window : globalThis);

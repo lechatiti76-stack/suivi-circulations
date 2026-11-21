@@ -492,3 +492,26 @@ iframe.apercu { width: 100%; height: 300px; border: 1px solid var(--trait); bord
 
 /* mails : liste propre à un train d'une EF (ex. Ferovergne › Vierzon) */
 .mails-ef tr.sous-liste th { font-weight: 500; color: var(--encre-2); padding-left: 18px; white-space: pre; }
+
+/* ---------- volet de droite adaptatif : quand il est étroit, les boutons passent sous la ligne (rien n'est coupé) ---------- */
+#p-liste { container-type: inline-size; container-name: circs; overflow-x: hidden; }
+@container circs (max-width: 900px) {
+  .circ:not(.entete) { row-gap: 5px; }
+  .circ > .boutons { grid-column: 1 / -1; justify-content: flex-start; flex-wrap: wrap; white-space: normal; }
+  .circ.entete > span:last-child { display: none; }
+  .circ { grid-template-columns: 50px 34px 56px 54px 50px 46px 58px minmax(90px, 1fr); }
+  .vue-D .circ { grid-template-columns: 50px 56px 54px 50px 46px 58px minmax(90px, 1fr); }
+  .vue-A .circ { grid-template-columns: 50px 56px 54px 46px 58px minmax(90px, 1fr); }
+}
+@container circs (max-width: 560px) {
+  .circ > .num, .circ.entete > span:nth-child(3) { display: none; }
+  .circ { grid-template-columns: 46px 30px 50px 46px 42px 52px minmax(70px, 1fr); }
+  .vue-D .circ { grid-template-columns: 46px 50px 46px 42px 52px minmax(70px, 1fr); }
+  .vue-A .circ { grid-template-columns: 46px 50px 42px 52px minmax(70px, 1fr); }
+  .circ .bouton.petit { padding: 2px 5px; font-size: 11.5px; }
+}
+
+.stx-arrivees { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 8px; }
+.stx-arr { display: grid; grid-template-columns: auto 1fr; column-gap: 10px; align-items: baseline; padding: 8px 12px; border: 1px solid var(--trait); border-left: 4px solid #8E5CF7; border-radius: 8px; background: var(--surface-2); }
+.stx-arr > b { font-size: 20px; grid-row: span 2; }
+.stx-arr small { color: var(--encre-2); font-size: 12px; grid-column: 2; }

@@ -29,7 +29,18 @@ html.plan-seul #plan-vue[hidden] { display: grid !important; }
 @media (max-width:900px) { html.plan-seul #plan-vue { grid-template-columns: minmax(0,1fr) 220px; grid-template-rows: none; overflow: hidden; } html.plan-seul #plan-svg { min-width: 0; } html.plan-seul #plan-zone { overflow: hidden; } html.plan-seul #plan-cote { border-top: 0; border-left: 1px solid var(--p-trait); padding: 10px; gap: 12px; } }
 @media (max-width:640px) { html.plan-seul #plan-vue { grid-template-columns: minmax(0,1fr); } html.plan-seul #plan-cote { display: none; } }
 @media (max-height:420px) { html.plan-seul #plan-tete { padding-top: 4px; } html.plan-seul #plan-tete h2 { font-size: 15px; } }
-#plan-qui li[style] { display: block; }
+#plan-qui li[style], #plan-locos li[style] { display: block; }
+/* panneau de droite escamotable : caché, il s'ouvre au passage de la souris sur le bord droit ou par le bouton ; épinglé, le plan se réduit */
+#plan-vue { position: relative; }
+#plan-vue.cote-cache { grid-template-columns: minmax(0,1fr) !important; }
+#plan-vue.cote-cache #plan-cote { box-sizing: border-box; display: flex !important; position: absolute; top: 0; right: 0; bottom: 0; width: min(320px, 85vw); z-index: 30; transform: translateX(101%); transition: transform .22s ease; box-shadow: -10px 0 28px #000a; }
+#plan-vue.cote-cache.cote-survol #plan-cote { transform: none; }
+#plan-cote-zone { position: absolute; top: 0; right: 0; bottom: 0; width: 16px; z-index: 25; }
+#plan-vue:not(.cote-cache) #plan-cote-zone { display: none; }
+#plan-cote-btn { position: absolute; top: 50%; right: 0; z-index: 31; transform: translateY(-50%); writing-mode: vertical-rl; border: 1px solid var(--p-trait); border-right: 0; border-radius: 8px 0 0 8px; background: var(--p-panneau); color: var(--p-encre); font: 600 12px var(--sans, system-ui); letter-spacing: .05em; padding: 12px 5px; cursor: pointer; opacity: .85; }
+#plan-cote-btn:hover { opacity: 1; background: #1c2a35; }
+#plan-vue:not(.cote-cache) #plan-cote-btn { right: min(300px, 40vw); }
+#plan-vue.cote-cache.cote-survol #plan-cote-btn { right: min(320px, 85vw); }
 #pe-conf { display: grid; grid-template-columns: auto 1fr; gap: 8px 10px; align-items: center; }
 #pe-conf[hidden] { display: none; }
 #pe-conf .seg { display: flex; gap: 6px; } #pe-conf .seg label { display: flex; gap: 4px; align-items: center; border: 1px solid var(--p-trait); border-radius: 5px; padding: 3px 8px; cursor: pointer; }
@@ -49,6 +60,7 @@ html.plan-seul #plan-vue[hidden] { display: grid !important; }
 #plan-raz { width: 100%; color: #fecaca; background: #450a0a; border: 1px solid #b91c1c; border-radius: 6px; padding: 6px 10px; font: inherit; font-size: 12.5px; cursor: pointer; }
 #plan-raz.confirmer { background: #b91c1c; color: #fff; font-weight: 700; }
 #pe-engins { display: flex; flex-wrap: wrap; gap: 6px; }
+.pe-stock { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
 #pe-engins span { display: inline-flex; align-items: center; gap: 4px; background: #052e16; color: #4ade80; border: 1px solid #22c55e; border-radius: 5px; padding: 2px 4px 2px 8px; font-weight: 800; font-size: 12.5px; }
 #pe-engins button { border: 0; background: transparent; color: #fca5a5; cursor: pointer; font-size: 14px; padding: 0 4px; }
 #pe-vider { color: #fecaca; background: #450a0a; border: 1px solid #b91c1c; border-radius: 5px; padding: 3px 9px; font: inherit; font-size: 12.5px; cursor: pointer; justify-self: start; }
@@ -385,6 +397,7 @@ body[data-mode="simulation"] #fiche{display:none}
      <span>Capacité</span><b id="pe-cap"></b>
      <label for="pe-hs">Wagons HS</label><input type="number" id="pe-hs" min="0" max="80" step="1" value="0" style="width:6em">
      <span>Engins</span><div id="pe-engins"></div>
+     <span>Loco en stockage</span><div class="pe-stock"><select id="pe-stock-ef"></select><input id="pe-stock-num" placeholder="n° (facultatif)" maxlength="12" style="width:9em"><button type="button" id="pe-stock-ok">+ Loco</button></div>
      <span></span><button type="button" id="pe-vider" title="Plus aucun wagon ni engin sur cette voie">Effacer la voie (wagons et engins)</button>
      <span>Contenu</span><button type="button" id="pe-calcul" hidden title="Oublier le contenu saisi : la voie suit de nouveau la journée">Revenir au calcul</button>
     </div>
@@ -400,6 +413,7 @@ body[data-mode="simulation"] #fiche{display:none}
    <section id="plan-verif-s" hidden><h3>À vérifier</h3><div id="plan-verif"></div></section>
    <section id="plan-prev-s" hidden><h3>Navettes et trains</h3><div id="plan-prev"></div></section>
    <section><h3>Wagons par entreprise</h3><ul class="p-qui" id="plan-qui"></ul></section>
+   <section><h3>Locomotives sur le site</h3><ul class="p-qui" id="plan-locos"></ul></section>
    <section class="mvts-cache"><h3>Derniers mouvements</h3><ol id="plan-mvts"><li class="vide-liste">Aucun mouvement depuis l'ouverture.</li></ol></section>
    <section id="plan-raz-s" hidden><button type="button" id="plan-raz" class="raz">Effacer tout le plan (essais)</button><p class="note" id="plan-raz-msg"></p></section>
    <section><h3>Légende</h3><div class="p-legende" id="plan-legende"></div><p class="note" style="color:var(--p-encre2);margin:10px 0 0;font-size:12px">Une voie qui change d'état clignote. Cliquez sur une voie pour saisir ses wagons.</p></section>
@@ -947,6 +961,7 @@ body[data-mode="simulation"] #fiche{display:none}
       if (m.indisponible) code = "indisponible";
       else if (mouvement && (mouvement.origine === v.troncon || mouvement.destination === v.troncon)) code = "manoeuvre";
       else if (!presents.length && !hs) code = m.reservee ? "reservee" : "libre";
+      else if (!wagons) code = "partielle"; // seulement des engins (loco en stockage…) : la voie n'est pas pleine
       else code = cap ? (wagons >= cap ? "occupee" : "partielle") : "occupee";
       return { code, libelle: ETATS[code].libelle, couleur: ETATS[code].couleur, wagons, locos, capacite: cap, reste: cap ? Math.max(0, cap - wagons) : null,
         taux: cap ? Math.round(100 * wagons / cap) : null, hs, type, mixte, auto: !impose, trains: presents.map(t => t.id), reservee: !!m.reservee, indisponible: !!m.indisponible };
@@ -2056,7 +2071,11 @@ body[data-mode="simulation"] #fiche{display:none}
       }
       const t = RS.voies[e.v].troncon; E.compo[t] = e.parts.map(p => Object.assign({}, p)); E.stocks[t] = e.parts.reduce((n, p) => n + p.nb, 0);
       // saisie avec la liste des engins : les autres engins de la voie sont effacés
-      if (Array.isArray(e.engins)) for (const id in E.locos) if (E.locos[id] === t && !e.engins.includes(id)) { delete E.locos[id]; if (E.infos) delete E.infos[id]; }
+      if (Array.isArray(e.engins)) {
+        for (const id in E.locos) if (E.locos[id] === t && !e.engins.includes(id)) { delete E.locos[id]; if (E.infos) delete E.infos[id]; }
+        // loco en stockage saisie dans le plan : posée sur la voie
+        e.engins.forEach(id => { if (!E.locos[id] && /^STOCK /.test(id)) { E.locos[id] = t; E.infos = E.infos || {}; E.infos[id] = { ef: String(id).split(" ")[1] || "", modele: "diesel", stock: true }; } });
+      }
       if (!e.parts.length) delete cotes[e.v];
       for (let i = aVerifier.length - 1; i >= 0; i--) if (aVerifier[i].ambigu.voie === e.v) aVerifier.splice(i, 1); // corrigé par la saisie
     });
@@ -2295,6 +2314,25 @@ body[data-mode="simulation"] #fiche{display:none}
   }
   let tLarg = null; window.addEventListener("resize", () => { clearTimeout(tLarg); tLarg = setTimeout(ajusterLargeur, 150); });
   setTimeout(ajusterLargeur, 50);
+  if (window.ResizeObserver) new ResizeObserver(() => { clearTimeout(tLarg); tLarg = setTimeout(ajusterLargeur, 120); }).observe(svg);
+  // panneau de droite : caché par défaut (le plan prend toute la largeur), ouvert au survol du bord droit, épinglé par le bouton
+  (function panneau() {
+    const vue = $("plan-vue"), cote = $("plan-cote"); if (!vue || !cote) return;
+    const lire = () => { try { return localStorage.getItem("plan:coteFixe") === "1"; } catch (e) { return false; } };
+    const zone = document.createElement("div"); zone.id = "plan-cote-zone"; vue.appendChild(zone);
+    const bt = document.createElement("button"); bt.type = "button"; bt.id = "plan-cote-btn"; vue.appendChild(bt);
+    let fixe = lire(), tFerme = null;
+    const appliquer = () => {
+      vue.classList.toggle("cote-cache", !fixe); if (fixe) vue.classList.remove("cote-survol");
+      bt.textContent = fixe ? "Masquer ▶" : "◀ Infos"; bt.title = fixe ? "Masquer le panneau (le plan s'agrandit)" : "Afficher le panneau en permanence (le plan se réduit)";
+    };
+    const ouvrir = () => { if (fixe) return; clearTimeout(tFerme); vue.classList.add("cote-survol"); };
+    const fermer = () => { if (fixe) return; clearTimeout(tFerme); tFerme = setTimeout(() => vue.classList.remove("cote-survol"), 350); };
+    zone.addEventListener("mouseenter", ouvrir); cote.addEventListener("mouseenter", ouvrir); cote.addEventListener("mouseleave", fermer);
+    bt.addEventListener("mouseenter", ouvrir); bt.addEventListener("mouseleave", fermer);
+    bt.addEventListener("click", () => { fixe = !fixe; try { localStorage.setItem("plan:coteFixe", fixe ? "1" : "0"); } catch (e) { /* stockage bloqué */ } appliquer(); });
+    appliquer();
+  })();
 
 
   // ---------------------------------------------------------------- plan : état des voies
@@ -2310,6 +2348,9 @@ body[data-mode="simulation"] #fiche{display:none}
   }
   const largeur = (t, txt) => { let l = 0; try { l = t.getBBox().width; } catch (e) { l = 0; } return l || String(txt || "").length * TAILLE() * 0.62; };
   const TAILLE = () => 16 * (pDonnees.taille || 120) / 100;
+  const nomEngin = id => String(id).replace(/^(em|STOCK)\s+/i, "").toUpperCase();
+  // voies de service : sans effet sur les chiffres « Sur le site » et « Wagons par entreprise » (les voies restent dessinées)
+  const HORS_STATS = new Set(["Cv5003", "Tiroir", "Fosse1", "Fosse2", "Garage", "Hangar"]);
   function bout(p, cote) { // extrémité de la partie droite (le plus long segment) de la voie, côté Paris (droite) ou Le Havre (gauche)
     let a = 0, lg = -1; for (let i = 1; i < p.length; i++) { const d = Math.hypot(p[i][0] - p[i - 1][0], p[i][1] - p[i - 1][1]); if (d > lg) { lg = d; a = i - 1; } }
     const g = p[a][0] <= p[a + 1][0] ? p[a] : p[a + 1], dr = p[a][0] <= p[a + 1][0] ? p[a + 1] : p[a];
@@ -2318,12 +2359,13 @@ body[data-mode="simulation"] #fiche{display:none}
   const demi = (cote, lg) => (cote === "P" ? `0 ${100 - lg} ${lg} 100` : `${lg} 100`); // moitié côté Paris (droite) ou Le Havre (gauche)
   const contraste = c => { const h = String(c || "").replace("#", ""); if (h.length < 6) return "#fff"; const r = parseInt(h.slice(0, 2), 16), g = parseInt(h.slice(2, 4), 16), b = parseInt(h.slice(4, 6), 16); return (r * 299 + g * 587 + b * 114) / 1000 > 150 ? "#0b1218" : "#ffffff"; };
   function dessinerEtats(clignoter) {
-    const maintenant = Date.now(), totaux = {}, prevs = previsionsVoie(), resas = reservationsVoie(); let wagons = 0; const nb = { libre: 0, partielle: 0, occupee: 0 };
+    const locos = [], maintenant = Date.now(), totaux = {}, prevs = previsionsVoie(), resas = reservationsVoie(); let wagons = 0; const nb = { libre: 0, partielle: 0, occupee: 0 };
     svg.style.setProperty("--pt", TAILLE().toFixed(1) + "px");
     svg.classList.toggle("sans-flux", !!(window.LHTE_MARCHE && window.LHTE_MARCHE.animation === false));
     for (const v of VOIES) {
       const f = formes[v], e = Tn.etatVoie(v), c = compo(v), code = e.code, coul = COUL[code] || "#888", cote = (pDonnees.cotes || {})[v] || "";
-      c.parts.forEach(([k, n]) => { totaux[k] = (totaux[k] || 0) + n; }); if (e.hs) totaux["~HS"] = (totaux["~HS"] || 0) + e.hs; wagons += e.wagons; if (code in nb) nb[code]++;
+      c.ids.forEach(id => locos.push({ id, v }));
+      if (!HORS_STATS.has(v)) { c.parts.forEach(([k, n]) => { totaux[k] = (totaux[k] || 0) + n; }); if (e.hs) totaux["~HS"] = (totaux["~HS"] || 0) + e.hs; wagons += e.wagons; if (code in nb) nb[code]++; }
       const signature = code + "|" + e.wagons + "|" + e.type;
       if (clignoter && f.avant !== null && f.avant !== signature && code !== "manoeuvre") f.flash = maintenant + CV.clignotement_s * 1000;
       f.avant = signature;
@@ -2344,7 +2386,7 @@ body[data-mode="simulation"] #fiche{display:none}
       // pastille : nom, 80', wagons / capacité (en gros), entreprises, HS
       const morceaux = [`<tspan class="nom">${echap(v)}</tspan>`];
       if (e.type === 80 || e.mixte) morceaux.push(`<tspan dx="5" class="cap">${e.mixte ? "60'/80'" : "80'"}</tspan>`);
-      if (!e.wagons) morceaux.push(`<tspan dx="7" fill="${coul}" font-weight="600">${code === "libre" ? "libre" : LIBELLES[code].toLowerCase()}</tspan>`);
+      if (!e.wagons) morceaux.push(`<tspan dx="7" fill="${coul}" font-weight="600">${code === "libre" ? "libre" : c.engins ? "engins" : LIBELLES[code].toLowerCase()}</tspan>`);
       else {
         morceaux.push(`<tspan dx="7" class="nb">${e.wagons}</tspan>${e.capacite ? `<tspan class="cap">/${e.capacite}</tspan>` : `<tspan class="cap"> wg</tspan>`}`);
         const vus = c.parts.slice(0, 3); vus.forEach(([k, n]) => morceaux.push(`<tspan dx="8" fill="${couleurQui(k)}">●</tspan><tspan dx="3" class="ef">${echap(nomQui(k))}${c.parts.length > 1 ? " " + n : ""}</tspan>`));
@@ -2385,7 +2427,7 @@ body[data-mode="simulation"] #fiche{display:none}
       } else f.chip.style.display = "none";
       // engins : en gros, en vert, toujours à l'extrémité de la voie (côté Paris par défaut)
       if (c.engins) {
-        const ids = c.ids.map(id => String(id).replace(/^em\s+/i, "").toUpperCase()), txt = ids.slice(0, 2).join(" · ") + (ids.length > 2 ? ` +${ids.length - 2}` : "");
+        const ids = c.ids.map(nomEngin), txt = ids.slice(0, 2).join(" · ") + (ids.length > 2 ? ` +${ids.length - 2}` : "");
         f.emT.textContent = "◀ " + txt;
         f.emT.textContent = (cote === "H" ? "" : "◀ ") + txt + (cote === "H" ? " ▶" : "");
         const lg = largeur(f.emT, f.emT.textContent) + 18, b = bout(f.pts, cote === "H" ? "H" : "P"), cx = b.ancre === "end" ? b.x - lg / 2 - 4 : b.x + lg / 2 + 4;
@@ -2396,6 +2438,12 @@ body[data-mode="simulation"] #fiche{display:none}
     }
     $("plan-vide").hidden = wagons > 0;
     $("plan-chiffres").innerHTML = `<div><b>${wagons}</b><span>wagons${totaux["~HS"] ? ` dont ${totaux["~HS"]} HS` : ""}</span></div><div><b style="color:${COUL.libre}">${nb.libre}</b><span>voies libres</span></div><div><b style="color:${COUL.occupee}">${nb.occupee}</b><span>voies pleines</span></div>`;
+    // locomotives : par entreprise (loco en stockage : celle choisie ; sinon l'EF connue de l'engin)
+    const parEf = {}, efLoco = l => { const t = Tn.liste().find(x => x.id === l.id) || {}; return String(l.id).startsWith("STOCK ") ? String(l.id).split(" ")[1] : (t.ef || "Autres"); };
+    locos.forEach(l => { const k = efLoco(l); (parEf[k] = parEf[k] || { n: 0, stock: 0 }).n++; if (String(l.id).startsWith("STOCK ")) parEf[k].stock++; });
+    const nStock = locos.filter(l => String(l.id).startsWith("STOCK ")).length;
+    $("plan-locos").innerHTML = locos.length ? Object.entries(parEf).sort((a, b) => b[1].n - a[1].n).map(([k, o]) => `<li><i style="background:${couleurQui(k)}"></i><span>${echap(nomQui(k))}${o.stock ? ` <small style="color:var(--p-encre2)">(${o.stock} en stockage)</small>` : ""}</span><b>${o.n}</b></li>`).join("") +
+      `<li style="color:var(--p-encre2)">${locos.length} loco${locos.length > 1 ? "s" : ""}${nStock ? ` · ${nStock} en stockage` : ""}</li>` : '<li style="color:var(--p-encre2)">Aucune locomotive sur le site.</li>';
     const qui = Object.entries(totaux).sort((a, b) => b[1] - a[1]);
     $("plan-qui").innerHTML = qui.length ? qui.map(([k, n]) => `<li><i style="background:${couleurQui(k)}"></i><span>${echap(nomQui(k))}</span><b>${n}</b></li>`).join("") : '<li style="color:var(--p-encre2)">Aucun wagon sur le site.</li>';
     if (VOIES.some(v => formes[v].flash > maintenant)) { clearTimeout(dessinerEtats.t); dessinerEtats.t = setTimeout(() => dessinerEtats(false), 1000 + Math.min(...VOIES.map(v => formes[v].flash).filter(x => x > maintenant)) - maintenant); }
@@ -2486,9 +2534,19 @@ body[data-mode="simulation"] #fiche{display:none}
   $("pe-lignes").addEventListener("input", () => { pDonnees.sale = true; }); $("pe-lignes").addEventListener("change", () => { pDonnees.sale = true; });
   $("pe-lignes").addEventListener("click", e => { if (e.target.closest("button")) pDonnees.sale = true; });
   function rendreEngins() {
-    const l = pDonnees.engins || []; $("pe-engins").innerHTML = l.length ? l.map((id, i) => `<span>${echap(String(id).replace(/^em\s+/i, "").toUpperCase())}<button type="button" data-i="${i}" title="Effacer cet engin" aria-label="Effacer l'engin ${echap(id)}">✕</button></span>`).join("") : '<small class="note">aucun</small>';
+    const l = pDonnees.engins || []; $("pe-engins").innerHTML = l.length ? l.map((id, i) => `<span>${String(id).startsWith("STOCK ") ? "🅿 " : ""}${echap(nomEngin(id))}<button type="button" data-i="${i}" title="Effacer cet engin" aria-label="Effacer l'engin ${echap(id)}">✕</button></span>`).join("") : '<small class="note">aucun</small>';
     $("pe-engins").querySelectorAll("button").forEach(b => b.addEventListener("click", () => { pDonnees.engins.splice(+b.dataset.i, 1); pDonnees.enginsSale = true; rendreEngins(); }));
   }
+  // locomotives en stockage (Hangar, Garage…) : ajoutées à la liste des engins de la voie, enregistrées avec elle
+  const LOCOS_STOCK = ["NRS", "Captrain", "Regiorail", "Fertrax", "Naviland", "DB", "Socorail"];
+  $("pe-stock-ef").innerHTML = LOCOS_STOCK.map(e => `<option>${echap(e)}</option>`).join("");
+  $("pe-stock-ok").addEventListener("click", () => {
+    const num = $("pe-stock-num").value.replace(/[^A-Za-z0-9 _.-]/g, "").trim().slice(0, 12);
+    let id = "STOCK " + $("pe-stock-ef").value.toUpperCase() + (num ? " " + num : ""), k = 2;
+    while ((pDonnees.engins || []).includes(id)) id = "STOCK " + $("pe-stock-ef").value.toUpperCase() + (num ? " " + num : "") + " " + (k++);
+    pDonnees.engins = (pDonnees.engins || []).concat([id]); pDonnees.enginsSale = true; $("pe-stock-num").value = ""; rendreEngins();
+    $("pe-msg").textContent = "Loco ajoutée : enregistrez pour la garder sur la voie.";
+  });
   $("pe-vider").addEventListener("click", () => { $("pe-lignes").innerHTML = ""; pDonnees.sale = true; pDonnees.engins = []; pDonnees.enginsSale = true; rendreEngins(); $("pe-hs").value = 0; $("pe-msg").textContent = "La voie sera vide (sans wagon ni engin) à l'enregistrement."; });
   const isoLocal = () => { const d = new Date(); return new Date(d - d.getTimezoneOffset() * 60000).toISOString().slice(0, 19); };
   async function envoyerPlan(corps) {
